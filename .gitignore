@@ -25,3 +25,4 @@ build/
 
 # Secrets (we’ll commit a template instead)
 secrets_config.py
+

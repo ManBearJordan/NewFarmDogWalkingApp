@@ -1,0 +1,39 @@
+# Deployment exclusions
+# Use this file with deployment tools to exclude development files from production packages
+
+# Development directory (tests, docs, scripts, backups)
+dev/
+
+# Git and development metadata
+.git/
+.github/
+.gitignore
+.deployment-ignore
+
+# Python cache and temporary files  
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE and editor files
+.vscode/
+.idea/
+.DS_Store
+
+# Build artifacts
+dist/
+build/
+*.zip
+
+# Local databases (if present)
+*.db
+*.sqlite
+
+# Secrets configuration (use template instead)
+secrets_config.py
