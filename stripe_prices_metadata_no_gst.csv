@@ -1,0 +1,17 @@
+﻿product_name,price_nickname,price_code,interval,pack_qty,sessions_per_day,visits_per_week,aud_amount_cents
+Short Walk,Short Walk (Single),WALK_SHORT_SINGLE,one_time,1,,,3000
+Short Walk,Short Walk (Pack x5),WALK_SHORT_PACK5,one_time,5,,,13000
+Long Walk,Long Walk (Single),WALK_LONG_SINGLE,one_time,1,,,4000
+Long Walk,Long Walk (Pack x5),WALK_LONG_PACK5,one_time,5,,,17000
+Home Visit – 30m (1×/day),Home Visit 30m 1× (Single),HV_30_1X_SINGLE,one_time,1,1,,3000
+Home Visit – 30m (1×/day),Home Visit 30m 1× (Pack x5),HV_30_1X_PACK5,one_time,5,1,,13000
+Home Visit – 30m (2×/day),Home Visit 30m 2× (Single),HV_30_2X_SINGLE,one_time,1,2,,5000
+Home Visit – 30m (2×/day),Home Visit 30m 2× (Pack x5),HV_30_2X_PACK5,one_time,5,2,,21000
+Doggy Daycare (per day),Daycare (Single Day),DAYCARE_SINGLE,one_time,1,,,5500
+Doggy Daycare (per day),Daycare (Pack x5),DAYCARE_PACK5,one_time,5,,,17000
+Overnight Pet Sitting,Overnight (Single),BOARD_OVERNIGHT_SINGLE,one_time,1,,,8000
+Overnight Pet Sitting,Overnight (Pack x5),BOARD_OVERNIGHT_PACK5,one_time,5,,,33000
+Poop Scoop – One-time,Poop Scoop (Once),SCOOP_ONCE_SINGLE,one_time,1,,,7000
+Poop Scoop – Weekly,Poop Scoop Weekly (Monthly),SCOOP_WEEKLY_MONTH,month,1,,1,10000
+Poop Scoop – Fortnightly,Poop Scoop Fortnightly (Monthly),SCOOP_FORTNIGHTLY_MONTH,month,1,,0.5,6000
+Poop Scoop – Twice Weekly,Poop Scoop Twice Weekly (Monthly),SCOOP_TWICE_WEEKLY_MONTH,month,1,,2,16000

@@ -1,0 +1,4 @@
+name,description,service_code,capacity_type,default_duration_min
+Short Walk,"Short Walk — weekly subscription (1x/week, use quantity for more)",WALK_SHORT,walk,30
+Long Walk,"Long Walk — weekly subscription (1x/week, use quantity for more)",WALK_LONG,walk,60
+Doggy Daycare (per day),"Doggy Daycare (per day) — weekly subscription (1x/week, use quantity for more)",DAYCARE_DAY,daycare,480
