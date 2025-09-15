@@ -1,2 +1,18 @@
-game now.zip
-secrets_config.py
+# overwrite .gitignore with a proper set of rules
+@'
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs/archives
+*.log
+*.zip
+
+# (optional) local DB files — include only if you DON'T want DBs in git
+# *.db
+# *.sqlite
+'@ | Set-Content .gitignore -Encoding utf8
