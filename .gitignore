@@ -1,18 +1,27 @@
-# overwrite .gitignore with a proper set of rules
-@'
-# Python
-.venv/
-venv/
+# Python junk
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Logs/archives
 *.log
+
+# Virtual envs
+.venv/
+venv/
+
+# Editors/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Builds & archives
+dist/
+build/
 *.zip
 
-# (optional) local DB files — include only if you DON'T want DBs in git
-# *.db
-# *.sqlite
-'@ | Set-Content .gitignore -Encoding utf8
+# Optional (recommended) – don’t track local DBs
+*.db
+*.sqlite
+
+# Secrets (we’ll commit a template instead)
+secrets_config.py
