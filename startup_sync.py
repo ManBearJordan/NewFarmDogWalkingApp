@@ -207,67 +207,117 @@ class SubscriptionAutoSync(QObject):
                     )
                 return False
             
-            # Step 3: Immediately generate bookings for this subscription
-            logger.info(f"Generating bookings for completed subscription {subscription_id}")
+            # Step 3: Use unified booking helpers for reliable booking generation
+            logger.info(f"Generating bookings for completed subscription {subscription_id} using purge-then-rebuild pattern")
             
             try:
-                # Get the updated subscription from Stripe and sync just this one
-                from stripe_integration import _api
-                stripe_api = _api()
-                updated_subscription = stripe_api.Subscription.retrieve(subscription_id, expand=['customer'])
+                # Use the unified purge-then-rebuild pattern for reliable booking generation
+                from unified_booking_helpers import purge_future_subscription_bookings, rebuild_subscription_bookings
                 
-                # Convert to dict format
-                subscription_data_dict = dict(updated_subscription)
+                # Convert day list to mask for unified helpers
+                days_str = schedule_data["days"]  # e.g., "MON,WED,FRI"
+                day_names = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+                days_list = [d.strip().upper() for d in days_str.split(",") if d.strip()]
+                days_mask = 0
+                for day in days_list:
+                    if day in day_names:
+                        days_mask |= (1 << day_names.index(day))
                 
-                # Ensure customer data is properly populated
-                try:
-                    from customer_display_helpers import ensure_customer_data_in_subscription
-                    subscription_data_dict = ensure_customer_data_in_subscription(subscription_data_dict)
-                except ImportError:
-                    logger.warning("customer_display_helpers not available for customer data enhancement")
+                # Step 3a: Purge existing future bookings to avoid conflicts
+                purge_future_subscription_bookings(self.conn, subscription_id)
+                logger.info(f"Purged existing future bookings for subscription {subscription_id}")
                 
-                # Sync just this subscription to generate bookings immediately
-                from subscription_sync import sync_subscription_to_bookings
-                bookings_created = sync_subscription_to_bookings(self.conn, subscription_data_dict, parent_widget)
+                # Step 3b: Rebuild bookings with consistent, unified fields
+                bookings_created = rebuild_subscription_bookings(
+                    self.conn,
+                    subscription_id,
+                    days_mask,
+                    schedule_data["start_time"],
+                    schedule_data["end_time"],
+                    schedule_data["dogs"],
+                    schedule_data["location"],
+                    schedule_data.get("notes", ""),
+                    months_ahead=3
+                )
                 
                 if bookings_created > 0:
-                    logger.info(f"Successfully created {bookings_created} bookings for subscription {subscription_id}")
+                    logger.info(f"Successfully created {bookings_created} bookings for subscription {subscription_id} using unified booking helpers")
                 else:
-                    logger.warning(f"No bookings were created for subscription {subscription_id} - this may indicate missing service code or other issues")
+                    logger.warning(f"No bookings were created for subscription {subscription_id} - checking for issues...")
+                    
+                    # Try the fallback approach if unified helpers failed
+                    try:
+                        # Get the updated subscription from Stripe and sync just this one
+                        from stripe_integration import _api
+                        stripe_api = _api()
+                        updated_subscription = stripe_api.Subscription.retrieve(subscription_id, expand=['customer'])
+                        
+                        # Convert to dict format and ensure customer data
+                        subscription_data_dict = dict(updated_subscription)
+                        try:
+                            from customer_display_helpers import ensure_customer_data_in_subscription
+                            subscription_data_dict = ensure_customer_data_in_subscription(subscription_data_dict)
+                        except ImportError:
+                            logger.warning("customer_display_helpers not available for customer data enhancement")
+                        
+                        # Fallback to traditional sync approach
+                        from subscription_sync import sync_subscription_to_bookings
+                        fallback_bookings = sync_subscription_to_bookings(self.conn, subscription_data_dict, parent_widget)
+                        
+                        if fallback_bookings > 0:
+                            logger.info(f"Fallback method created {fallback_bookings} bookings for subscription {subscription_id}")
+                            bookings_created = fallback_bookings
+                            
+                    except Exception as fallback_error:
+                        logger.error(f"Both unified and fallback booking generation failed for {subscription_id}: {fallback_error}")
                 
-                # Also trigger a full sync to ensure calendar is updated
-                sync_stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
-                logger.info(f"Full sync completed: {sync_stats}")
+                # Trigger calendar sync to ensure everything is up to date
+                try:
+                    sync_stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
+                    logger.info(f"Calendar sync completed: {sync_stats}")
+                except Exception as sync_error:
+                    logger.warning(f"Calendar sync had issues but continuing: {sync_error}")
                 
                 return True
                 
             except Exception as sync_error:
-                error_msg = f"Failed to generate bookings for {subscription_id}: {sync_error}"
-                logger.error(error_msg)
+                from subscription_error_handling import log_subscription_error, handle_stripe_api_error, handle_database_error, show_error_dialog
+                
+                # Determine error type and provide appropriate handling
+                if "stripe" in str(sync_error).lower() or "api" in str(sync_error).lower():
+                    user_error_msg = handle_stripe_api_error(sync_error, "booking generation", subscription_id)
+                elif "database" in str(sync_error).lower() or "sqlite" in str(sync_error).lower():
+                    user_error_msg = handle_database_error(sync_error, "booking generation", subscription_id)
+                else:
+                    user_error_msg = log_subscription_error("booking generation", subscription_id, sync_error)
                 
                 if parent_widget:
-                    from PySide6.QtWidgets import QMessageBox
-                    QMessageBox.warning(
+                    show_error_dialog(
                         parent_widget,
                         "Booking Generation Error",
-                        f"Schedule was saved successfully, but there was an error generating bookings:\n\n{sync_error}\n\n" +
-                        "You can manually refresh bookings from the Subscriptions tab."
+                        f"Schedule was saved successfully, but there was an error generating bookings:\n\n{user_error_msg}\n\n" +
+                        "You can manually refresh bookings from the Subscriptions tab or try completing the schedule again.",
+                        details=f"Technical details:\n{str(sync_error)}"
                     )
                 
-                # Still return True since the schedule was saved successfully
+                # Still return True since the schedule was saved successfully - booking generation can be retried
                 return True
             
         except Exception as e:
-            error_msg = f"Unexpected error handling schedule completion for {subscription_id}: {e}"
-            logger.error(error_msg)
+            from subscription_error_handling import log_subscription_error, show_error_dialog
+            
+            user_error_msg = log_subscription_error("schedule completion", subscription_id, e, {
+                "operation": "handle_schedule_completion",
+                "schedule_data": schedule_data
+            })
             
             if parent_widget:
-                from PySide6.QtWidgets import QMessageBox
-                QMessageBox.critical(
+                show_error_dialog(
                     parent_widget,
-                    "Unexpected Error",
-                    f"An unexpected error occurred:\n\n{e}\n\n" +
-                    "Please try again or contact support if the problem persists."
+                    "Schedule Completion Error",
+                    f"An unexpected error occurred while processing the schedule:\n\n{user_error_msg}\n\n" +
+                    "Please try saving the schedule again. If this persists, check the application logs for detailed information.",
+                    details=f"Technical details:\n{str(e)}"
                 )
             return False
 

@@ -33,11 +33,18 @@ def get_robust_customer_display_info(subscription_data: Dict[str, Any]) -> str:
         # Step 1: Check if customer data is already expanded in subscription
         customer = subscription_data.get("customer", {})
         
-        if isinstance(customer, dict):
+        # Handle different customer data formats
+        if isinstance(customer, str):
+            # Customer is just an ID string
+            name = ""
+            email = ""
+            customer_id = customer
+        elif isinstance(customer, dict):
             name = customer.get("name", "")
             email = customer.get("email", "")
             customer_id = customer.get("id", "")
         else:
+            # Customer is an object from Stripe API
             name = getattr(customer, "name", "") if customer else ""
             email = getattr(customer, "email", "") if customer else ""
             customer_id = getattr(customer, "id", "") if customer else ""
