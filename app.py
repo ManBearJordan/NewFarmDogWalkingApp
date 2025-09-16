@@ -3,6 +3,7 @@ from PySide6.QtGui import QTextDocument
 from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
 from PySide6 import QtCore, QtGui, QtWidgets
 import os, sys, json
+import logging
 from PySide6 import QtWidgets, QtCore, QtGui
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QMessageBox, QTabWidget, QDateTimeEdit, QComboBox, QFileDialog, QSpinBox, QDateEdit, QTimeEdit, QCheckBox, QDialog, QMenu, QGroupBox, QHeaderView)
@@ -27,6 +28,9 @@ import bookings_two_week as btw
 from reports_tab import ReportsTab
 from date_range_helpers import resolve_range
 from crm_dashboard import CRMDashboardTab
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # --- Helpers for Calendar view ---------------------------------------------
 
@@ -2370,16 +2374,85 @@ class SubscriptionsTab(QWidget):
             self.table.setRowCount(0)
             for s in subs:
                 row = self.table.rowCount(); self.table.insertRow(row)
-                self.table.setItem(row,0,QTableWidgetItem(s.get("id","")))
+                sub_id = s.get("id", "")
+                
+                self.table.setItem(row,0,QTableWidgetItem(sub_id))
                 self.table.setItem(row,1,QTableWidgetItem(s.get("customer_name","")))
                 self.table.setItem(row,2,QTableWidgetItem(s.get("status","")))
                 self.table.setItem(row,3,QTableWidgetItem(s.get("products","")))
-                self.table.setItem(row,4,QTableWidgetItem(""))  # Days - filled from schedule
-                self.table.setItem(row,5,QTableWidgetItem(""))  # Time - filled from schedule
-                self.table.setItem(row,6,QTableWidgetItem(""))  # Dogs - filled from schedule
-                self.table.setItem(row,7,QTableWidgetItem(""))  # Location - filled from schedule
+                
+                # Load schedule data from local database
+                schedule_data = self._load_schedule_for_subscription(sub_id)
+                self.table.setItem(row,4,QTableWidgetItem(schedule_data.get("days_display", "")))
+                self.table.setItem(row,5,QTableWidgetItem(schedule_data.get("time_display", "")))
+                self.table.setItem(row,6,QTableWidgetItem(str(schedule_data.get("dogs", ""))))
+                self.table.setItem(row,7,QTableWidgetItem(schedule_data.get("location", "")))
         except Exception as e:
             QMessageBox.critical(self,"Stripe Error",str(e))
+    
+    def _load_schedule_for_subscription(self, subscription_id: str) -> dict:
+        """Load schedule data from local database for a subscription."""
+        try:
+            if not subscription_id:
+                return {}
+                
+            # Query the subs_schedule table for this subscription
+            schedule = self.conn.execute("""
+                SELECT days, start_time, end_time, dogs, location, notes
+                FROM subs_schedule
+                WHERE stripe_subscription_id = ?
+            """, (subscription_id,)).fetchone()
+            
+            if not schedule:
+                return {}
+            
+            # Format the data for display
+            result = {
+                "days_display": self._format_days_for_display(schedule["days"] or ""),
+                "time_display": self._format_time_for_display(schedule["start_time"] or "", schedule["end_time"] or ""),
+                "dogs": schedule["dogs"] or 0,
+                "location": schedule["location"] or ""
+            }
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error loading schedule for subscription {subscription_id}: {e}")
+            return {}
+    
+    def _format_days_for_display(self, days_csv: str) -> str:
+        """Format days CSV into display format."""
+        if not days_csv:
+            return ""
+        
+        # Map day codes to short names
+        day_map = {
+            "MON": "Mon", "TUE": "Tue", "WED": "Wed", "THU": "Thu",
+            "FRI": "Fri", "SAT": "Sat", "SUN": "Sun"
+        }
+        
+        days = [day.strip().upper() for day in days_csv.split(",") if day.strip()]
+        display_days = [day_map.get(day, day) for day in days if day in day_map]
+        
+        return ", ".join(display_days)
+    
+    def _format_time_for_display(self, start_time: str, end_time: str) -> str:
+        """Format time range for display."""
+        if not start_time or not end_time:
+            return ""
+        
+        try:
+            # Parse and format times to ensure consistent display
+            from datetime import time, datetime
+            
+            start = datetime.strptime(start_time, "%H:%M").time()
+            end = datetime.strptime(end_time, "%H:%M").time()
+            
+            return f"{start.strftime('%H:%M')}-{end.strftime('%H:%M')}"
+            
+        except Exception:
+            # Fallback if parsing fails
+            return f"{start_time}-{end_time}" if start_time and end_time else ""
 
 # ---------------- Archive Tab ----------------
 class ArchiveTab(QWidget):

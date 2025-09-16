@@ -42,9 +42,14 @@ def get_subscriptions_missing_schedule_data(subscriptions: List[Dict[str, Any]])
         # Check if any required fields are missing or empty
         missing_fields = []
         
-        # Extract and check service code
-        service_code = extract_service_code_from_metadata(subscription)
-        if not service_code:
+        # Extract and check service code - be more permissive for existing subscriptions
+        # Check if there's any service code in metadata (not necessarily validated)
+        metadata = subscription.get("metadata", {})
+        has_service_code = (
+            metadata.get("service_code") or 
+            extract_service_code_from_metadata(subscription)
+        )
+        if not has_service_code:
             missing_fields.append("service_code")
         
         # Check days
