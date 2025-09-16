@@ -43,14 +43,44 @@ def get_subscriptions_missing_schedule_data(subscriptions: List[Dict[str, Any]])
         missing_fields = []
         
         # Extract and check service code - be more permissive for existing subscriptions
-        # Check if there's any service code in metadata (not necessarily validated)
+        # Only flag as missing if there's genuinely no service code information at all
         metadata = subscription.get("metadata", {})
         has_service_code = (
             metadata.get("service_code") or 
             extract_service_code_from_metadata(subscription)
         )
+        
+        # Only add service_code as missing if we truly have no service information
+        # This prevents blocking workflow for valid subscriptions
         if not has_service_code:
-            missing_fields.append("service_code")
+            # Check if we can derive service code from product information
+            try:
+                from service_map import get_service_code, is_valid_service_code
+                items = subscription.get("items", {})
+                if isinstance(items, dict):
+                    items_data = items.get("data", [])
+                else:
+                    items_data = getattr(items, "data", []) if items else []
+                
+                found_mappable_service = False
+                for item in items_data:
+                    price = item.get("price", {}) if isinstance(item, dict) else getattr(item, "price", {})
+                    if isinstance(price, dict):
+                        product = price.get("product", {})
+                        if isinstance(product, dict):
+                            product_name = product.get("name", "")
+                            if product_name:
+                                mapped_code = get_service_code(product_name.strip())
+                                if mapped_code and is_valid_service_code(mapped_code):
+                                    found_mappable_service = True
+                                    break
+                
+                # Only flag as missing if we can't map from product either
+                if not found_mappable_service:
+                    missing_fields.append("service_code")
+            except Exception:
+                # If service mapping fails, we'll prompt user later rather than blocking
+                missing_fields.append("service_code")
         
         # Check days
         if not schedule.get("day_list") or len(schedule["day_list"]) == 0:
@@ -98,7 +128,16 @@ def is_subscription_schedule_complete(subscription: Dict[str, Any]) -> bool:
     """
     schedule = extract_schedule_from_subscription(subscription)
     
+    # Check for service code but be more permissive - accept any non-empty service code
+    metadata = subscription.get("metadata", {})
+    has_any_service_code = (
+        metadata.get("service_code") or 
+        extract_service_code_from_metadata(subscription)
+    )
+    
     # All required fields must be present and valid
+    # Service code is not strictly required for schedule completion
+    # (it can be prompted for later if needed for booking generation)
     return (
         len(schedule.get("day_list", [])) > 0 and
         schedule.get("start_time", "") not in ("", "09:00") and  

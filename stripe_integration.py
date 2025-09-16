@@ -583,13 +583,36 @@ def list_subscriptions(limit=100):
         else:
             c_name = getattr(cust, "name", None)
             c_email = getattr(cust, "email", None)
+        
+        # Implement proper fallback for customer name as per problem statement
+        # If name is empty/null, use email or fetch from Stripe customer API
+        customer_display_name = c_name
+        if not customer_display_name and c_email:
+            # Use email as fallback
+            customer_display_name = c_email
+        elif not customer_display_name and cust:
+            # Try to fetch customer details from Stripe if we have customer ID
+            try:
+                customer_id = cust.get("id") if isinstance(cust, dict) else getattr(cust, "id", None)
+                if customer_id:
+                    customer_obj = s.Customer.retrieve(customer_id)
+                    fetched_name = getattr(customer_obj, "name", None)
+                    fetched_email = getattr(customer_obj, "email", None)
+                    customer_display_name = fetched_name or fetched_email or "Unknown Customer"
+                else:
+                    customer_display_name = "Unknown Customer"
+            except Exception:
+                customer_display_name = "Unknown Customer"
+        elif not customer_display_name:
+            customer_display_name = "Unknown Customer"
+            
         latest_inv = sub_dict.get("latest_invoice") or getattr(sub, "latest_invoice", None)
         latest_url = latest_inv.get("hosted_invoice_url") if isinstance(latest_inv, dict) else getattr(latest_inv, "hosted_invoice_url", None)
         out.append({
             "id": sub_dict.get("id") or getattr(sub, "id", None),
             "status": sub_dict.get("status") or getattr(sub, "status", None),
             "customer_email": c_email,
-            "customer_name": c_name,
+            "customer_name": customer_display_name,
             "products": ", ".join(products) if products else "",
             "current_period_end": sub_dict.get("current_period_end") or getattr(sub, "current_period_end", None),
             "latest_invoice_url": latest_url,

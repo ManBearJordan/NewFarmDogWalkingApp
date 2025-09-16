@@ -190,6 +190,20 @@ class SubscriptionScheduleDialog(QDialog):
             name = getattr(customer, "name", "") if customer else ""
             email = getattr(customer, "email", "") if customer else ""
         
+        # If we don't have a name, try to fetch it from Stripe
+        if not name and customer:
+            try:
+                from stripe_integration import _api
+                stripe_api = _api()
+                customer_id = customer.get("id") if isinstance(customer, dict) else getattr(customer, "id", None)
+                if customer_id:
+                    customer_obj = stripe_api.Customer.retrieve(customer_id)
+                    name = getattr(customer_obj, "name", "") or ""
+                    if not email:
+                        email = getattr(customer_obj, "email", "") or ""
+            except Exception as e:
+                logger.warning(f"Failed to fetch customer details from Stripe: {e}")
+
         if name and email:
             return f"{name} ({email})"
         elif name:
