@@ -58,6 +58,15 @@ def get_robust_customer_display_info(subscription_data: Dict[str, Any]) -> str:
                 name = getattr(customer, "name", "")
                 email = getattr(customer, "email", "")
                 customer_id = getattr(customer, "id", "")
+                
+                # Handle case where customer_id is empty string
+                if not customer_id:
+                    name = ""
+                    email = ""
+            else:
+                name = ""
+                email = ""
+                customer_id = ""
         except Exception:
             name = ""
             email = ""
