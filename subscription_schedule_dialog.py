@@ -181,37 +181,64 @@ class SubscriptionScheduleDialog(QDialog):
         layout.addWidget(button_box)
     
     def _get_customer_display_info(self):
-        """Get customer display information from subscription data."""
+        """Get customer display information with robust Stripe API fallback."""
+        try:
+            from customer_display_helpers import get_robust_customer_display_info
+            return get_robust_customer_display_info(self.subscription_data)
+        except ImportError:
+            # Fallback to local implementation if helper is not available
+            logger.warning("customer_display_helpers not available, using fallback")
+            return self._get_customer_display_info_fallback()
+    
+    def _get_customer_display_info_fallback(self):
+        """Fallback implementation with improved Stripe API usage."""
         customer = self.subscription_data.get("customer", {})
+        
+        # Extract initial customer data
         if isinstance(customer, dict):
             name = customer.get("name", "")
             email = customer.get("email", "")
+            customer_id = customer.get("id", "")
         else:
             name = getattr(customer, "name", "") if customer else ""
             email = getattr(customer, "email", "") if customer else ""
+            customer_id = getattr(customer, "id", "") if customer else ""
         
-        # If we don't have a name, try to fetch it from Stripe
-        if not name and customer:
-            try:
-                from stripe_integration import _api
-                stripe_api = _api()
-                customer_id = customer.get("id") if isinstance(customer, dict) else getattr(customer, "id", None)
-                if customer_id:
-                    customer_obj = stripe_api.Customer.retrieve(customer_id)
-                    name = getattr(customer_obj, "name", "") or ""
-                    if not email:
-                        email = getattr(customer_obj, "email", "") or ""
-            except Exception as e:
-                logger.warning(f"Failed to fetch customer details from Stripe: {e}")
-
+        # If we have good data, use it
         if name and email:
             return f"{name} ({email})"
         elif name:
             return name
         elif email:
             return email
-        else:
-            return "Unknown Customer"
+        
+        # Always try to fetch from Stripe if we have customer_id but missing info
+        if customer_id:
+            try:
+                from stripe_integration import _api
+                stripe_api = _api()
+                logger.info(f"Fetching customer details from Stripe API for {customer_id}")
+                customer_obj = stripe_api.Customer.retrieve(customer_id)
+                
+                fetched_name = getattr(customer_obj, "name", "") or ""
+                fetched_email = getattr(customer_obj, "email", "") or ""
+                
+                if fetched_name and fetched_email:
+                    return f"{fetched_name} ({fetched_email})"
+                elif fetched_name:
+                    return fetched_name
+                elif fetched_email:
+                    return fetched_email
+                else:
+                    # Better to show customer ID than "Unknown Customer"
+                    return f"Customer {customer_id}"
+                    
+            except Exception as e:
+                logger.warning(f"Failed to fetch customer details from Stripe: {e}")
+                # Still better to show customer ID than "Unknown Customer"
+                return f"Customer {customer_id}"
+        
+        return "Unknown Customer"
     
     def populate_current_data(self):
         """Populate form fields with current schedule data if available."""

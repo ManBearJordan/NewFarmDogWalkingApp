@@ -759,26 +759,75 @@ def get_subscription_details(subscription_id):
 
 def list_active_subscriptions(limit=200):
     """
-    Returns active-like subs with customer info AND weekly_quantity derived from
-    subscription item quantity for weekly recurring items.
-    Use this weekly_quantity when seeding calendar holds.
+    Returns active-like subscriptions with robust customer info and weekly_quantity.
+    
+    This function ensures customer information is always available by fetching
+    from Stripe API when needed, preventing "Unknown Customer" issues.
     """
     s = _api()
     out = []
-    # Expand items + price (but not product to avoid 4-level limit)
+    # Expand items + price + customer to get complete data
     subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
+    
     for sub in subs.auto_paging_iter():
         d = dict(sub) if not isinstance(sub, dict) else sub
         status = d.get("status")
         if status not in ("active", "trialing", "past_due"):
             continue
 
-        # customer
+        # Enhanced customer handling with Stripe API fallback
         cust = d.get("customer") or getattr(sub, "customer", None)
+        customer_id = None
+        c_name = None
+        c_email = None
+        
         if isinstance(cust, dict):
-            c_email = cust.get("email"); c_name = cust.get("name"); customer_id = cust.get("id")
+            c_email = cust.get("email")
+            c_name = cust.get("name")
+            customer_id = cust.get("id")
+        elif isinstance(cust, str):
+            # Customer is just an ID, need to fetch details
+            customer_id = cust
         else:
-            c_email = getattr(cust, "email", None); c_name = getattr(cust, "name", None); customer_id = getattr(cust, "id", None)
+            c_email = getattr(cust, "email", None)
+            c_name = getattr(cust, "name", None)
+            customer_id = getattr(cust, "id", None)
+
+        # Always try to fetch customer data from Stripe if we don't have name/email
+        customer_display_name = c_name
+        if (not customer_display_name or not c_email) and customer_id:
+            try:
+                logger.debug(f"Fetching customer details for {customer_id}")
+                customer_obj = s.Customer.retrieve(customer_id)
+                fetched_name = getattr(customer_obj, "name", None)
+                fetched_email = getattr(customer_obj, "email", None)
+                
+                # Use fetched data to fill in missing info
+                customer_display_name = fetched_name or customer_display_name
+                c_email = fetched_email or c_email
+                c_name = fetched_name or c_name
+                
+                # Update customer object in subscription data for downstream use
+                d["customer"] = {
+                    "id": customer_id,
+                    "name": fetched_name or "",
+                    "email": fetched_email or "",
+                }
+                
+            except Exception as e:
+                logger.warning(f"Failed to fetch customer {customer_id}: {e}")
+        
+        # Final customer display name with robust fallback
+        if customer_display_name and c_email:
+            customer_display_name = f"{customer_display_name} ({c_email})"
+        elif customer_display_name:
+            pass  # Use name as-is
+        elif c_email:
+            customer_display_name = c_email
+        elif customer_id:
+            customer_display_name = f"Customer {customer_id}"
+        else:
+            customer_display_name = "Unknown Customer"
 
         # items
         items_block = d.get("items") or getattr(sub, "items", None)
@@ -791,7 +840,7 @@ def list_active_subscriptions(limit=200):
             qty = int(it_d.get("quantity") or 0)
             price = it_d.get("price") or getattr(it, "price", None)
 
-            # Use the new helper function to calculate weekly quantity
+            # Use the helper function to calculate weekly quantity
             weekly_qty += calculate_weekly_quantity(price, qty)
 
             # Get interval for item_rows

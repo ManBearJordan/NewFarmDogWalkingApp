@@ -130,7 +130,7 @@ class SubscriptionAutoSync(QObject):
     
     def handle_schedule_completion(self, subscription_id: str, schedule_data: Dict[str, Any], parent_widget=None) -> bool:
         """
-        Handle completion of schedule data for a subscription.
+        Handle completion of schedule data for a subscription with enhanced error handling.
         
         This updates both Stripe metadata and local database, then triggers
         immediate booking generation for the specific subscription.
@@ -138,12 +138,30 @@ class SubscriptionAutoSync(QObject):
         Args:
             subscription_id: Stripe subscription ID
             schedule_data: Dictionary with schedule information
+            parent_widget: Parent widget for showing error dialogs
             
         Returns:
             True if successful, False otherwise
         """
         try:
             logger.info(f"Processing completed schedule for subscription {subscription_id}")
+            
+            # Validate required fields
+            required_fields = ["days", "start_time", "end_time", "location", "dogs"]
+            missing_fields = [field for field in required_fields if not schedule_data.get(field)]
+            
+            if missing_fields:
+                error_msg = f"Missing required schedule fields: {', '.join(missing_fields)}"
+                logger.error(error_msg)
+                
+                if parent_widget:
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.warning(
+                        parent_widget,
+                        "Schedule Data Error", 
+                        f"Cannot save schedule - {error_msg}"
+                    )
+                return False
             
             # Step 1: Update Stripe subscription metadata
             success_stripe = update_stripe_subscription_metadata(
@@ -158,8 +176,8 @@ class SubscriptionAutoSync(QObject):
             )
             
             if not success_stripe:
-                logger.warning(f"Failed to update Stripe metadata for {subscription_id} - continuing with local update")
-                # Continue anyway with local update - Stripe update is not critical for immediate booking generation
+                logger.warning(f"Failed to update Stripe metadata for {subscription_id}")
+                # Don't fail completely - local update is more important
             
             # Step 2: Update local database (this is critical)
             success_local = update_local_subscription_schedule(
@@ -175,26 +193,47 @@ class SubscriptionAutoSync(QObject):
             )
             
             if not success_local:
-                logger.error(f"Failed to update local schedule for {subscription_id}")
+                error_msg = f"Failed to save schedule to local database for subscription {subscription_id}"
+                logger.error(error_msg)
+                
+                if parent_widget:
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.critical(
+                        parent_widget,
+                        "Database Error",
+                        f"Critical error: {error_msg}\n\n" +
+                        "Please try saving the schedule again. If this persists, " +
+                        "check the application logs for detailed error information."
+                    )
                 return False
             
             # Step 3: Immediately generate bookings for this subscription
             logger.info(f"Generating bookings for completed subscription {subscription_id}")
             
-            # Get the updated subscription from Stripe and sync just this one
             try:
+                # Get the updated subscription from Stripe and sync just this one
                 from stripe_integration import _api
                 stripe_api = _api()
                 updated_subscription = stripe_api.Subscription.retrieve(subscription_id, expand=['customer'])
                 
                 # Convert to dict format
-                subscription_data = dict(updated_subscription)
+                subscription_data_dict = dict(updated_subscription)
+                
+                # Ensure customer data is properly populated
+                try:
+                    from customer_display_helpers import ensure_customer_data_in_subscription
+                    subscription_data_dict = ensure_customer_data_in_subscription(subscription_data_dict)
+                except ImportError:
+                    logger.warning("customer_display_helpers not available for customer data enhancement")
                 
                 # Sync just this subscription to generate bookings immediately
                 from subscription_sync import sync_subscription_to_bookings
-                bookings_created = sync_subscription_to_bookings(self.conn, subscription_data, parent_widget)
+                bookings_created = sync_subscription_to_bookings(self.conn, subscription_data_dict, parent_widget)
                 
-                logger.info(f"Immediately created {bookings_created} bookings for subscription {subscription_id}")
+                if bookings_created > 0:
+                    logger.info(f"Successfully created {bookings_created} bookings for subscription {subscription_id}")
+                else:
+                    logger.warning(f"No bookings were created for subscription {subscription_id} - this may indicate missing service code or other issues")
                 
                 # Also trigger a full sync to ensure calendar is updated
                 sync_stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
@@ -203,12 +242,33 @@ class SubscriptionAutoSync(QObject):
                 return True
                 
             except Exception as sync_error:
-                logger.error(f"Failed to generate bookings for {subscription_id}: {sync_error}")
-                # Still return True since the schedule was saved, just booking generation failed
+                error_msg = f"Failed to generate bookings for {subscription_id}: {sync_error}"
+                logger.error(error_msg)
+                
+                if parent_widget:
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.warning(
+                        parent_widget,
+                        "Booking Generation Error",
+                        f"Schedule was saved successfully, but there was an error generating bookings:\n\n{sync_error}\n\n" +
+                        "You can manually refresh bookings from the Subscriptions tab."
+                    )
+                
+                # Still return True since the schedule was saved successfully
                 return True
             
         except Exception as e:
-            logger.error(f"Failed to handle schedule completion for {subscription_id}: {e}")
+            error_msg = f"Unexpected error handling schedule completion for {subscription_id}: {e}"
+            logger.error(error_msg)
+            
+            if parent_widget:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.critical(
+                    parent_widget,
+                    "Unexpected Error",
+                    f"An unexpected error occurred:\n\n{e}\n\n" +
+                    "Please try again or contact support if the problem persists."
+                )
             return False
 
 
@@ -330,52 +390,104 @@ class StartupSyncManager(QObject):
     
     def on_schedule_saved(self, subscription_id: str, schedule_data: Dict[str, Any]):
         """
-        Handle when user saves schedule data for a subscription.
+        Handle when user saves schedule data for a subscription with enhanced feedback.
         
         Args:
             subscription_id: Stripe subscription ID
             schedule_data: Dictionary with schedule information
         """
         try:
-            logger.info(f"Schedule saved for subscription {subscription_id}")
+            logger.info(f"Schedule saved for subscription {subscription_id}: {schedule_data}")
             
             # Process the completed schedule
             success = self.auto_sync.handle_schedule_completion(subscription_id, schedule_data, self.main_window)
             
             if success:
-                # Show success message with booking info
+                # Get booking count for display
+                try:
+                    from db import get_conn
+                    conn = get_conn()
+                    cur = conn.cursor()
+                    
+                    # Count bookings created for this subscription
+                    booking_count = cur.execute("""
+                        SELECT COUNT(*) as count FROM bookings 
+                        WHERE created_from_sub_id = ? AND source = 'subscription'
+                        AND start_dt >= datetime('now')
+                    """, (subscription_id,)).fetchone()
+                    
+                    conn.close()
+                    
+                    booking_count_text = f"{booking_count['count']} future bookings" if booking_count else "bookings"
+                    
+                except Exception as e:
+                    logger.warning(f"Could not get booking count: {e}")
+                    booking_count_text = "bookings"
+                
+                # Show enhanced success message
+                from PySide6.QtWidgets import QMessageBox
+                success_msg = (
+                    f"✅ Schedule saved successfully for subscription {subscription_id}!\n\n"
+                    f"✓ Schedule data saved to local database\n"
+                    f"✓ Stripe subscription metadata updated\n"
+                    f"✓ Generated {booking_count_text} and calendar entries\n\n"
+                    f"Schedule Details:\n"
+                    f"• Days: {schedule_data.get('days', 'Not specified')}\n"
+                    f"• Time: {schedule_data.get('start_time', '')} - {schedule_data.get('end_time', '')}\n"
+                    f"• Location: {schedule_data.get('location', 'Not specified')}\n"
+                    f"• Dogs: {schedule_data.get('dogs', 0)}\n"
+                    f"• Service: {schedule_data.get('service_code', 'Not specified')}\n\n"
+                    f"Your bookings are now available in the Calendar tab."
+                )
+                
                 QMessageBox.information(
                     self.main_window,
                     "Schedule Saved Successfully",
-                    f"✅ Schedule saved for subscription {subscription_id}!\n\n" +
-                    "✓ Updated Stripe subscription metadata\n" +
-                    "✓ Updated local database\n" +
-                    "✓ Generated bookings and calendar entries\n\n" +
-                    "Your bookings are now available in the Calendar tab."
+                    success_msg
                 )
                 
-                # Refresh UI
-                try:
-                    if hasattr(self.main_window, 'calendar_tab'):
-                        self.main_window.calendar_tab.refresh_day()
-                    if hasattr(self.main_window, 'subscriptions_tab'):
-                        self.main_window.subscriptions_tab.refresh_from_stripe()
-                    if hasattr(self.main_window, 'bookings_tab'):
-                        self.main_window.bookings_tab.refresh_two_weeks()
-                except Exception as e:
-                    logger.error(f"Error refreshing UI after schedule save: {e}")
+                # Refresh UI components
+                self._refresh_ui_after_schedule_save()
+                
             else:
-                # Show error message
+                # Show error message - details should have been shown by handle_schedule_completion
+                from PySide6.QtWidgets import QMessageBox
                 QMessageBox.warning(
                     self.main_window,
-                    "Save Error",
-                    f"There was an error saving the schedule for subscription {subscription_id}.\nPlease try again or check the logs for details."
+                    "Schedule Save Error",
+                    f"There was an error saving the schedule for subscription {subscription_id}.\n\n"
+                    f"Please check the error details that were displayed and try again.\n"
+                    f"You can also try completing the schedule manually in the Subscriptions tab."
                 )
                 
         except Exception as e:
             logger.error(f"Error handling schedule save for {subscription_id}: {e}")
+            from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(
                 self.main_window,
-                "Error",
-                f"An unexpected error occurred while saving the schedule:\n{str(e)}"
+                "Unexpected Error",
+                f"An unexpected error occurred while processing the saved schedule:\n\n{str(e)}\n\n"
+                f"Please try saving the schedule again or contact support if the problem persists."
             )
+    
+    def _refresh_ui_after_schedule_save(self):
+        """Refresh UI components after successful schedule save."""
+        try:
+            # Refresh calendar
+            if hasattr(self.main_window, 'calendar_tab') and hasattr(self.main_window.calendar_tab, 'refresh_day'):
+                self.main_window.calendar_tab.refresh_day()
+                logger.debug("Refreshed calendar tab")
+            
+            # Refresh subscriptions
+            if hasattr(self.main_window, 'subscriptions_tab') and hasattr(self.main_window.subscriptions_tab, 'refresh_from_stripe'):
+                self.main_window.subscriptions_tab.refresh_from_stripe()
+                logger.debug("Refreshed subscriptions tab")
+            
+            # Refresh bookings
+            if hasattr(self.main_window, 'bookings_tab') and hasattr(self.main_window.bookings_tab, 'refresh_two_weeks'):
+                self.main_window.bookings_tab.refresh_two_weeks()
+                logger.debug("Refreshed bookings tab")
+                
+        except Exception as e:
+            logger.error(f"Error refreshing UI after schedule save: {e}")
+            # Don't show error to user for UI refresh issues
