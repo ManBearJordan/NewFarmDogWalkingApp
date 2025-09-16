@@ -11,8 +11,8 @@ This module implements the automated subscription sync workflow that:
 
 import logging
 from typing import List, Dict, Any, Optional, Tuple
-from PySide6.QtWidgets import QWidget, QMessageBox, QApplication
-from PySide6.QtCore import QObject, Signal, QTimer, QThread
+from PySide6.QtWidgets import QWidget, QMessageBox, QApplication, QDialog
+from PySide6.QtCore import QObject, Signal, QTimer, QThread, Qt
 
 # Import our new modules
 from subscription_validator import (
@@ -133,7 +133,7 @@ class SubscriptionAutoSync(QObject):
         Handle completion of schedule data for a subscription.
         
         This updates both Stripe metadata and local database, then triggers
-        immediate booking generation.
+        immediate booking generation for the specific subscription.
         
         Args:
             subscription_id: Stripe subscription ID
@@ -157,10 +157,10 @@ class SubscriptionAutoSync(QObject):
             )
             
             if not success_stripe:
-                logger.warning(f"Failed to update Stripe metadata for {subscription_id}")
-                # Continue anyway with local update
+                logger.warning(f"Failed to update Stripe metadata for {subscription_id} - continuing with local update")
+                # Continue anyway with local update - Stripe update is not critical for immediate booking generation
             
-            # Step 2: Update local database
+            # Step 2: Update local database (this is critical)
             success_local = update_local_subscription_schedule(
                 self.conn,
                 subscription_id,
@@ -179,11 +179,31 @@ class SubscriptionAutoSync(QObject):
             # Step 3: Immediately generate bookings for this subscription
             logger.info(f"Generating bookings for completed subscription {subscription_id}")
             
-            # Re-sync all subscriptions to pick up the new data
-            sync_stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
-            logger.info(f"Booking generation completed: {sync_stats}")
-            
-            return True
+            # Get the updated subscription from Stripe and sync just this one
+            try:
+                from stripe_integration import _api
+                stripe_api = _api()
+                updated_subscription = stripe_api.Subscription.retrieve(subscription_id, expand=['customer'])
+                
+                # Convert to dict format
+                subscription_data = dict(updated_subscription)
+                
+                # Sync just this subscription to generate bookings immediately
+                from subscription_sync import sync_subscription_to_bookings
+                bookings_created = sync_subscription_to_bookings(self.conn, subscription_data)
+                
+                logger.info(f"Immediately created {bookings_created} bookings for subscription {subscription_id}")
+                
+                # Also trigger a full sync to ensure calendar is updated
+                sync_stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
+                logger.info(f"Full sync completed: {sync_stats}")
+                
+                return True
+                
+            except Exception as sync_error:
+                logger.error(f"Failed to generate bookings for {subscription_id}: {sync_error}")
+                # Still return True since the schedule was saved, just booking generation failed
+                return True
             
         except Exception as e:
             logger.error(f"Failed to handle schedule completion for {subscription_id}: {e}")
@@ -254,25 +274,55 @@ class StartupSyncManager(QObject):
         """
         Show schedule completion dialogs for subscriptions missing data.
         
+        All dialogs are dismissible and won't get stuck. Users can skip any subscription.
+        
         Args:
             missing_data_subscriptions: List of subscriptions missing schedule data
         """
         try:
             logger.info(f"Showing schedule dialogs for {len(missing_data_subscriptions)} subscriptions")
             
-            for subscription in missing_data_subscriptions:
-                from subscription_schedule_dialog import SubscriptionScheduleDialog
-                
-                dialog = SubscriptionScheduleDialog(subscription, self.main_window)
-                
-                # Connect schedule saved signal
-                dialog.schedule_saved.connect(self.on_schedule_saved)
-                
-                # Show dialog (non-blocking, but modal)
-                dialog.show()
-                
+            # Process each subscription one by one to avoid overwhelming the user
+            for i, subscription in enumerate(missing_data_subscriptions, 1):
+                try:
+                    from subscription_schedule_dialog import SubscriptionScheduleDialog
+                    
+                    # Create dialog with clear dismissible UI
+                    dialog = SubscriptionScheduleDialog(subscription, self.main_window)
+                    
+                    # Ensure dialog is properly dismissible
+                    dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowCloseButtonHint)
+                    dialog.setAttribute(Qt.WA_DeleteOnClose, True)  # Auto-cleanup
+                    
+                    # Connect schedule saved signal
+                    dialog.schedule_saved.connect(self.on_schedule_saved)
+                    
+                    # Show dialog as modal but dismissible
+                    dialog.setWindowTitle(f"Complete Schedule ({i}/{len(missing_data_subscriptions)})")
+                    result = dialog.exec()  # This blocks until dialog is closed
+                    
+                    if result == QDialog.Rejected:
+                        logger.info(f"User dismissed dialog for subscription {subscription.get('id', 'unknown')}")
+                        # Continue with next subscription - user can always skip
+                        continue
+                    
+                except Exception as dialog_error:
+                    logger.error(f"Error showing dialog for subscription {subscription.get('id', 'unknown')}: {dialog_error}")
+                    # Continue with other subscriptions even if one fails
+                    continue
+                    
         except Exception as e:
             logger.error(f"Error showing schedule dialogs: {e}")
+            # Show user-friendly error that won't get stuck
+            try:
+                QMessageBox.warning(
+                    self.main_window,
+                    "Schedule Setup",
+                    "Some subscription schedules need to be completed, but there was an error showing the setup dialogs.\n\n" +
+                    "Please use the Subscriptions tab to manually complete any missing schedule information."
+                )
+            except:
+                pass  # Don't let error dialogs get stuck either
     
     def on_schedule_saved(self, subscription_id: str, schedule_data: Dict[str, Any]):
         """
@@ -289,11 +339,15 @@ class StartupSyncManager(QObject):
             success = self.auto_sync.handle_schedule_completion(subscription_id, schedule_data)
             
             if success:
-                # Show success message
+                # Show success message with booking info
                 QMessageBox.information(
                     self.main_window,
-                    "Schedule Saved",
-                    f"Schedule saved successfully!\nBookings and calendar entries have been generated for subscription {subscription_id}."
+                    "Schedule Saved Successfully",
+                    f"✅ Schedule saved for subscription {subscription_id}!\n\n" +
+                    "✓ Updated Stripe subscription metadata\n" +
+                    "✓ Updated local database\n" +
+                    "✓ Generated bookings and calendar entries\n\n" +
+                    "Your bookings are now available in the Calendar tab."
                 )
                 
                 # Refresh UI

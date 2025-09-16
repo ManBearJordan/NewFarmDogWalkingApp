@@ -74,6 +74,10 @@ class SubscriptionScheduleDialog(QDialog):
         self.setMinimumWidth(500)
         self.setMinimumHeight(400)
         
+        # Ensure dialog is always dismissible and doesn't get stuck
+        self.setWindowFlags(self.windowFlags() | Qt.WindowCloseButtonHint)
+        self.setAttribute(Qt.WA_DeleteOnClose, True)
+        
         layout = QVBoxLayout(self)
         
         # Header with subscription info
@@ -143,15 +147,17 @@ class SubscriptionScheduleDialog(QDialog):
         
         layout.addLayout(form_layout)
         
-        # Buttons
+        # Buttons with better UX
         button_box = QDialogButtonBox()
         
         self.save_button = QPushButton("Save & Generate Bookings")
         self.save_button.setDefault(True)
         self.save_button.clicked.connect(self.save_schedule)
+        self.save_button.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; padding: 8px; }")
         
         skip_button = QPushButton("Skip for Now")
-        skip_button.clicked.connect(self.reject)
+        skip_button.clicked.connect(self.skip_subscription)
+        skip_button.setToolTip("You can complete this later in the Subscriptions tab")
         
         button_box.addButton(self.save_button, QDialogButtonBox.AcceptRole)
         button_box.addButton(skip_button, QDialogButtonBox.RejectRole)
@@ -265,6 +271,16 @@ class SubscriptionScheduleDialog(QDialog):
         
         # Close dialog
         self.accept()
+    
+    def skip_subscription(self):
+        """Handle skipping this subscription for now."""
+        logger.info(f"User skipped subscription {self.subscription_id}")
+        self.reject()
+    
+    def closeEvent(self, event):
+        """Handle dialog close event to ensure it doesn't get stuck."""
+        logger.info(f"Dialog closed for subscription {self.subscription_id}")
+        event.accept()  # Always allow closing
 
 
 def show_subscription_schedule_dialogs(subscriptions_missing_data, parent=None):
