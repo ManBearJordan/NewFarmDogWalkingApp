@@ -26,6 +26,7 @@ from stripe_integration import (
 import bookings_two_week as btw
 from reports_tab import ReportsTab
 from date_range_helpers import resolve_range
+from crm_dashboard import CRMDashboardTab
 
 # --- Helpers for Calendar view ---------------------------------------------
 
@@ -204,8 +205,8 @@ class ClientsTab(QWidget):
         credit_row.addStretch()
         layout.addLayout(credit_row)
 
-        self.table = QTableWidget(0,8)
-        self.table.setHorizontalHeaderLabels(["ID","Name","Email","Phone","Address","Notes","Credit","StripeCustomerID"])
+        self.table = QTableWidget(0,10)
+        self.table.setHorizontalHeaderLabels(["ID","Name","Email","Phone","Address","Notes","Credit","Status","Tags","StripeCustomerID"])
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.itemSelectionChanged.connect(self.on_row_select)
         layout.addWidget(self.table)
@@ -224,7 +225,10 @@ class ClientsTab(QWidget):
         #     pass
 
     def refresh(self):
-        rows = self.conn.execute("SELECT id,name,email,phone,address,notes,COALESCE(credit_cents,0) as credit_cents,stripe_customer_id FROM clients ORDER BY id DESC").fetchall()
+        from crm_module import CRMManager
+        crm = CRMManager(self.conn)
+        
+        rows = self.conn.execute("SELECT id,name,email,phone,address,notes,COALESCE(credit_cents,0) as credit_cents,status,stripe_customer_id FROM clients ORDER BY id DESC").fetchall()
         self.table.setRowCount(0)
         for r in rows:
             row = self.table.rowCount(); self.table.insertRow(row)
@@ -234,7 +238,20 @@ class ClientsTab(QWidget):
             credit_cents = r["credit_cents"] or 0
             credit_display = f"${credit_cents/100:.2f}"
             self.table.setItem(row,6,QTableWidgetItem(credit_display))
-            self.table.setItem(row,7,QTableWidgetItem(str(r["stripe_customer_id"] or "")))
+            
+            # Show customer status
+            status = r["status"] or "active"
+            self.table.setItem(row,7,QTableWidgetItem(status.title()))
+            
+            # Show customer tags
+            client_tags = crm.get_client_tags(r["id"])
+            tag_names = [tag.name for tag in client_tags[:3]]  # Show up to 3 tags
+            tag_display = ", ".join(tag_names)
+            if len(client_tags) > 3:
+                tag_display += f" (+{len(client_tags)-3} more)"
+            self.table.setItem(row,8,QTableWidgetItem(tag_display))
+            
+            self.table.setItem(row,9,QTableWidgetItem(str(r["stripe_customer_id"] or "")))
 
     def on_row_select(self):
         items = self.table.selectedItems()
@@ -2446,6 +2463,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.tabs)
         
         # Add tabs
+        self.crm_dashboard = CRMDashboardTab()
         self.clients_tab = ClientsTab()
         self.pets_tab = PetsTab()
         self.bookings_tab = BookingsTab()
@@ -2454,6 +2472,7 @@ class MainWindow(QMainWindow):
         self.reports_tab = ReportsTab()
         self.archive_tab = ArchiveTab(get_conn())
         
+        self.tabs.addTab(self.crm_dashboard, "CRM Dashboard")
         self.tabs.addTab(self.clients_tab, "Clients")
         self.tabs.addTab(self.pets_tab, "Pets")
         self.tabs.addTab(self.bookings_tab, "Bookings")
