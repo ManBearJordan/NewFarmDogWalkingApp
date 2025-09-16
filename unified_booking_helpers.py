@@ -347,20 +347,18 @@ def rebuild_subscription_bookings(conn: sqlite3.Connection, sub_id: str,
             client_id = resolve_client_id(conn, customer.id)
         
         # Get service info from subscription items
-        if hasattr(subscription, 'items') and subscription.items.data:
-            item = subscription.items.data[0]
-            price = item.price
-            
-            # Extract service info from price/product metadata
-            if hasattr(price, 'metadata') and price.metadata:
+        items = getattr(subscription, "items", None)
+        if items and hasattr(items, "data") and items.data:
+            item = items.data[0]
+            price = getattr(item, "price", None)
+            if price and hasattr(price, "metadata") and price.metadata:
                 price_metadata = dict(price.metadata)
-                service_input = (price_metadata.get('service_name') or 
-                               price.nickname or service_input)
-            elif price.nickname:
+                service_input = price_metadata.get('service_name') or price.nickname or service_input
+            elif price and hasattr(price, "nickname") and price.nickname:
                 service_input = price.nickname
             
             # Try product metadata as fallback
-            if hasattr(price, 'product') and hasattr(price.product, 'metadata'):
+            if price and hasattr(price, 'product') and hasattr(price.product, 'metadata'):
                 product_metadata = dict(price.product.metadata or {})
                 if service_input == "Dog Walking Service":  # Still default
                     service_input = (product_metadata.get('service_name') or 

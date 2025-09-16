@@ -2013,12 +2013,13 @@ class SubscriptionsTab(QWidget):
                     client_id = c.lastrowid
             
             # FIXED: Extract service information from subscription items
-            if hasattr(subscription, 'items') and subscription.items.data:
-                item = subscription.items.data[0]  # Use first item
-                price = item.price
+            items = getattr(subscription, "items", None)
+            if items and hasattr(items, "data") and items.data:
+                item = items.data[0]  # Use first item
+                price = getattr(item, "price", None)
                 
                 # Try to get service info from price metadata
-                if hasattr(price, 'metadata') and price.metadata:
+                if price and hasattr(price, 'metadata') and price.metadata:
                     price_metadata = dict(price.metadata)
                     # Check both service_code and service_type (interchangeable)
                     service_type = (price_metadata.get('service_code') or 
@@ -2027,12 +2028,12 @@ class SubscriptionsTab(QWidget):
                     service_label = (price_metadata.get('service_name') or 
                                    price.nickname or 
                                    service_label)
-                elif price.nickname:
+                elif price and hasattr(price, "nickname") and price.nickname:
                     service_label = price.nickname
                     service_type = self._derive_service_type_from_label(service_label)
                 
                 # Try product metadata as fallback
-                if hasattr(price, 'product') and hasattr(price.product, 'metadata'):
+                if price and hasattr(price, 'product') and hasattr(price.product, 'metadata'):
                     product_metadata = dict(price.product.metadata or {})
                     if not service_type or service_type == "WALK_GENERAL":
                         # Check both service_code and service_type (interchangeable)
