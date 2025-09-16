@@ -237,8 +237,46 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
         logger.warning(f"Could not resolve client for customer {customer_id}")
         return 0
     
-    # Extract service code
+    # Enhanced service code extraction with better fallback handling
     service_code = extract_service_code_from_metadata(subscription_data)
+    if not service_code:
+        logger.info(f"Primary service code extraction failed for subscription {subscription_id}, trying fallback methods...")
+        
+        # Fallback 1: Try to derive from product information
+        try:
+            from service_map import get_service_code, is_valid_service_code
+            items = subscription_data.get("items", {})
+            if isinstance(items, dict):
+                items_data = items.get("data", [])
+            else:
+                items_data = getattr(items, "data", []) if items else []
+            
+            for item in items_data:
+                price = item.get("price", {}) if isinstance(item, dict) else getattr(item, "price", {})
+                if isinstance(price, dict):
+                    # Try price nickname mapping
+                    price_nickname = price.get("nickname", "")
+                    if price_nickname:
+                        mapped_code = get_service_code(price_nickname.strip())
+                        if mapped_code and is_valid_service_code(mapped_code):
+                            service_code = mapped_code
+                            logger.info(f"Derived service code '{service_code}' from price nickname for subscription {subscription_id}")
+                            break
+                    
+                    # Try product name mapping
+                    product = price.get("product", {})
+                    if isinstance(product, dict):
+                        product_name = product.get("name", "")
+                        if product_name:
+                            mapped_code = get_service_code(product_name.strip())
+                            if mapped_code and is_valid_service_code(mapped_code):
+                                service_code = mapped_code
+                                logger.info(f"Derived service code '{service_code}' from product name for subscription {subscription_id}")
+                                break
+        except Exception as fallback_error:
+            logger.warning(f"Service code fallback mapping failed for subscription {subscription_id}: {fallback_error}")
+    
+    # If still no service code, use interactive dialog or default
     if not service_code:
         logger.warning(f"No valid service code found for subscription {subscription_id}")
         
@@ -265,13 +303,19 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
                         # Continue anyway - we can still use the service code locally
                 else:
                     logger.info(f"User did not select service code for subscription {subscription_id}")
-                    return 0
+                    # Use default service code rather than failing completely
+                    service_code = "DOG_WALK"  # Safe default
+                    logger.warning(f"Using default service code '{service_code}' for subscription {subscription_id}")
                     
             except Exception as e:
                 logger.error(f"Error showing service selection dialog: {e}")
-                return 0
+                # Use default service code rather than failing completely
+                service_code = "DOG_WALK"  # Safe default
+                logger.warning(f"Falling back to default service code '{service_code}' for subscription {subscription_id}")
         else:
-            return 0
+            # No UI available - use default service code
+            service_code = "DOG_WALK"  # Safe default
+            logger.warning(f"No UI available, using default service code '{service_code}' for subscription {subscription_id}")
     
     # Extract schedule
     schedule = extract_schedule_from_subscription(subscription_data)

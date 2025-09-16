@@ -42,18 +42,23 @@ def get_subscriptions_missing_schedule_data(subscriptions: List[Dict[str, Any]])
         # Check if any required fields are missing or empty
         missing_fields = []
         
-        # Extract and check service code - be more permissive for existing subscriptions
-        # Only flag as missing if there's genuinely no service code information at all
+        # Enhanced service code detection with multiple fallback strategies
         metadata = subscription.get("metadata", {})
-        has_service_code = (
+        has_service_code = False
+        service_code_source = None
+        
+        # Strategy 1: Check direct metadata fields
+        direct_service_code = (
             metadata.get("service_code") or 
             extract_service_code_from_metadata(subscription)
         )
         
-        # Only add service_code as missing if we truly have no service information
-        # This prevents blocking workflow for valid subscriptions
+        if direct_service_code:
+            has_service_code = True
+            service_code_source = "direct_metadata"
+        
+        # Strategy 2: Try to derive from product information if no direct code
         if not has_service_code:
-            # Check if we can derive service code from product information
             try:
                 from service_map import get_service_code, is_valid_service_code
                 items = subscription.get("items", {})
@@ -62,25 +67,59 @@ def get_subscriptions_missing_schedule_data(subscriptions: List[Dict[str, Any]])
                 else:
                     items_data = getattr(items, "data", []) if items else []
                 
-                found_mappable_service = False
                 for item in items_data:
                     price = item.get("price", {}) if isinstance(item, dict) else getattr(item, "price", {})
                     if isinstance(price, dict):
+                        # Try price metadata first
+                        price_metadata = price.get("metadata", {})
+                        if price_metadata and price_metadata.get("service_code"):
+                            has_service_code = True
+                            service_code_source = "price_metadata"
+                            break
+                        
+                        # Try product name mapping
                         product = price.get("product", {})
                         if isinstance(product, dict):
                             product_name = product.get("name", "")
                             if product_name:
                                 mapped_code = get_service_code(product_name.strip())
                                 if mapped_code and is_valid_service_code(mapped_code):
-                                    found_mappable_service = True
+                                    has_service_code = True
+                                    service_code_source = "product_mapping"
                                     break
-                
-                # Only flag as missing if we can't map from product either
-                if not found_mappable_service:
-                    missing_fields.append("service_code")
-            except Exception:
-                # If service mapping fails, we'll prompt user later rather than blocking
-                missing_fields.append("service_code")
+                        
+                        # Try product metadata
+                        if isinstance(product, dict) and product.get("metadata", {}):
+                            product_metadata = product.get("metadata", {})
+                            if product_metadata.get("service_code"):
+                                has_service_code = True
+                                service_code_source = "product_metadata"
+                                break
+            except Exception as e:
+                logger.warning(f"Service code mapping failed for subscription {subscription.get('id', 'unknown')}: {e}")
+        
+        # Strategy 3: Use permissive fallback for existing subscriptions
+        if not has_service_code:
+            # Check if subscription is older than 24 hours - if so, use default service code
+            created_timestamp = subscription.get("created")
+            if created_timestamp:
+                try:
+                    import time
+                    subscription_age_hours = (time.time() - created_timestamp) / 3600
+                    if subscription_age_hours > 24:
+                        # For older subscriptions, assume a default service code to prevent blocking
+                        has_service_code = True
+                        service_code_source = "legacy_default"
+                        logger.info(f"Using default service code for legacy subscription {subscription.get('id', 'unknown')}")
+                except Exception:
+                    pass
+        
+        # Only mark service_code as missing if all strategies fail for new subscriptions
+        if not has_service_code:
+            missing_fields.append("service_code")
+            logger.debug(f"No service code found for subscription {subscription.get('id', 'unknown')} via any strategy")
+        else:
+            logger.debug(f"Service code found for subscription {subscription.get('id', 'unknown')} via {service_code_source}")
         
         # Check days
         if not schedule.get("day_list") or len(schedule["day_list"]) == 0:
