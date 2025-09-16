@@ -2333,7 +2333,6 @@ class SubscriptionsTab(QWidget):
     def delete_subscription(self):
         """Delete selected subscription with confirmation dialog"""
         from unified_booking_helpers import delete_subscription_locally
-        from stripe_integration import cancel_subscription
         
         # 1) Ensure we have a selected row
         row = self.table.currentRow()
@@ -2360,8 +2359,9 @@ class SubscriptionsTab(QWidget):
             f"This action will:\n"
             f"• Remove all future bookings from this subscription\n"
             f"• Remove calendar entries\n"
-            f"• Delete the subscription schedule\n"
-            f"• Cancel the subscription in Stripe (configurable)\n\n"
+            f"• Delete the subscription schedule\n\n"
+            f"NOTE: This will only remove the subscription from the local database.\n"
+            f"The subscription will remain active in Stripe and continue billing.\n\n"
             f"This action cannot be undone.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
@@ -2384,21 +2384,10 @@ class SubscriptionsTab(QWidget):
             QMessageBox.critical(self, "Local Delete Failed", f"Error deleting local data: {str(e)}")
             return
 
-        # 6) Optional Stripe cancellation (configurable - for now always attempt)
-        stripe_success = False
-        try:
-            stripe_success = cancel_subscription(sub_id)
-            if stripe_success:
-                success_msg += f"\n• Subscription canceled in Stripe"
-            else:
-                success_msg += f"\n• Warning: Could not cancel subscription in Stripe"
-        except Exception as e:
-            success_msg += f"\n• Warning: Stripe cancellation failed: {str(e)}"
-
-        # 7) Remove from UI table
+        # 6) Remove from UI table
         self.table.removeRow(row)
 
-        # 8) Refresh calendar and bookings to show changes
+        # 7) Refresh calendar and bookings to show changes
         main_window = self._get_main_window()
         if main_window:
             if hasattr(main_window, 'calendar_tab'):
@@ -2407,10 +2396,10 @@ class SubscriptionsTab(QWidget):
             if hasattr(main_window, 'bookings_tab'):
                 main_window.bookings_tab.refresh_two_weeks()
 
-        # 9) Show success message
+        # 8) Show success message
         QMessageBox.information(self, "Subscription Deleted", success_msg)
 
-        # 10) Trigger automatic sync to fetch any missing subscriptions
+        # 9) Trigger automatic sync to fetch any missing subscriptions
         try:
             # This will fetch subscriptions from Stripe and show dialogs for any missing data
             from startup_sync import SubscriptionAutoSync

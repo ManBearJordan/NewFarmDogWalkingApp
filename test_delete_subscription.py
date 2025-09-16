@@ -1,8 +1,13 @@
 """
 Tests for delete subscription functionality.
 
-This test suite validates the new delete subscription feature that allows users
-to delete subscriptions and clean up associated bookings and calendar entries.
+This test suite validates the delete subscription feature that allows users
+to delete subscriptions from the local database and clean up associated 
+bookings and calendar entries.
+
+IMPORTANT: The delete subscription feature only performs local cleanup.
+It does NOT cancel or modify subscriptions in Stripe. Stripe subscriptions
+remain active and continue billing after local deletion.
 """
 
 import unittest
@@ -22,7 +27,12 @@ from db import init_db, get_conn
 
 
 class TestDeleteSubscription(unittest.TestCase):
-    """Test suite for delete subscription functionality."""
+    """Test suite for delete subscription functionality.
+    
+    Note: The delete subscription feature only performs local database cleanup.
+    It does NOT cancel subscriptions in Stripe. Stripe subscriptions remain active
+    and continue billing after local deletion.
+    """
     
     def setUp(self):
         """Set up test database and environment."""
@@ -175,7 +185,7 @@ class TestDeleteSubscription(unittest.TestCase):
     
     @patch('stripe_integration.stripe')
     def test_cancel_subscription_success(self, mock_stripe):
-        """Test successful Stripe subscription cancellation."""
+        """Test successful Stripe subscription cancellation (standalone function, NOT used by delete workflow)."""
         # Mock successful cancellation
         mock_subscription = Mock()
         mock_subscription.status = 'canceled'
@@ -192,7 +202,7 @@ class TestDeleteSubscription(unittest.TestCase):
     
     @patch('stripe_integration.stripe')
     def test_cancel_subscription_failure(self, mock_stripe):
-        """Test Stripe subscription cancellation failure."""
+        """Test Stripe subscription cancellation failure (standalone function, NOT used by delete workflow)."""
         # Mock failure
         mock_stripe.Subscription.cancel.side_effect = Exception("Stripe error")
         
