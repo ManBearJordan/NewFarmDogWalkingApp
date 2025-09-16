@@ -1591,40 +1591,32 @@ class CalendarTab(QWidget):
 
     def refresh_calendar(self):
         """
-        Refresh calendar functionality:
-        1. Pulls subscriptions from Stripe
-        2. Drops future holds for cancelled subs with clear_future_sub_occurrences(...)
-        3. Re-seeds holds via materialize_sub_occurrences(...)
-        4. Refreshes the current day view
+        Refresh calendar using unified subscription sync.
+        
+        This now uses the new unified subscription-driven workflow where
+        subscriptions are the single source of truth for bookings and calendar.
         """
         try:
-            # Import the required function
-            from stripe_integration import list_active_subscriptions
+            from subscription_sync import sync_subscriptions_to_bookings_and_calendar
             
-            # 1. Pull subscriptions from Stripe
-            QMessageBox.information(self, "Refresh Calendar", "Syncing subscriptions from Stripe...")
-            subs = list_active_subscriptions()
+            QMessageBox.information(self, "Refresh Calendar", "Syncing subscriptions to bookings and calendar...")
             
-            # Get active subscription IDs
-            active_ids = [s.get("id") for s in subs if s.get("id")]
+            # Use the unified sync function
+            stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
             
-            # 2. Find cancelled subscriptions and clear their future holds
-            cur = self.conn.cursor()
-            cur.execute("SELECT DISTINCT stripe_subscription_id FROM sub_occurrences WHERE start_dt >= date('now')")
-            local_ids = [r[0] for r in cur.fetchall()]
-            canceled = [sid for sid in local_ids if sid not in active_ids]
-            
-            if canceled:
-                clear_future_sub_occurrences(self.conn, canceled)
-                QMessageBox.information(self, "Refresh Calendar", f"Cleared future holds for {len(canceled)} cancelled subscription(s).")
-            
-            # 3. Re-seed holds for all active subscriptions using the new method
-            self.rebuild_calendar_materialisation()
-            
-            # 4. Refresh the current day view
+            # Refresh the current day view
             self.refresh_day()
             
-            QMessageBox.information(self, "Refresh Calendar", "Calendar refreshed successfully! Subscriptions synced and holds updated.")
+            # Show results
+            msg = f"""Calendar refresh complete!
+            
+Subscriptions processed: {stats['subscriptions_processed']}
+Bookings created: {stats['bookings_created']}
+Bookings cleaned up: {stats['bookings_cleaned']}
+
+Subscriptions are now the single source of truth for bookings and calendar."""
+            
+            QMessageBox.information(self, "Refresh Calendar", msg)
             
         except Exception as e:
             QMessageBox.critical(self, "Refresh Calendar Error", f"Failed to refresh calendar: {str(e)}")
@@ -2514,6 +2506,14 @@ class MainWindow(QMainWindow):
             materialize_sub_occurrences(self.conn, horizon_days=90)
         except Exception as e:
             print("Subscription materialization error:", e)
+        
+        # Perform unified subscription sync on startup
+        try:
+            from subscription_sync import sync_on_startup
+            sync_stats = sync_on_startup(self.conn)
+            print(f"Startup subscription sync completed: {sync_stats}")
+        except Exception as e:
+            print("Startup subscription sync error:", e)
         
         # Show admin tasks due today popup
         try:

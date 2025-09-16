@@ -540,25 +540,50 @@ def booking_items_total_cents(conn, booking_id: int) -> int:
     """, (booking_id,))
     return int(cur.fetchone()[0] or 0)
 
-def add_or_upsert_booking(conn, client_id, service_label, service_type,
-                          start_iso, end_iso, location, dogs, price_cents, notes):
+def add_or_upsert_booking(conn, client_id, service_code, start_dt, end_dt, 
+                          location, dogs, price_cents, notes, status="scheduled",
+                          created_from_sub_id=None, source="manual", service_label=None):
+    """
+    Add or update a booking with support for subscription tracking.
+    
+    Args:
+        conn: Database connection
+        client_id: Client ID
+        service_code: Service code (canonical)
+        start_dt: Start datetime (ISO string)
+        end_dt: End datetime (ISO string)
+        location: Service location
+        dogs: Number of dogs
+        price_cents: Price in cents
+        notes: Booking notes
+        status: Booking status
+        created_from_sub_id: Stripe subscription ID if from subscription
+        source: Source of booking ('manual', 'subscription', etc.)
+        service_label: Human-readable service label (derived from service_code if None)
+    """
+    from service_map import get_service_display_name
+    
+    if service_label is None:
+        service_label = get_service_display_name(service_code, service_code)
+    
     cur = conn.cursor()
+    
+    # Use the existing booking structure but add subscription fields
     cur.execute("""
-        INSERT INTO bookings (client_id, service, service_type, start_dt, end_dt, start, end, location, dogs, price_cents, status, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)
-        ON CONFLICT(client_id, service_type, start, end) DO UPDATE SET
-            service     = excluded.service,
-            location    = excluded.location,
-            dogs        = excluded.dogs,
-            price_cents = excluded.price_cents,
-            notes       = COALESCE(excluded.notes, bookings.notes),
-            updated_at  = CURRENT_TIMESTAMP
-    """, (client_id, service_label, service_type, start_iso, end_iso, start_iso, end_iso, location, dogs, price_cents, notes))
+        INSERT INTO bookings 
+        (client_id, service_type, service, service_name, start_dt, end_dt, start, end, 
+         location, dogs_count, dogs, price_cents, status, notes, created_from_sub_id, source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        client_id, service_code, service_label, service_code, 
+        start_dt, end_dt, start_dt, end_dt,
+        location or "", int(dogs or 1), int(dogs or 1), int(price_cents or 0), 
+        status, notes or "", created_from_sub_id, source
+    ))
+    
+    booking_id = cur.lastrowid
     conn.commit()
-    row = cur.execute("""SELECT id FROM bookings
-                          WHERE client_id=? AND service_type=? AND start=? AND end=?""",
-                      (client_id, service_type, start_iso, end_iso)).fetchone()
-    return row["id"]
+    return booking_id
 
 def set_booking_invoice(conn, booking_id, invoice_id):
     cur = conn.cursor()
