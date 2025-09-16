@@ -196,6 +196,11 @@ def generate_booking_occurrences(subscription_data: Dict[str, Any],
             
             occurrence = {
                 "subscription_id": subscription_data["id"],
+                "customer_id": subscription_data.get("customer_id") or (
+                    subscription_data.get("customer", {}).get("id") 
+                    if isinstance(subscription_data.get("customer"), dict)
+                    else getattr(subscription_data.get("customer"), "id", None)
+                ),  # ALWAYS include customer_id as per requirements
                 "client_id": client_id,
                 "service_code": service_code,
                 "start_dt": start_iso,
@@ -217,6 +222,8 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
     """
     Sync a single subscription to generate/update bookings.
     
+    Ensures every subscription ALWAYS stores the Stripe customer ID as per requirements.
+    
     Args:
         conn: Database connection
         subscription_data: Subscription data from Stripe API
@@ -224,17 +231,31 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
     Returns:
         Number of bookings created/updated
     """
+    from log_utils import log_subscription_error, log_subscription_warning
+    
     subscription_id = subscription_data["id"]
     
-    # Resolve client ID
+    # Extract customer_id with robust fallback - REQUIREMENT: Always store customer_id
     customer_id = subscription_data.get("customer_id")
     if not customer_id:
-        logger.warning(f"No customer ID for subscription {subscription_id}")
+        # Try to extract from customer object
+        customer = subscription_data.get("customer")
+        if isinstance(customer, dict):
+            customer_id = customer.get("id")
+        elif customer:
+            customer_id = getattr(customer, "id", None)
+    
+    if not customer_id:
+        log_subscription_error("Missing customer_id in subscription data", subscription_id)
         return 0
+    
+    # Ensure subscription_data includes customer_id for all downstream operations
+    if "customer_id" not in subscription_data:
+        subscription_data["customer_id"] = customer_id
     
     client_id = resolve_client_id(conn, customer_id)
     if not client_id:
-        logger.warning(f"Could not resolve client for customer {customer_id}")
+        log_subscription_warning(f"Could not resolve client for customer {customer_id}", subscription_id)
         return 0
     
     # Enhanced service code extraction with better fallback handling
