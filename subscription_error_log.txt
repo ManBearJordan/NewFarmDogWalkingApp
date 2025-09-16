@@ -233,3 +233,4 @@ let us know at support@stripe.com.
 
 (Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=5&expand%5B0%5D=data.customer&expand%5B1%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
 >>>>>>> 717c9907b3f1fdbc38ba685e3ddc27eb0565eac3
+2025-09-16 23:20:40,936 ERROR [SUB:sub_invalid] Missing customer_id in subscription data
