@@ -1526,16 +1526,13 @@ class CalendarTab(QWidget):
         self.conn = get_conn()
         layout = QVBoxLayout(self)
 
-        # Add refresh and sync buttons at the top
+        # Add troubleshooting button only (removed legacy sync buttons per requirements)
         button_row = QHBoxLayout()
-        self.refresh_calendar_btn = QPushButton("Refresh Calendar")
-        self.refresh_calendar_btn.clicked.connect(self.refresh_calendar)
-        button_row.addWidget(self.refresh_calendar_btn)
         
-        self.sync_subscriptions_btn = QPushButton("Sync Subscriptions")
-        self.sync_subscriptions_btn.clicked.connect(self.manual_subscription_sync)
-        self.sync_subscriptions_btn.setToolTip("Manually sync all subscriptions from Stripe to update bookings and calendar")
-        button_row.addWidget(self.sync_subscriptions_btn)
+        self.troubleshoot_btn = QPushButton("Troubleshoot Sync")
+        self.troubleshoot_btn.clicked.connect(self.troubleshoot_sync)
+        self.troubleshoot_btn.setToolTip("Force manual sync if there are sync issues")
+        button_row.addWidget(self.troubleshoot_btn)
         
         button_row.addStretch()
         layout.addLayout(button_row)
@@ -1600,50 +1597,39 @@ class CalendarTab(QWidget):
 
     def refresh_calendar(self):
         """
-        Refresh calendar using unified subscription sync.
+        Refresh calendar display without full sync.
         
-        This now uses the new unified subscription-driven workflow where
-        subscriptions are the single source of truth for bookings and calendar.
+        Updated to work with the new automatic sync workflow.
+        This now just refreshes the display without performing subscription sync.
         """
         try:
-            from subscription_sync import sync_subscriptions_to_bookings_and_calendar
-            
-            QMessageBox.information(self, "Refresh Calendar", "Syncing subscriptions to bookings and calendar...")
-            
-            # Use the unified sync function
-            stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
-            
-            # Refresh the current day view
+            # Just refresh the current day view - no more subscription sync
             self.refresh_day()
             
-            # Show results
-            msg = f"""Calendar refresh complete!
-            
-Subscriptions processed: {stats['subscriptions_processed']}
-Bookings created: {stats['bookings_created']}
-Bookings cleaned up: {stats['bookings_cleaned']}
-
-Subscriptions are now the single source of truth for bookings and calendar."""
-            
-            QMessageBox.information(self, "Refresh Calendar", msg)
+            # Show brief confirmation
+            QMessageBox.information(
+                self, 
+                "Calendar Refreshed", 
+                "Calendar display has been refreshed.\n\nNote: Subscription sync now happens automatically when the app starts."
+            )
             
         except Exception as e:
             QMessageBox.critical(self, "Refresh Calendar Error", f"Failed to refresh calendar: {str(e)}")
 
-    def manual_subscription_sync(self):
+    def troubleshoot_sync(self):
         """
-        Manually trigger subscription sync.
+        Troubleshooting sync method that forces a manual sync.
         
-        This allows users to immediately sync subscriptions from Stripe
-        without waiting for automatic sync triggers.
+        This replaces the removed legacy sync buttons and should only be used
+        when there are sync issues that need to be resolved manually.
         """
         try:
             from subscription_sync import sync_subscriptions_to_bookings_and_calendar
             
             # Show progress message
             progress_msg = QMessageBox(self)
-            progress_msg.setWindowTitle("Subscription Sync")
-            progress_msg.setText("Syncing subscriptions from Stripe...")
+            progress_msg.setWindowTitle("Troubleshoot Sync")
+            progress_msg.setText("Performing troubleshooting sync...\nThis may take a moment.")
             progress_msg.setStandardButtons(QMessageBox.NoButton)
             progress_msg.show()
             QApplication.processEvents()
@@ -1656,20 +1642,40 @@ Subscriptions are now the single source of truth for bookings and calendar."""
             self.refresh_day()
             
             # Show results
-            msg = f"""Manual subscription sync complete!
-            
-📊 Sync Statistics:
-• Subscriptions processed: {stats['subscriptions_processed']}
-• Bookings created: {stats['bookings_created']}  
-• Bookings cleaned up: {stats['bookings_cleaned']}
+            msg = f"""Troubleshooting sync completed successfully!
 
-✅ All subscriptions are now synchronized with bookings and calendar.
-Subscriptions are the single source of truth."""
+Subscriptions processed: {stats['subscriptions_processed']}
+Bookings created: {stats['bookings_created']}
+Bookings cleaned up: {stats['bookings_cleaned']}
+
+Note: Subscriptions are now automatically synced when the app starts.
+This troubleshooting sync should only be needed in case of sync issues."""
             
-            QMessageBox.information(self, "Subscription Sync Complete", msg)
+            QMessageBox.information(self, "Troubleshoot Sync Complete", msg)
             
         except Exception as e:
-            QMessageBox.critical(self, "Subscription Sync Error", f"Failed to sync subscriptions: {str(e)}")
+            QMessageBox.critical(self, "Troubleshoot Sync Error", f"Failed to perform troubleshooting sync: {str(e)}")
+
+    def manual_subscription_sync(self):
+        """
+        Legacy method - now redirects to troubleshoot sync.
+        
+        This method is kept for compatibility but redirects to the new
+        troubleshooting sync functionality.
+        """
+        # Redirect to troubleshoot sync with explanation
+        reply = QMessageBox.question(
+            self,
+            "Manual Sync",
+            "Manual subscription sync has been replaced with automatic sync on app startup.\n\n" +
+            "Would you like to perform a troubleshooting sync instead?\n" +
+            "(This should only be needed if there are sync issues)",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.troubleshoot_sync()
 
     # REMOVED: No longer compute subscription holds - only show real bookings
 
@@ -2557,13 +2563,15 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print("Subscription materialization error:", e)
         
-        # Perform unified subscription sync on startup
+        # Initialize automatic subscription sync with modal popups
         try:
-            from subscription_sync import sync_on_startup
-            sync_stats = sync_on_startup(self.conn)
-            print(f"Startup subscription sync completed: {sync_stats}")
+            from startup_sync import StartupSyncManager
+            self.sync_manager = StartupSyncManager(self)
+            self.sync_manager.set_connection(self.conn)
+            # Start automatic sync after UI is fully loaded
+            self.sync_manager.start_automatic_sync(delay_ms=2000)
         except Exception as e:
-            print("Startup subscription sync error:", e)
+            print("Startup sync initialization error:", e)
         
         # Show admin tasks due today popup
         try:
