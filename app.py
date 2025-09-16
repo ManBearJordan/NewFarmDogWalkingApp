@@ -1808,7 +1808,7 @@ class SubscriptionsTab(QWidget):
         top = QHBoxLayout()
         self.refresh_btn = QPushButton("Refresh from Stripe")
         self.refresh_btn.clicked.connect(self.refresh_from_stripe)
-        self.save_btn = QPushButton("Save Schedule for Selected")
+        self.save_btn = QPushButton("Complete Schedule for Selected")
         self.save_btn.clicked.connect(self.save_schedule)
         self.rebuild_btn = QPushButton("Rebuild next 3 months")
         self.rebuild_btn.clicked.connect(self.rebuild_occurrences)
@@ -1818,22 +1818,12 @@ class SubscriptionsTab(QWidget):
         top.addWidget(self.refresh_btn); top.addWidget(self.save_btn); top.addWidget(self.rebuild_btn); top.addWidget(self.delete_btn)
         layout.addLayout(top)
 
-        editor = QHBoxLayout()
-        editor.addWidget(QLabel("Days:"))
-        self.days = DaysPicker()
-        editor.addWidget(self.days)
-        self.start_time = QTimeEdit(); self.start_time.setDisplayFormat("HH:mm"); self.start_time.setTime(QtCore.QTime(9,0))
-        self.start_time.setFixedWidth(80)
-        self.end_time   = QTimeEdit(); self.end_time.setDisplayFormat("HH:mm");   self.end_time.setTime(QtCore.QTime(10,0))
-        self.end_time.setFixedWidth(80)
-        self.dogs = QSpinBox(); self.dogs.setRange(1,20); self.dogs.setValue(1)
-        self.dogs.setFixedWidth(60)
-        self.loc = QLineEdit(); self.loc.setPlaceholderText("Location")
-        self.notes = QLineEdit(); self.notes.setPlaceholderText("Notes")
-        for w,label in [(self.start_time,"Start"),(self.end_time,"End"),(self.dogs,"Dogs"),(self.loc,"Location"),(self.notes,"Notes")]:
-            editor.addWidget(QLabel(label+":"))
-            editor.addWidget(w)
-        layout.addLayout(editor)
+        # Information about the new popup-based workflow
+        info_label = QLabel("Schedule information is now managed through popup dialogs. "
+                           "Use 'Complete Schedule for Selected' to open the schedule dialog for incomplete subscriptions.")
+        info_label.setStyleSheet("QLabel { color: #666; font-style: italic; padding: 10px; }")
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
 
         self.table = QTableWidget(0,8)
         self.table.setHorizontalHeaderLabels(["ID","Customer","Status","Products","Days","Time","Dogs","Location"])

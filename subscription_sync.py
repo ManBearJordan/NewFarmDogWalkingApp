@@ -206,7 +206,7 @@ def generate_booking_occurrences(subscription_data: Dict[str, Any],
     return occurrences
 
 
-def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: Dict[str, Any]) -> int:
+def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: Dict[str, Any], parent_widget=None) -> int:
     """
     Sync a single subscription to generate/update bookings.
     
@@ -234,7 +234,37 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
     service_code = extract_service_code_from_metadata(subscription_data)
     if not service_code:
         logger.warning(f"No valid service code found for subscription {subscription_id}")
-        return 0
+        
+        # If we have a parent widget, show service selection dialog
+        if parent_widget is not None:
+            try:
+                from subscription_schedule_dialog import show_service_selection_dialog
+                service_code = show_service_selection_dialog(subscription_id, parent_widget)
+                
+                if service_code:
+                    logger.info(f"User selected service code '{service_code}' for subscription {subscription_id}")
+                    
+                    # Update the subscription metadata with the selected service code
+                    try:
+                        from stripe_integration import _api
+                        stripe_api = _api()
+                        stripe_api.Subscription.modify(
+                            subscription_id,
+                            metadata={'service_code': service_code}
+                        )
+                        logger.info(f"Updated Stripe subscription {subscription_id} with service_code: {service_code}")
+                    except Exception as e:
+                        logger.error(f"Failed to update Stripe subscription metadata: {e}")
+                        # Continue anyway - we can still use the service code locally
+                else:
+                    logger.info(f"User did not select service code for subscription {subscription_id}")
+                    return 0
+                    
+            except Exception as e:
+                logger.error(f"Error showing service selection dialog: {e}")
+                return 0
+        else:
+            return 0
     
     # Extract schedule
     schedule = extract_schedule_from_subscription(subscription_data)
@@ -415,7 +445,7 @@ def sync_subscriptions_to_bookings_and_calendar(conn: Optional[sqlite3.Connectio
                 active_subscription_ids.append(subscription_id)
                 
                 # Sync subscription to bookings
-                bookings_created = sync_subscription_to_bookings(conn, subscription)
+                bookings_created = sync_subscription_to_bookings(conn, subscription, parent_widget=None)
                 total_bookings_created += bookings_created
                 subscriptions_processed += 1
                 
