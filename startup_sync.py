@@ -128,7 +128,7 @@ class SubscriptionAutoSync(QObject):
                 self.sync_completed.emit(error_results)
             return error_results
     
-    def handle_schedule_completion(self, subscription_id: str, schedule_data: Dict[str, Any]) -> bool:
+    def handle_schedule_completion(self, subscription_id: str, schedule_data: Dict[str, Any], parent_widget=None) -> bool:
         """
         Handle completion of schedule data for a subscription.
         
@@ -153,7 +153,8 @@ class SubscriptionAutoSync(QObject):
                 schedule_data["end_time"],
                 schedule_data["location"],
                 schedule_data["dogs"],
-                schedule_data.get("notes", "")
+                schedule_data.get("notes", ""),
+                schedule_data.get("service_code", "")
             )
             
             if not success_stripe:
@@ -169,7 +170,8 @@ class SubscriptionAutoSync(QObject):
                 schedule_data["end_time"],
                 schedule_data["location"],
                 schedule_data["dogs"],
-                schedule_data.get("notes", "")
+                schedule_data.get("notes", ""),
+                schedule_data.get("service_code", "")
             )
             
             if not success_local:
@@ -190,7 +192,7 @@ class SubscriptionAutoSync(QObject):
                 
                 # Sync just this subscription to generate bookings immediately
                 from subscription_sync import sync_subscription_to_bookings
-                bookings_created = sync_subscription_to_bookings(self.conn, subscription_data)
+                bookings_created = sync_subscription_to_bookings(self.conn, subscription_data, parent_widget)
                 
                 logger.info(f"Immediately created {bookings_created} bookings for subscription {subscription_id}")
                 
@@ -336,7 +338,7 @@ class StartupSyncManager(QObject):
             logger.info(f"Schedule saved for subscription {subscription_id}")
             
             # Process the completed schedule
-            success = self.auto_sync.handle_schedule_completion(subscription_id, schedule_data)
+            success = self.auto_sync.handle_schedule_completion(subscription_id, schedule_data, self.main_window)
             
             if success:
                 # Show success message with booking info

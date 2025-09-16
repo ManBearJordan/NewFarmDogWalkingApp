@@ -7,7 +7,7 @@ are missing required schedule information (days, time, location, dog count).
 
 import sqlite3
 from typing import List, Dict, Any, Optional
-from subscription_sync import extract_schedule_from_subscription
+from subscription_sync import extract_schedule_from_subscription, extract_service_code_from_metadata
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,11 @@ def get_subscriptions_missing_schedule_data(subscriptions: List[Dict[str, Any]])
         
         # Check if any required fields are missing or empty
         missing_fields = []
+        
+        # Extract and check service code
+        service_code = extract_service_code_from_metadata(subscription)
+        if not service_code:
+            missing_fields.append("service_code")
         
         # Check days
         if not schedule.get("day_list") or len(schedule["day_list"]) == 0:
@@ -104,7 +109,8 @@ def update_stripe_subscription_metadata(subscription_id: str,
                                        end_time: str,
                                        location: str,
                                        dogs: int,
-                                       notes: str = "") -> bool:
+                                       notes: str = "",
+                                       service_code: str = "") -> bool:
     """
     Update Stripe subscription metadata with schedule information.
     
@@ -131,16 +137,22 @@ def update_stripe_subscription_metadata(subscription_id: str,
         stripe_api = _api()
         
         # Update subscription metadata
+        metadata = {
+            "days": days,
+            "start_time": start_time,
+            "end_time": end_time,
+            "location": location,
+            "dogs": str(dogs),
+            "notes": notes
+        }
+        
+        # Add service_code if provided
+        if service_code:
+            metadata["service_code"] = service_code
+        
         updated_subscription = stripe_api.Subscription.modify(
             subscription_id,
-            metadata={
-                "days": days,
-                "start_time": start_time,
-                "end_time": end_time,
-                "location": location,
-                "dogs": str(dogs),
-                "notes": notes
-            }
+            metadata=metadata
         )
         
         logger.info(f"Updated Stripe subscription {subscription_id} metadata")
@@ -158,7 +170,8 @@ def update_local_subscription_schedule(conn: sqlite3.Connection,
                                      end_time: str, 
                                      location: str,
                                      dogs: int,
-                                     notes: str = "") -> bool:
+                                     notes: str = "",
+                                     service_code: str = "") -> bool:
     """
     Update local database subscription schedule information.
     

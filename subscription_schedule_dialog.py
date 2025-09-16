@@ -7,7 +7,7 @@ and prompts the user to fill in the missing details.
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                               QPushButton, QTimeEdit, QSpinBox, QLineEdit, 
-                              QMessageBox, QCheckBox, QFormLayout, QDialogButtonBox)
+                              QMessageBox, QCheckBox, QFormLayout, QDialogButtonBox, QWidget, QComboBox)
 from PySide6.QtCore import Qt, QTime, Signal
 from PySide6.QtGui import QFont
 import logging
@@ -111,6 +111,22 @@ class SubscriptionScheduleDialog(QDialog):
         # Days selection
         self.days_widget = DaysPickerWidget()
         form_layout.addRow("Days:", self.days_widget)
+        
+        # Service selection (if missing)
+        if "service_code" in self.missing_fields:
+            from service_map import get_all_service_codes, get_service_display_name
+            
+            self.service_combo = QComboBox()
+            self.service_combo.addItem("-- Select Service Type --", "")
+            
+            service_codes = get_all_service_codes()
+            for code in service_codes:
+                display_name = get_service_display_name(code)
+                self.service_combo.addItem(display_name, code)
+            
+            form_layout.addRow("Service Type:", self.service_combo)
+        else:
+            self.service_combo = None
         
         # Time selection
         time_layout = QHBoxLayout()
@@ -243,6 +259,12 @@ class SubscriptionScheduleDialog(QDialog):
         
         # Dogs is always valid since spinbox enforces range
         
+        # Validate service selection (if required)
+        if self.service_combo is not None:
+            selected_service_code = self.service_combo.currentData()
+            if not selected_service_code:
+                errors.append("Please select a service type")
+        
         return errors
     
     def save_schedule(self):
@@ -263,6 +285,12 @@ class SubscriptionScheduleDialog(QDialog):
             "dogs": self.dogs_spin.value(),
             "notes": self.notes_edit.text().strip()
         }
+        
+        # Add service code if it was selected
+        if self.service_combo is not None:
+            selected_service_code = self.service_combo.currentData()
+            if selected_service_code:
+                schedule_data["service_code"] = selected_service_code
         
         logger.info(f"Saving schedule for subscription {self.subscription_id}: {schedule_data}")
         
@@ -313,3 +341,73 @@ def show_subscription_schedule_dialogs(subscriptions_missing_data, parent=None):
             logger.info(f"User skipped schedule completion for subscription {subscription.get('id')}")
     
     return completed_schedules
+
+
+def show_service_selection_dialog(subscription_id, parent=None):
+    """
+    Show a dialog for user to select service type when mapping fails.
+    
+    Args:
+        subscription_id: Stripe subscription ID
+        parent: Parent widget for the dialog
+        
+    Returns:
+        Selected service code or None if cancelled
+    """
+    from service_map import get_all_service_codes, get_service_display_name
+    
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Select Service Type")
+    dialog.setModal(True)
+    dialog.setMinimumWidth(500)
+    dialog.setMinimumHeight(400)
+    
+    # Ensure dialog is dismissible
+    dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowCloseButtonHint)
+    dialog.setAttribute(Qt.WA_DeleteOnClose, True)
+    
+    layout = QVBoxLayout(dialog)
+    
+    # Header info
+    header_label = QLabel(f"Service Type Selection Required\n\nSubscription ID: {subscription_id}")
+    header_font = QFont()
+    header_font.setBold(True)
+    header_font.setPointSize(12)
+    header_label.setFont(header_font)
+    header_label.setWordWrap(True)
+    layout.addWidget(header_label)
+    
+    info_label = QLabel("The service type for this subscription could not be automatically determined. Please select the appropriate service type:")
+    info_label.setWordWrap(True)
+    layout.addWidget(info_label)
+    
+    # Service selection
+    from PySide6.QtWidgets import QComboBox
+    service_combo = QComboBox()
+    service_combo.addItem("-- Select Service Type --", "")
+    
+    service_codes = get_all_service_codes()
+    for code in service_codes:
+        display_name = get_service_display_name(code)
+        service_combo.addItem(display_name, code)
+    
+    layout.addWidget(service_combo)
+    
+    # Buttons
+    button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    button_box.accepted.connect(dialog.accept)
+    button_box.rejected.connect(dialog.reject)
+    layout.addWidget(button_box)
+    
+    # Show dialog and get result
+    if dialog.exec() == QDialog.Accepted:
+        selected_code = service_combo.currentData()
+        if selected_code:
+            logger.info(f"User selected service code '{selected_code}' for subscription {subscription_id}")
+            return selected_code
+        else:
+            logger.info(f"User did not select a valid service code for subscription {subscription_id}")
+            return None
+    else:
+        logger.info(f"User cancelled service selection for subscription {subscription_id}")
+        return None

@@ -1808,7 +1808,7 @@ class SubscriptionsTab(QWidget):
         top = QHBoxLayout()
         self.refresh_btn = QPushButton("Refresh from Stripe")
         self.refresh_btn.clicked.connect(self.refresh_from_stripe)
-        self.save_btn = QPushButton("Save Schedule for Selected")
+        self.save_btn = QPushButton("Complete Schedule for Selected")
         self.save_btn.clicked.connect(self.save_schedule)
         self.rebuild_btn = QPushButton("Rebuild next 3 months")
         self.rebuild_btn.clicked.connect(self.rebuild_occurrences)
@@ -1818,22 +1818,12 @@ class SubscriptionsTab(QWidget):
         top.addWidget(self.refresh_btn); top.addWidget(self.save_btn); top.addWidget(self.rebuild_btn); top.addWidget(self.delete_btn)
         layout.addLayout(top)
 
-        editor = QHBoxLayout()
-        editor.addWidget(QLabel("Days:"))
-        self.days = DaysPicker()
-        editor.addWidget(self.days)
-        self.start_time = QTimeEdit(); self.start_time.setDisplayFormat("HH:mm"); self.start_time.setTime(QtCore.QTime(9,0))
-        self.start_time.setFixedWidth(80)
-        self.end_time   = QTimeEdit(); self.end_time.setDisplayFormat("HH:mm");   self.end_time.setTime(QtCore.QTime(10,0))
-        self.end_time.setFixedWidth(80)
-        self.dogs = QSpinBox(); self.dogs.setRange(1,20); self.dogs.setValue(1)
-        self.dogs.setFixedWidth(60)
-        self.loc = QLineEdit(); self.loc.setPlaceholderText("Location")
-        self.notes = QLineEdit(); self.notes.setPlaceholderText("Notes")
-        for w,label in [(self.start_time,"Start"),(self.end_time,"End"),(self.dogs,"Dogs"),(self.loc,"Location"),(self.notes,"Notes")]:
-            editor.addWidget(QLabel(label+":"))
-            editor.addWidget(w)
-        layout.addLayout(editor)
+        # Information about the new popup-based workflow
+        info_label = QLabel("Schedule information is now managed through popup dialogs. "
+                           "Use 'Complete Schedule for Selected' to open the schedule dialog for incomplete subscriptions.")
+        info_label.setStyleSheet("QLabel { color: #666; font-style: italic; padding: 10px; }")
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
 
         self.table = QTableWidget(0,8)
         self.table.setHorizontalHeaderLabels(["ID","Customer","Status","Products","Days","Time","Dogs","Location"])
@@ -1844,131 +1834,97 @@ class SubscriptionsTab(QWidget):
         self.refresh_from_stripe()
 
     def on_row_select(self):
-        items = self.table.selectedItems()
-        if not items: return
-        row = items[0].row()
-        sub_id = self.table.item(row,0).text()
-        # Load schedule if exists
-        sched = self.conn.execute("SELECT * FROM subs_schedule WHERE stripe_subscription_id=?", (sub_id,)).fetchone()
-        if sched:
-            self.days.set_days(sched["days"] or "")
-            self.start_time.setTime(QtCore.QTime.fromString(sched["start_time"] or "09:00", "HH:mm"))
-            self.end_time.setTime(QtCore.QTime.fromString(sched["end_time"] or "10:00", "HH:mm"))
-            self.dogs.setValue(int(sched["dogs"] or 1))
-            self.loc.setText(sched["location"] or "")
-            self.notes.setText(sched["notes"] or "")
+        # Row selection handling - no longer needed with popup-based workflow
+        pass
 
     def save_schedule_for_selected(self):
-        # Import unified functions
-        from unified_booking_helpers import purge_future_subscription_bookings, rebuild_subscription_bookings
-        
-        # 1) Ensure we have a selected row
+        """Show the schedule completion dialog for the selected subscription."""
+        # Ensure we have a selected row
         row = self.table.currentRow()
         if row < 0:
             QMessageBox.warning(self, "No selection", "Select a subscription row first.")
             return
 
-        # 2) Read the visible columns to get the Stripe sub id
+        # Get the Stripe subscription ID
         sub_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole) \
                  or self.table.item(row, 0).text()
         if not sub_id or not sub_id.startswith("sub_"):
-            QMessageBox.critical(self, "Save failed", "Could not resolve Stripe subscription id for this row.")
+            QMessageBox.critical(self, "Error", "Could not resolve Stripe subscription id for this row.")
             return
 
-        # 3) Read inputs - adapt to current UI structure
-        days_csv = self.days.get_days_csv()
-        if not days_csv:
-            QMessageBox.warning(self, "Missing day", "Pick at least one day.")
-            return
-
-        # Convert CSV days to mask - Python weekday: Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
-        days = []
-        day_map = {"MON": 0, "TUE": 1, "WED": 2, "THU": 3, "FRI": 4, "SAT": 5, "SUN": 6}
-        for day in days_csv.split(","):
-            day = day.strip().upper()
-            if day in day_map:
-                days.append(day_map[day])
-
-        start_qt = self.start_time.time()
-        end_qt   = self.end_time.time()
-        start_str = start_qt.toString("HH:mm")
-        end_str   = end_qt.toString("HH:mm")
-        dogs      = max(1, self.dogs.value())
-        location  = (self.loc.text() or "").strip()
-        notes     = (self.notes.text() or "").strip()
-
-        # 4) Persist (create table if missing)
-        conn = get_conn()
-        c = conn.cursor()
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS sub_schedules (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              stripe_subscription_id TEXT UNIQUE NOT NULL,
-              days_mask INTEGER NOT NULL,
-              start_time TEXT NOT NULL,
-              end_time TEXT NOT NULL,
-              dogs INTEGER NOT NULL DEFAULT 1,
-              location TEXT,
-              notes TEXT
-            )
-        """)
-        days_mask = 0
-        for d in days:
-            days_mask |= (1 << d)
-
-        c.execute("""
-          INSERT INTO sub_schedules
-            (stripe_subscription_id, days_mask, start_time, end_time, dogs, location, notes)
-          VALUES (?,?,?,?,?,?,?)
-          ON CONFLICT(stripe_subscription_id) DO UPDATE SET
-            days_mask=excluded.days_mask,
-            start_time=excluded.start_time,
-            end_time=excluded.end_time,
-            dogs=excluded.dogs,
-            location=excluded.location,
-            notes=excluded.notes
-        """, (sub_id, days_mask, start_str, end_str, dogs, location, notes))
-        conn.commit()
-
-        # 5) PURGE-THEN-REBUILD: Use unified functions for consistent behavior
         try:
-            # Purge future subscription bookings for this subscription
-            purge_future_subscription_bookings(conn, sub_id)
+            # Get subscription data from Stripe
+            from stripe_integration import list_subscriptions
+            subscriptions = list_subscriptions()
             
-            # Rebuild bookings for the next 3 months using unified function
-            bookings_created = rebuild_subscription_bookings(
-                conn, sub_id, days_mask, start_str, end_str, dogs, location, notes, months_ahead=3
-            )
+            # Find the selected subscription
+            selected_subscription = None
+            for sub in subscriptions:
+                if sub.get('id') == sub_id:
+                    selected_subscription = sub
+                    break
             
-            # Refresh calendar to show new bookings immediately
-            main_window = self._get_main_window()
-            if main_window and hasattr(main_window, 'calendar_tab'):
-                main_window.calendar_tab.rebuild_month_markers()
-                main_window.calendar_tab.refresh_day()
+            if not selected_subscription:
+                QMessageBox.warning(self, "Error", f"Subscription {sub_id} not found in Stripe data.")
+                return
             
-            # Also refresh bookings tab if available
-            if main_window and hasattr(main_window, 'bookings_tab'):
-                main_window.bookings_tab.refresh_two_weeks()
+            # Check what fields are missing using the validator
+            from subscription_validator import get_subscriptions_missing_schedule_data
+            missing_data_subs = get_subscriptions_missing_schedule_data([selected_subscription])
+            
+            if not missing_data_subs:
+                # Check if subscription already has complete schedule
+                QMessageBox.information(
+                    self, 
+                    "Schedule Complete", 
+                    f"Subscription {sub_id} already has complete schedule information.\n\n" +
+                    "Use 'Rebuild next 3 months' to regenerate bookings if needed."
+                )
+                return
+            
+            # Show schedule completion dialog
+            subscription_data = missing_data_subs[0]  # It will be the first (and only) one
+            
+            from subscription_schedule_dialog import SubscriptionScheduleDialog
+            dialog = SubscriptionScheduleDialog(subscription_data, self)
+            
+            # Connect to handle schedule saving
+            def on_schedule_saved(subscription_id, schedule_data):
+                # Process the completed schedule
+                try:
+                    from startup_sync import SubscriptionAutoSync
+                    auto_sync = SubscriptionAutoSync()
+                    auto_sync.set_connection(self.conn)
+                    success = auto_sync.handle_schedule_completion(subscription_id, schedule_data, self)
+                    
+                    if success:
+                        # Refresh the subscriptions table
+                        self.refresh_from_stripe()
+                        QMessageBox.information(
+                            self,
+                            "Schedule Saved Successfully",
+                            f"✅ Schedule saved and bookings generated for subscription {subscription_id}!"
+                        )
+                    else:
+                        QMessageBox.warning(
+                            self,
+                            "Partial Success",
+                            f"Schedule was saved but there was an issue generating bookings for {subscription_id}."
+                        )
+                except Exception as e:
+                    QMessageBox.critical(
+                        self,
+                        "Error",
+                        f"Failed to process schedule completion: {e}"
+                    )
+            
+            dialog.schedule_saved.connect(on_schedule_saved)
+            
+            # Show the dialog
+            dialog.exec()
             
         except Exception as e:
-            QMessageBox.warning(self, "Booking Generation Error", f"Schedule saved but booking generation failed: {str(e)}")
-
-        # 6) Reflect immediately in the grid so you can SEE it stuck
-        # Find column indices
-        col_days = 4  # "Days" column
-        col_time = 5  # "Time" column  
-        col_dogs = 6  # "Dogs" column
-        col_location = 7  # "Location" column
-        
-        self.table.setItem(row, col_days, QTableWidgetItem(self._mask_to_days_label(days_mask)))
-        self.table.setItem(row, col_time, QTableWidgetItem(f"{start_str}-{end_str}"))
-        self.table.setItem(row, col_dogs, QTableWidgetItem(str(dogs)))
-        self.table.setItem(row, col_location, QTableWidgetItem(location or ""))
-        
-        success_msg = f"Schedule saved for this subscription."
-        if 'bookings_created' in locals():
-            success_msg += f" Generated {bookings_created} future bookings."
-        QMessageBox.information(self, "Saved", success_msg)
+            QMessageBox.critical(self, "Error", f"Failed to show schedule dialog: {e}")
 
     def _mask_to_days_label(self, mask: int) -> str:
         names = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
