@@ -31,3 +31,6 @@ Traceback (most recent call last):
     raise ValueError("Test exception for logging")
 ValueError: Test exception for logging
 2025-09-16 19:58:23,295 ERROR [SUB:sub_test_missing] Unknown Customer: No name, email, or customer_id found in subscription_data
+2025-09-16 20:01:32,319 ERROR [SUB:sub_1S7GUEE7gFi2VO5ksFygygiC] Unknown Customer: No name, email, or customer_id found in subscription_data
+2025-09-16 20:01:50,415 INFO [SUB:sub_1S7GUEE7gFi2VO5ksFygygiC] Schedule persisted for subscription sub_1S7GUEE7gFi2VO5ksFygygiC: {'days': 'WED', 'start_time': '10:30', 'end_time': '18:30', 'location': 'Home', 'dogs': 1, 'notes': '', 'service_code': 'DAYCARE_SINGLE'}
+2025-09-16 20:02:00,065 ERROR [SUB:sub_1S7GUEE7gFi2VO5ksFygygiC] Unknown Customer: No name, email, or customer_id found in subscription_data
