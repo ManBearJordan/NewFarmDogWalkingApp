@@ -813,3 +813,26 @@ def list_active_subscriptions(limit=200):
             "latest_invoice_url": latest_url,
         })
     return out
+
+def cancel_subscription(subscription_id: str) -> bool:
+    """
+    Cancel a subscription in Stripe.
+    
+    Args:
+        subscription_id: Stripe subscription ID to cancel
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        s = _api()
+        subscription = s.Subscription.modify(
+            subscription_id,
+            cancel_at_period_end=False  # Cancel immediately
+        )
+        # Actually cancel the subscription
+        subscription = s.Subscription.cancel(subscription_id)
+        return subscription.status == 'canceled'
+    except Exception as e:
+        print(f"Error canceling subscription {subscription_id}: {e}")
+        return False

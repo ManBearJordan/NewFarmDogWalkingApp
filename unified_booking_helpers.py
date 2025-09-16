@@ -10,6 +10,7 @@ This module provides:
 import sqlite3
 import re
 from typing import Optional, Tuple
+from datetime import datetime
 
 
 def resolve_client_id(conn: sqlite3.Connection, stripe_customer_id: str) -> Optional[int]:
@@ -316,3 +317,61 @@ def rebuild_subscription_bookings(conn: sqlite3.Connection, sub_id: str,
         current_date += timedelta(days=1)
     
     return bookings_created
+
+def delete_subscription_locally(conn: sqlite3.Connection, sub_id: str) -> dict:
+    """
+    Delete a subscription and all associated data from local database.
+    
+    Args:
+        conn: Database connection
+        sub_id: Subscription ID to delete
+        
+    Returns:
+        Dictionary with counts of deleted items
+    """
+    cur = conn.cursor()
+    results = {
+        'bookings_deleted': 0,
+        'calendar_entries_deleted': 0,
+        'schedules_deleted': 0
+    }
+    
+    # 1. Delete future bookings created from this subscription
+    future_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Delete future subscription-generated bookings
+    cur.execute("""
+        DELETE FROM bookings
+        WHERE created_from_sub_id = ?
+        AND start_dt >= ?
+        AND source = 'subscription'
+    """, (sub_id, future_date))
+    results['bookings_deleted'] = cur.rowcount
+    
+    # 2. Delete calendar/occurrence entries
+    cur.execute("""
+        DELETE FROM sub_occurrences
+        WHERE stripe_subscription_id = ?
+        AND start_dt >= ?
+    """, (sub_id, future_date))
+    results['calendar_entries_deleted'] = cur.rowcount
+    
+    # 3. Delete subscription schedule
+    cur.execute("""
+        DELETE FROM sub_schedules
+        WHERE stripe_subscription_id = ?
+    """, (sub_id,))
+    results['schedules_deleted'] = cur.rowcount
+    
+    # Also check for subs_schedule table (alternative naming)
+    try:
+        cur.execute("""
+            DELETE FROM subs_schedule
+            WHERE stripe_subscription_id = ?
+        """, (sub_id,))
+        results['schedules_deleted'] += cur.rowcount
+    except:
+        pass  # Table may not exist
+    
+    conn.commit()
+    return results

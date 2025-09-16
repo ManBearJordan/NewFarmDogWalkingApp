@@ -1812,7 +1812,10 @@ class SubscriptionsTab(QWidget):
         self.save_btn.clicked.connect(self.save_schedule)
         self.rebuild_btn = QPushButton("Rebuild next 3 months")
         self.rebuild_btn.clicked.connect(self.rebuild_occurrences)
-        top.addWidget(self.refresh_btn); top.addWidget(self.save_btn); top.addWidget(self.rebuild_btn)
+        self.delete_btn = QPushButton("Delete Subscription")
+        self.delete_btn.clicked.connect(self.delete_subscription)
+        self.delete_btn.setStyleSheet("QPushButton { background-color: #dc3545; color: white; font-weight: bold; }")
+        top.addWidget(self.refresh_btn); top.addWidget(self.save_btn); top.addWidget(self.rebuild_btn); top.addWidget(self.delete_btn)
         layout.addLayout(top)
 
         editor = QHBoxLayout()
@@ -2326,6 +2329,95 @@ class SubscriptionsTab(QWidget):
     def rebuild_occurrences(self):
         # Keep the old method name for backward compatibility
         self.rebuild_next_3_months()
+
+    def delete_subscription(self):
+        """Delete selected subscription with confirmation dialog"""
+        from unified_booking_helpers import delete_subscription_locally
+        from stripe_integration import cancel_subscription
+        
+        # 1) Ensure we have a selected row
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "No selection", "Select a subscription row first.")
+            return
+
+        # 2) Get the subscription ID
+        sub_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole) or self.table.item(row, 0).text()
+        if not sub_id or not sub_id.startswith("sub_"):
+            QMessageBox.critical(self, "Delete failed", "Could not resolve Stripe subscription ID for this row.")
+            return
+
+        # 3) Get customer name for confirmation dialog
+        customer_name = self.table.item(row, 1).text() if self.table.item(row, 1) else "Unknown Customer"
+        
+        # 4) Confirmation dialog
+        reply = QMessageBox.question(
+            self, 
+            "Confirm Delete Subscription",
+            f"Are you sure you want to delete this subscription and all future bookings?\n\n"
+            f"Subscription: {sub_id}\n"
+            f"Customer: {customer_name}\n\n"
+            f"This action will:\n"
+            f"• Remove all future bookings from this subscription\n"
+            f"• Remove calendar entries\n"
+            f"• Delete the subscription schedule\n"
+            f"• Cancel the subscription in Stripe (configurable)\n\n"
+            f"This action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # 5) Delete from local database first
+        try:
+            conn = get_conn()
+            results = delete_subscription_locally(conn, sub_id)
+            
+            success_msg = f"Local deletion completed:\n"
+            success_msg += f"• {results['bookings_deleted']} future bookings deleted\n"
+            success_msg += f"• {results['calendar_entries_deleted']} calendar entries deleted\n"
+            success_msg += f"• {results['schedules_deleted']} schedule entries deleted"
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Local Delete Failed", f"Error deleting local data: {str(e)}")
+            return
+
+        # 6) Optional Stripe cancellation (configurable - for now always attempt)
+        stripe_success = False
+        try:
+            stripe_success = cancel_subscription(sub_id)
+            if stripe_success:
+                success_msg += f"\n• Subscription canceled in Stripe"
+            else:
+                success_msg += f"\n• Warning: Could not cancel subscription in Stripe"
+        except Exception as e:
+            success_msg += f"\n• Warning: Stripe cancellation failed: {str(e)}"
+
+        # 7) Remove from UI table
+        self.table.removeRow(row)
+
+        # 8) Refresh calendar and bookings to show changes
+        main_window = self._get_main_window()
+        if main_window:
+            if hasattr(main_window, 'calendar_tab'):
+                main_window.calendar_tab.rebuild_month_markers()
+                main_window.calendar_tab.refresh_day()
+            if hasattr(main_window, 'bookings_tab'):
+                main_window.bookings_tab.refresh_two_weeks()
+
+        # 9) Show success message
+        QMessageBox.information(self, "Subscription Deleted", success_msg)
+
+        # 10) Trigger automatic sync to fetch any missing subscriptions
+        try:
+            # This will fetch subscriptions from Stripe and show dialogs for any missing data
+            from startup_sync import SubscriptionAutoSync
+            self.auto_sync = SubscriptionAutoSync()
+            self.auto_sync.perform_startup_sync(show_progress=False)
+        except Exception as e:
+            print(f"Auto-sync after deletion failed: {e}")
 
     def refresh_from_stripe(self):
         try:
