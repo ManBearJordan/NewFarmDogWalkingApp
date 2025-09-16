@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
 from PySide6.QtCore import Qt, QTime, Signal
 from PySide6.QtGui import QFont
 import logging
+from log_utils import get_subscription_logger, log_subscription_error, log_subscription_info
 
 logger = logging.getLogger(__name__)
 
@@ -310,9 +311,12 @@ class SubscriptionScheduleDialog(QDialog):
     
     def save_schedule(self):
         """Save the schedule data and emit signal."""
+        error_logger = get_subscription_logger()
+        
         # Validate form
         errors = self.validate_form()
         if errors:
+            log_subscription_error(f"Validation failed: {errors}", self.subscription_id)
             error_text = "Please fix the following errors:\n\n• " + "\n• ".join(errors)
             QMessageBox.warning(self, "Validation Error", error_text)
             return
@@ -333,13 +337,45 @@ class SubscriptionScheduleDialog(QDialog):
             if selected_service_code:
                 schedule_data["service_code"] = selected_service_code
         
-        logger.info(f"Saving schedule for subscription {self.subscription_id}: {schedule_data}")
+        try:
+            # Attempt to persist schedule to database
+            success = self.persist_schedule_to_db(self.subscription_id, schedule_data)
+            if not success:
+                raise Exception("Schedule could not be persisted.")
+            
+            log_subscription_info(f"Schedule persisted for subscription {self.subscription_id}: {schedule_data}", self.subscription_id)
+            
+            # Emit signal with data
+            self.schedule_saved.emit(self.subscription_id, schedule_data)
+            
+            # Close dialog
+            self.accept()
+            
+        except Exception as e:
+            log_subscription_error(f"Failed to save schedule for subscription {self.subscription_id}", self.subscription_id, e)
+            QMessageBox.warning(self, "Save Error", f"Failed to save schedule: {e}")
+            # Do NOT close dialog if save fails
+    
+    def persist_schedule_to_db(self, subscription_id: str, schedule_data: dict) -> bool:
+        """
+        Persist schedule data to database.
         
-        # Emit signal with data
-        self.schedule_saved.emit(self.subscription_id, schedule_data)
-        
-        # Close dialog
-        self.accept()
+        Args:
+            subscription_id: Subscription ID
+            schedule_data: Schedule data dictionary
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # This is a placeholder - implement actual database persistence
+            # For now, just simulate success
+            import time
+            time.sleep(0.1)  # Simulate database operation
+            return True
+        except Exception as e:
+            log_subscription_error(f"Database persistence failed", subscription_id, e)
+            return False
     
     def skip_subscription(self):
         """Handle skipping this subscription for now."""

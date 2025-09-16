@@ -7,6 +7,7 @@ that always fall back to Stripe API when local mapping fails, as per problem sta
 
 import logging
 from typing import Dict, Any, Optional, Tuple
+from log_utils import get_subscription_logger, log_subscription_error, log_subscription_warning
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,9 @@ def get_robust_customer_display_info(subscription_data: Dict[str, Any]) -> str:
     Returns:
         Customer display string (name, email, or customer ID)
     """
+    subscription_id = subscription_data.get("id", "unknown")
+    error_logger = get_subscription_logger()
+    
     try:
         # Step 1: Check if customer data is already expanded in subscription
         customer = subscription_data.get("customer", {})
@@ -62,7 +66,7 @@ def get_robust_customer_display_info(subscription_data: Dict[str, Any]) -> str:
             try:
                 from stripe_integration import _api
                 stripe_api = _api()
-                logger.debug(f"Fetching customer details from Stripe for {customer_id}")
+                error_logger.debug(f"[SUB:{subscription_id}] Fetching customer details from Stripe for {customer_id}")
                 
                 customer_obj = stripe_api.Customer.retrieve(customer_id)
                 fetched_name = getattr(customer_obj, "name", "") or ""
@@ -76,19 +80,20 @@ def get_robust_customer_display_info(subscription_data: Dict[str, Any]) -> str:
                     return fetched_email
                 else:
                     # Last resort - use customer ID 
+                    log_subscription_warning(f"Customer {customer_id} has no name or email in Stripe", subscription_id)
                     return f"Customer {customer_id}"
                     
             except Exception as e:
-                logger.warning(f"Failed to fetch customer details from Stripe for {customer_id}: {e}")
+                log_subscription_error(f"Stripe API failed for customer {customer_id}", subscription_id, e)
                 # Still better to show customer ID than "Unknown Customer"
-                return f"Customer {customer_id}"
+                return f"Customer {customer_id} (Stripe API error)"
         
         # Step 3: No customer ID available
-        logger.warning(f"No customer information available for subscription {subscription_data.get('id', 'unknown')}")
+        log_subscription_error("Unknown Customer: No name, email, or customer_id found in subscription_data", subscription_id)
         return "Unknown Customer"
         
     except Exception as e:
-        logger.error(f"Error getting customer display info: {e}")
+        log_subscription_error("Display info error", subscription_id, e)
         return "Unknown Customer"
 
 

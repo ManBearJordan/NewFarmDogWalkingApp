@@ -1,0 +1,33 @@
+# Subscription Error Log - 2025-09-16 19:57:27
+# This file captures all subscription-related errors for diagnostics
+# Format: TIMESTAMP LEVEL MESSAGE
+#======================================================================
+
+# This file will be automatically populated when subscription errors occur.
+# After reproducing the bug, send this file for diagnostics.
+#
+# The log captures:
+# - Customer display errors (Stripe API failures, missing customer data)
+# - Schedule save errors (validation failures, database persistence issues)
+# - Booking generation errors (client resolution, booking creation, calendar updates)
+#
+# Each log entry includes:
+# - Timestamp
+# - Log level (ERROR, WARNING, INFO, DEBUG)
+# - Subscription ID context [SUB:sub_xxxxx]
+# - Detailed error message with exception information
+#
+# Example entries:
+# 2025-09-16 19:57:27 ERROR [SUB:sub_1234567890] Stripe API failed for customer cus_abcdef123: Connection timeout
+# 2025-09-16 19:57:28 WARNING [SUB:sub_1234567890] Customer cus_abcdef123 has no name or email in Stripe
+# 2025-09-16 19:57:29 ERROR [SUB:sub_1234567890] Validation failed: ['Missing required field: location']
+# 2025-09-16 19:57:30 INFO [SUB:sub_1234567890] Schedule persisted for subscription sub_1234567890: {'days': 'MON,WED,FRI', 'start_time': '09:00', 'end_time': '10:00', 'location': '123 Main St', 'dogs': 2}
+2025-09-16 19:58:23,275 INFO [SUB:sub_test123456789] Test info message
+2025-09-16 19:58:23,275 WARNING [SUB:sub_test123456789] Test warning message
+2025-09-16 19:58:23,275 ERROR [SUB:sub_test123456789] Test error message
+2025-09-16 19:58:23,275 ERROR [SUB:sub_test123456789] Test error with exception - Exception: Test exception for logging
+Traceback (most recent call last):
+  File "C:\NewFarmDogWalkingApp\test_error_logging.py", line 42, in test_log_utils
+    raise ValueError("Test exception for logging")
+ValueError: Test exception for logging
+2025-09-16 19:58:23,295 ERROR [SUB:sub_test_missing] Unknown Customer: No name, email, or customer_id found in subscription_data

@@ -389,6 +389,7 @@ class StartupSyncManager(QObject):
         Show schedule completion dialogs for subscriptions missing data.
         
         All dialogs are dismissible and won't get stuck. Users can skip any subscription.
+        Fixed to prevent dialog reopening after confirmation.
         
         Args:
             missing_data_subscriptions: List of subscriptions missing schedule data
@@ -396,8 +397,18 @@ class StartupSyncManager(QObject):
         try:
             logger.info(f"Showing schedule dialogs for {len(missing_data_subscriptions)} subscriptions")
             
+            # Track completed subscriptions to prevent reopening
+            completed_subscriptions = set()
+            
             # Process each subscription one by one to avoid overwhelming the user
             for i, subscription in enumerate(missing_data_subscriptions, 1):
+                subscription_id = subscription.get('id', 'unknown')
+                
+                # Skip if already completed in this session
+                if subscription_id in completed_subscriptions:
+                    logger.info(f"Skipping already completed subscription {subscription_id}")
+                    continue
+                
                 try:
                     from subscription_schedule_dialog import SubscriptionScheduleDialog
                     
@@ -408,20 +419,29 @@ class StartupSyncManager(QObject):
                     dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowCloseButtonHint)
                     dialog.setAttribute(Qt.WA_DeleteOnClose, True)  # Auto-cleanup
                     
-                    # Connect schedule saved signal
-                    dialog.schedule_saved.connect(self.on_schedule_saved)
+                    # Connect schedule saved signal with completion tracking
+                    def on_schedule_saved_with_tracking(sub_id, schedule_data):
+                        completed_subscriptions.add(sub_id)
+                        self.on_schedule_saved(sub_id, schedule_data)
+                    
+                    dialog.schedule_saved.connect(on_schedule_saved_with_tracking)
                     
                     # Show dialog as modal but dismissible
                     dialog.setWindowTitle(f"Complete Schedule ({i}/{len(missing_data_subscriptions)})")
                     result = dialog.exec()  # This blocks until dialog is closed
                     
+                    # Mark as completed regardless of result to prevent reopening
+                    completed_subscriptions.add(subscription_id)
+                    
                     if result == QDialog.Rejected:
-                        logger.info(f"User dismissed dialog for subscription {subscription.get('id', 'unknown')}")
+                        logger.info(f"User dismissed dialog for subscription {subscription_id}")
                         # Continue with next subscription - user can always skip
                         continue
                     
                 except Exception as dialog_error:
-                    logger.error(f"Error showing dialog for subscription {subscription.get('id', 'unknown')}: {dialog_error}")
+                    logger.error(f"Error showing dialog for subscription {subscription_id}: {dialog_error}")
+                    # Mark as completed even on error to prevent infinite loops
+                    completed_subscriptions.add(subscription_id)
                     # Continue with other subscriptions even if one fails
                     continue
                     
