@@ -60,32 +60,11 @@ def get_client_bundle(conn, client_id: int, fallback_addr: str = "") -> tuple[st
 def friendly_service_label(service_code: str | None, default_label: str = "") -> str:
     """
     Convert a service_code (e.g. WALK_SHORT_SINGLE) or a raw code into
-    a nice label. Uses common codes you've set in Stripe metadata.
+    a nice label. Uses the central service mapping.
     """
-    if not service_code:
-        return default_label or "Service"
-
-    lut = {
-        "WALK_SHORT_SINGLE": "Short Walk",
-        "WALK_SHORT_PACKS": "Short Walk (Pack)",
-        "WALK_LONG_SINGLE": "Long Walk",
-        "WALK_LONG_PACKS": "Long Walk (Pack)",
-        "HOME_VISIT_30M_SINGLE": "Home Visit – 30m (1×/day)",
-        "HOME_VISIT_30M_2X_SINGLE": "Home Visit – 30m (2×/day)",
-        "DAYCARE_SINGLE": "Doggy Daycare (per day)",
-        "DAYCARE_PACKS": "Doggy Daycare (Pack)",
-        "PICKUP_DROPOFF_SINGLE": "Pick up / Drop off",
-        "SCOOP_SINGLE": "Poop Scoop – One-time",
-        "SCOOP_WEEKLY_MONTHLY": "Poop Scoop – Weekly/Monthly",
-        "DAYCARE_WEEKLY_PER_VISIT": "Daycare (Weekly / per visit)",
-        "DAYCARE_FORTNIGHTLY_PER_VISIT": "Daycare (Fortnightly / per visit)",
-        # add any other codes you use
-    }
-    if service_code in lut:
-        return lut[service_code]
-
-    # fallback: prettify unknown codes
-    return service_code.replace("_", " ").title()
+    from service_map import get_service_display_name
+    
+    return get_service_display_name(service_code, default_label)
 
 
 def ts_to_iso(ts: int) -> str:
