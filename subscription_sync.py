@@ -93,11 +93,11 @@ def extract_schedule_from_subscription(subscription_data: Dict[str, Any]) -> Dic
     Extract schedule information from subscription metadata.
     
     Expected metadata format (as per problem statement image):
-    - days: comma-separated list of days (MON,TUE,WED,etc.)
-    - start_time: start time (HH:MM format)
-    - end_time: end time (HH:MM format) 
-    - location: service location
-    - dogs: number of dogs (integer)
+    - days/schedule_days: comma-separated list of days (MON,TUE,WED,etc.)
+    - start_time/schedule_start_time: start time (HH:MM format)
+    - end_time/schedule_end_time: end time (HH:MM format) 
+    - location/schedule_location: service location
+    - dogs/schedule_dogs: number of dogs (integer)
     
     Args:
         subscription_data: Subscription data from Stripe API
@@ -107,14 +107,21 @@ def extract_schedule_from_subscription(subscription_data: Dict[str, Any]) -> Dic
     """
     metadata = subscription_data.get("metadata", {})
     
-    # Default schedule values
+    # Helper function to get metadata with multiple possible key names
+    def get_metadata_value(keys, default=""):
+        for key in keys:
+            if key in metadata:
+                return metadata[key]
+        return default
+    
+    # Extract schedule values with support for both prefixed and non-prefixed keys
     schedule = {
-        "days": metadata.get("days", ""),
-        "start_time": metadata.get("start_time", "09:00"),
-        "end_time": metadata.get("end_time", "10:00"),
-        "location": metadata.get("location", ""),
-        "dogs": int(metadata.get("dogs", "1")),
-        "notes": metadata.get("notes", "")
+        "days": get_metadata_value(["schedule_days", "days"]),
+        "start_time": get_metadata_value(["schedule_start_time", "start_time"], "09:00"),
+        "end_time": get_metadata_value(["schedule_end_time", "end_time"], "10:00"),
+        "location": get_metadata_value(["schedule_location", "location"]),
+        "dogs": int(get_metadata_value(["schedule_dogs", "dogs"], "1")),
+        "notes": get_metadata_value(["schedule_notes", "notes"])
     }
     
     # Parse days into list

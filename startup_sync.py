@@ -269,6 +269,8 @@ class StartupSyncManager(QObject):
                 self.main_window.calendar_tab.refresh_day()
             if hasattr(self.main_window, 'subscriptions_tab'):
                 self.main_window.subscriptions_tab.refresh_from_stripe()
+            if hasattr(self.main_window, 'bookings_tab'):
+                self.main_window.bookings_tab.refresh_two_weeks()
         except Exception as e:
             logger.error(f"Error refreshing UI after sync: {e}")
     
@@ -358,6 +360,8 @@ class StartupSyncManager(QObject):
                         self.main_window.calendar_tab.refresh_day()
                     if hasattr(self.main_window, 'subscriptions_tab'):
                         self.main_window.subscriptions_tab.refresh_from_stripe()
+                    if hasattr(self.main_window, 'bookings_tab'):
+                        self.main_window.bookings_tab.refresh_two_weeks()
                 except Exception as e:
                     logger.error(f"Error refreshing UI after schedule save: {e}")
             else:
