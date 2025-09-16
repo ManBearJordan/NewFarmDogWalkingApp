@@ -120,6 +120,9 @@ def is_subscription_schedule_complete(subscription: Dict[str, Any]) -> bool:
     """
     Check if a subscription has complete schedule information.
     
+    This function ensures that a subscription won't trigger dialogs repeatedly
+    by being more rigorous about what constitutes "complete" data.
+    
     Args:
         subscription: Subscription data from Stripe API
         
@@ -135,16 +138,69 @@ def is_subscription_schedule_complete(subscription: Dict[str, Any]) -> bool:
         extract_service_code_from_metadata(subscription)
     )
     
-    # All required fields must be present and valid
-    # Service code is not strictly required for schedule completion
-    # (it can be prompted for later if needed for booking generation)
-    return (
-        len(schedule.get("day_list", [])) > 0 and
-        schedule.get("start_time", "") not in ("", "09:00") and  
-        schedule.get("end_time", "") not in ("", "10:00") and
-        schedule.get("location", "").strip() != "" and
-        schedule.get("dogs", 0) > 0
-    )
+    # More rigorous validation to prevent dialogs reappearing
+    # Check that all essential fields are present and valid
+    
+    # Days must be specified and valid
+    day_list = schedule.get("day_list", [])
+    if not day_list or len(day_list) == 0:
+        return False
+    
+    # Times must be set to meaningful values (not defaults)
+    start_time = schedule.get("start_time", "")
+    end_time = schedule.get("end_time", "")
+    
+    # Consider schedule incomplete if using obvious default values
+    if (start_time in ("", "09:00") or 
+        end_time in ("", "10:00") or
+        start_time == end_time):
+        return False
+    
+    # Location must be specified
+    location = schedule.get("location", "").strip()
+    if not location:
+        return False
+    
+    # Dogs must be a positive number
+    dogs = schedule.get("dogs", 0)
+    if dogs <= 0:
+        return False
+    
+    # Check if data is actually persisted in local database
+    # This prevents the dialog from reappearing after user saves data
+    try:
+        from db import get_conn
+        conn = get_conn()
+        cur = conn.cursor()
+        
+        # Check if this subscription has persistent schedule data
+        existing_schedule = cur.execute("""
+            SELECT days, start_time, end_time, location, dogs 
+            FROM subs_schedule 
+            WHERE stripe_subscription_id = ?
+        """, (subscription.get("id"),)).fetchone()
+        
+        if existing_schedule:
+            # If we have local data, validate it matches what we expect
+            persisted_complete = (
+                existing_schedule[0] and  # days
+                existing_schedule[1] not in ("", "09:00") and  # start_time
+                existing_schedule[2] not in ("", "10:00") and  # end_time
+                existing_schedule[3] and existing_schedule[3].strip() != "" and  # location
+                existing_schedule[4] and existing_schedule[4] > 0  # dogs
+            )
+            
+            if persisted_complete:
+                logger.debug(f"Schedule for subscription {subscription.get('id')} is complete in local database")
+                return True
+        
+        conn.close()
+        
+    except Exception as e:
+        logger.warning(f"Could not check local database for subscription schedule: {e}")
+    
+    # All validation passed
+    return True
 
 
 def update_stripe_subscription_metadata(subscription_id: str, 
@@ -217,7 +273,10 @@ def update_local_subscription_schedule(conn: sqlite3.Connection,
                                      notes: str = "",
                                      service_code: str = "") -> bool:
     """
-    Update local database subscription schedule information.
+    Update local database subscription schedule information with proper error handling.
+    
+    This function ensures that schedule data is actually persisted in the database,
+    preventing issues where the dialog reappears because data wasn't saved.
     
     Args:
         conn: Database connection
@@ -228,22 +287,69 @@ def update_local_subscription_schedule(conn: sqlite3.Connection,
         location: Service location
         dogs: Number of dogs
         notes: Optional notes
+        service_code: Service code for the subscription
         
     Returns:
         True if successful, False otherwise
     """
     try:
+        cur = conn.cursor()
+        
+        # First, ensure the subs_schedule table exists and has all required columns
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS subs_schedule (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                stripe_subscription_id TEXT UNIQUE NOT NULL,
+                days TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT NOT NULL,
+                dogs INTEGER NOT NULL,
+                location TEXT NOT NULL,
+                notes TEXT DEFAULT '',
+                service_code TEXT DEFAULT '',
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Check if service_code column exists, add if missing
+        try:
+            cur.execute("SELECT service_code FROM subs_schedule LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cur.execute("ALTER TABLE subs_schedule ADD COLUMN service_code TEXT DEFAULT ''")
+            logger.info("Added service_code column to subs_schedule table")
+        
         # Insert or update subs_schedule table
-        conn.execute("""
+        cur.execute("""
             INSERT OR REPLACE INTO subs_schedule 
-            (stripe_subscription_id, days, start_time, end_time, dogs, location, notes, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-        """, (subscription_id, days, start_time, end_time, dogs, location, notes))
+            (stripe_subscription_id, days, start_time, end_time, dogs, location, notes, service_code, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        """, (subscription_id, days, start_time, end_time, dogs, location, notes, service_code))
+        
+        # Verify the data was actually saved
+        verification = cur.execute("""
+            SELECT days, start_time, end_time, location, dogs, service_code 
+            FROM subs_schedule 
+            WHERE stripe_subscription_id = ?
+        """, (subscription_id,)).fetchone()
+        
+        if not verification:
+            logger.error(f"Failed to verify schedule save for subscription {subscription_id}")
+            return False
+        
+        # Log what was actually saved for debugging
+        logger.info(f"Successfully saved schedule for subscription {subscription_id}: "
+                   f"days={verification[0]}, start={verification[1]}, "
+                   f"end={verification[2]}, location={verification[3]}, "
+                   f"dogs={verification[4]}, service_code={verification[5] if len(verification) > 5 else ''}")
         
         conn.commit()
-        logger.info(f"Updated local subscription schedule for {subscription_id}")
         return True
         
     except Exception as e:
         logger.error(f"Failed to update local subscription schedule for {subscription_id}: {e}")
+        try:
+            conn.rollback()
+        except:
+            pass
         return False
