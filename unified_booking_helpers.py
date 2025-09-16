@@ -320,7 +320,11 @@ def rebuild_subscription_bookings(conn: sqlite3.Connection, sub_id: str,
 
 def delete_subscription_locally(conn: sqlite3.Connection, sub_id: str) -> dict:
     """
-    Delete a subscription and all associated data from local database.
+    Delete a subscription and all associated data from local database only.
+    
+    This function only removes local database entries. It does NOT cancel
+    or modify the subscription in Stripe. The Stripe subscription remains
+    active and continues billing.
     
     Args:
         conn: Database connection
