@@ -63,10 +63,13 @@ def resolve_client_id(conn: sqlite3.Connection, stripe_customer_id: str) -> Opti
 
 def service_type_from_label(name_or_metadata: str) -> str:
     """
-    Single, robust service_type derivation that:
+    Single, robust service_type derivation using central service map.
+    
+    This function:
     - Normalizes Unicode (– → -, × → x)
-    - Strips parentheses/extra punctuation
-    - Maps to canonical codes (e.g., DAYCARE_SINGLE, WALK_SHORT, OVERNIGHT_SINGLE)
+    - Tries exact matching with central service map first
+    - Falls back to fuzzy matching for backward compatibility
+    - Maps to canonical codes from the 26-service central map
     
     Used everywhere bookings are created: importer + subscription writer + manual booking UI.
     
@@ -74,10 +77,12 @@ def service_type_from_label(name_or_metadata: str) -> str:
         name_or_metadata: Service name or metadata string
     
     Returns:
-        Canonical service type code
+        Canonical service type code from central service map
     """
+    from service_map import get_service_code, DISPLAY_TO_SERVICE_CODE
+    
     if not name_or_metadata:
-        return "WALK_GENERAL"
+        return "WALK_SHORT_SINGLE"  # Safe default from central map
     
     # Step 1: Normalize Unicode characters
     label = name_or_metadata
@@ -86,91 +91,98 @@ def service_type_from_label(name_or_metadata: str) -> str:
     label = label.replace('×', 'x')  # multiplication sign to x
     label = label.replace('•', '')   # bullet point
     
-    # Step 2: Strip parentheses and extra punctuation, normalize case
-    label = re.sub(r'[()[\]{}]', '', label)  # Remove brackets/parentheses
-    label = re.sub(r'[^\w\s-]', '', label)   # Remove other punctuation except hyphens
-    label = label.lower().strip()
+    # Step 2: Try exact match with central service map first
+    exact_match = get_service_code(label.strip())
+    if exact_match:
+        return exact_match
     
-    # Step 3: Map to canonical codes
+    # Step 3: Strip parentheses and extra punctuation, normalize case for fuzzy matching
+    normalized_label = re.sub(r'[()[\]{}]', '', label)  # Remove brackets/parentheses
+    normalized_label = re.sub(r'[^\w\s-]', '', normalized_label)   # Remove other punctuation except hyphens
+    normalized_label = normalized_label.lower().strip()
     
-    # Handle generic/placeholder labels first
-    if label in ['subscription', 'service', 'none', '']:
-        return "WALK_GENERAL"
+    # Handle generic/placeholder labels
+    if normalized_label in ['subscription', 'service', 'none', '']:
+        return "WALK_SHORT_SINGLE"
     
-    # Daycare services
-    if 'daycare' in label or 'day care' in label:
-        if 'pack' in label:
-            return "DAYCARE_PACKS"
-        elif 'weekly' in label and 'visit' in label:
-            return "DAYCARE_WEEKLY_PER_VISIT"
-        elif 'fortnightly' in label and 'visit' in label:
+    # Step 4: Try partial matching against all display names from central map
+    for display_name, service_code in DISPLAY_TO_SERVICE_CODE.items():
+        if normalized_label in display_name.lower():
+            return service_code
+    
+    # Step 5: Legacy fuzzy matching for common variations
+    if 'daycare' in normalized_label or 'day care' in normalized_label:
+        if 'pack' in normalized_label and '5' in normalized_label:
+            return "DAYCARE_PACK5"
+        elif 'weekly' in normalized_label:
+            return "DAYCARE_WEEKLY"
+        elif 'fortnightly' in normalized_label:
             return "DAYCARE_FORTNIGHTLY_PER_VISIT"
         else:
             return "DAYCARE_SINGLE"
     
-    # Walk services
-    elif 'walk' in label:
-        if 'short' in label:
-            if 'pack' in label:
-                return "WALK_SHORT_PACKS"
+    elif 'walk' in normalized_label:
+        if 'short' in normalized_label:
+            if 'pack' in normalized_label and '5' in normalized_label:
+                return "WALK_SHORT_PACK5"
+            elif 'weekly' in normalized_label:
+                return "WALK_SHORT_WEEKLY"
             else:
                 return "WALK_SHORT_SINGLE"
-        elif 'long' in label:
-            if 'pack' in label:
-                return "WALK_LONG_PACKS"
+        elif 'long' in normalized_label:
+            if 'pack' in normalized_label and '5' in normalized_label:
+                return "WALK_LONG_PACK5"
+            elif 'weekly' in normalized_label:
+                return "WALK_LONG_WEEKLY"
             else:
                 return "WALK_LONG_SINGLE"
         else:
-            return "WALK_GENERAL"
+            return "WALK_SHORT_SINGLE"  # Default walk type
     
-    # Home visit services
-    elif 'home visit' in label or 'home-visit' in label:
-        if '30m' in label or '30 m' in label or 'thirty' in label:
-            if '2x' in label or '2 x' in label or 'twice' in label or 'two' in label:
-                return "HOME_VISIT_30M_2X_SINGLE"
+    elif 'home' in normalized_label and ('visit' in normalized_label or 'home-visit' in normalized_label):
+        if '2' in normalized_label and ('day' in normalized_label or 'daily' in normalized_label or 'twice' in normalized_label):
+            if 'pack' in normalized_label and '5' in normalized_label:
+                return "HV_30_2X_PACK5"
+            elif 'weekly' in normalized_label:
+                return "HOME_30_2_DAY_WEEKLY"
             else:
-                return "HOME_VISIT_30M_SINGLE"
+                return "HV_30_2X_SINGLE"
         else:
-            return "HOME_VISIT_30M_SINGLE"
+            if 'pack' in normalized_label and '5' in normalized_label:
+                return "HV_30_1X_PACK5"
+            elif 'weekly' in normalized_label:
+                return "HOME_30WEEKLY"
+            else:
+                return "HV_30_1X_SINGLE"
     
-    # Overnight services
-    elif 'overnight' in label or 'over night' in label:
-        if 'pack' in label:
-            return "OVERNIGHT_PACKS"
+    elif 'overnight' in normalized_label or 'sitting' in normalized_label:
+        if 'pack' in normalized_label and '5' in normalized_label:
+            return "BOARD_OVERNIGHT_PACK5"
         else:
-            return "OVERNIGHT_SINGLE"
+            return "BOARD_OVERNIGHT_SINGLE"
     
-    # Pickup/dropoff services
-    elif 'pickup' in label or 'pick up' in label or 'drop off' in label or 'dropoff' in label:
-        return "PICKUP_DROPOFF_SINGLE"
-    
-    # Poop scoop services
-    elif 'scoop' in label or 'poop' in label:
-        if 'weekly' in label or 'monthly' in label:
-            return "SCOOP_WEEKLY_MONTHLY"
+    elif 'pickup' in normalized_label or 'pick up' in normalized_label or 'drop' in normalized_label:
+        if 'fortnightly' in normalized_label:
+            return "PICKUP_FORTNIGHTLY_PER_VISIT"
+        elif 'weekly' in normalized_label:
+            return "PICKUP_WEEKLY_PER_VISIT"
+        elif 'pack' in normalized_label and '5' in normalized_label:
+            return "PICKUP_DROPOFF_PACK5"
         else:
-            return "SCOOP_SINGLE"
+            return "PICKUP_DROPOFF"
     
-    # Pet sitting services
-    elif 'sitting' in label or 'pet sit' in label:
-        return "PET_SITTING_SINGLE"
+    elif 'scoop' in normalized_label or 'poop' in normalized_label:
+        if 'twice' in normalized_label and 'weekly' in normalized_label:
+            return "SCOOP_TWICE_WEEKLY_MONTH"
+        elif 'fortnightly' in normalized_label:
+            return "SCOOP_FORTNIGHTLY_MONTH"
+        elif 'weekly' in normalized_label:
+            return "SCOOP_WEEKLY_MONTH"
+        else:
+            return "SCOOP_ONCE_SINGLE"
     
-    # Grooming services
-    elif 'groom' in label or 'bath' in label or 'wash' in label:
-        return "GROOMING_SINGLE"
-    
-    # Default fallback: convert to reasonable code
-    # Remove common words and convert to uppercase with underscores
-    fallback = re.sub(r'\b(the|and|or|of|in|on|at|to|for|with|by)\b', '', label)
-    fallback = re.sub(r'\s+', '_', fallback.strip())
-    fallback = re.sub(r'[^a-zA-Z0-9_]', '', fallback)
-    fallback = fallback.upper()
-    
-    # Ensure it's not empty
-    if not fallback:
-        return "WALK_GENERAL"
-    
-    return fallback
+    # Final fallback - return a safe default from central map
+    return "WALK_SHORT_SINGLE"
 
 
 def get_canonical_service_info(service_input: str, stripe_price_id: str = None) -> Tuple[str, str]:
@@ -199,38 +211,11 @@ def get_canonical_service_info(service_input: str, stripe_price_id: str = None) 
 
 def friendly_service_label(service_code: str) -> str:
     """
-    Convert a service_code to a friendly display label
+    Convert a service_code to a friendly display label using central service map
     """
-    if not service_code:
-        return "Service"
+    from service_map import get_service_display_name
     
-    # Map of service codes to friendly labels
-    label_map = {
-        "WALK_SHORT_SINGLE": "Short Walk",
-        "WALK_SHORT_PACKS": "Short Walk (Pack)",
-        "WALK_LONG_SINGLE": "Long Walk", 
-        "WALK_LONG_PACKS": "Long Walk (Pack)",
-        "WALK_GENERAL": "Dog Walk",
-        "HOME_VISIT_30M_SINGLE": "Home Visit – 30m (1×/day)",
-        "HOME_VISIT_30M_2X_SINGLE": "Home Visit – 30m (2×/day)",
-        "DAYCARE_SINGLE": "Doggy Daycare (per day)",
-        "DAYCARE_PACKS": "Doggy Daycare (Pack)",
-        "DAYCARE_WEEKLY_PER_VISIT": "Daycare (Weekly / per visit)",
-        "DAYCARE_FORTNIGHTLY_PER_VISIT": "Daycare (Fortnightly / per visit)",
-        "PICKUP_DROPOFF_SINGLE": "Pick up / Drop off",
-        "SCOOP_SINGLE": "Poop Scoop – One-time",
-        "SCOOP_WEEKLY_MONTHLY": "Poop Scoop – Weekly/Monthly",
-        "OVERNIGHT_SINGLE": "Overnight Care",
-        "OVERNIGHT_PACKS": "Overnight Care (Pack)",
-        "PET_SITTING_SINGLE": "Pet Sitting",
-        "GROOMING_SINGLE": "Grooming & Bath",
-    }
-    
-    if service_code in label_map:
-        return label_map[service_code]
-    
-    # Fallback: prettify the code
-    return service_code.replace("_", " ").title()
+    return get_service_display_name(service_code, "Service")
 
 
 def create_booking_with_unified_fields(conn: sqlite3.Connection, client_id: int, 

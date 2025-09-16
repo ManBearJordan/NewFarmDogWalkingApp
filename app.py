@@ -66,32 +66,11 @@ def get_client_bundle(conn, client_id: int, fallback_addr: str = "") -> tuple[st
 def friendly_service_label(service_code: str | None, default_label: str = "") -> str:
     """
     Convert a service_code (e.g. WALK_SHORT_SINGLE) or a raw code into
-    a nice label. Uses common codes you've set in Stripe metadata.
+    a nice label. Uses the central service mapping.
     """
-    if not service_code:
-        return default_label or "Service"
-
-    lut = {
-        "WALK_SHORT_SINGLE": "Short Walk",
-        "WALK_SHORT_PACKS": "Short Walk (Pack)",
-        "WALK_LONG_SINGLE": "Long Walk",
-        "WALK_LONG_PACKS": "Long Walk (Pack)",
-        "HOME_VISIT_30M_SINGLE": "Home Visit – 30m (1×/day)",
-        "HOME_VISIT_30M_2X_SINGLE": "Home Visit – 30m (2×/day)",
-        "DAYCARE_SINGLE": "Doggy Daycare (per day)",
-        "DAYCARE_PACKS": "Doggy Daycare (Pack)",
-        "PICKUP_DROPOFF_SINGLE": "Pick up / Drop off",
-        "SCOOP_SINGLE": "Poop Scoop – One-time",
-        "SCOOP_WEEKLY_MONTHLY": "Poop Scoop – Weekly/Monthly",
-        "DAYCARE_WEEKLY_PER_VISIT": "Daycare (Weekly / per visit)",
-        "DAYCARE_FORTNIGHTLY_PER_VISIT": "Daycare (Fortnightly / per visit)",
-        # add any other codes you use
-    }
-    if service_code in lut:
-        return lut[service_code]
-
-    # fallback: prettify unknown codes
-    return service_code.replace("_", " ").title()
+    from service_map import get_service_display_name
+    
+    return get_service_display_name(service_code, default_label)
 
 
 # put this right above ts_to_iso (or inside the function)
@@ -1336,51 +1315,87 @@ class BookingsTab(QWidget):
                 add_btn.setEnabled(True)
 
     def _derive_service_type_from_label(self, label):
-        """Derive a proper service_type code from a service label"""
+        """Derive a proper service_type code from a service label using central service map"""
+        from service_map import get_service_code, DISPLAY_TO_SERVICE_CODE
+        
         if not label:
-            return "WALK_GENERAL"
+            return "WALK_SHORT_SINGLE"  # Default fallback
         
-        label_lower = label.lower()
+        # First try exact match with the display name
+        exact_match = get_service_code(label)
+        if exact_match:
+            return exact_match
         
-        # Map common service labels to proper service types
+        # If no exact match, try fuzzy matching for backward compatibility
+        label_lower = label.lower().strip()
+        
+        # Try partial matching against all display names
+        for display_name, service_code in DISPLAY_TO_SERVICE_CODE.items():
+            if label_lower in display_name.lower():
+                return service_code
+        
+        # Legacy mapping for common variations that might exist in old data
         if "daycare" in label_lower:
-            if "single" in label_lower or "day" in label_lower:
-                return "DAYCARE_SINGLE"
-            elif "pack" in label_lower:
-                return "DAYCARE_PACKS"
+            if "pack" in label_lower and "5" in label_lower:
+                return "DAYCARE_PACK5"
             elif "weekly" in label_lower:
-                return "DAYCARE_WEEKLY_PER_VISIT"
+                return "DAYCARE_WEEKLY"
             elif "fortnightly" in label_lower:
                 return "DAYCARE_FORTNIGHTLY_PER_VISIT"
             else:
                 return "DAYCARE_SINGLE"
-        elif "short" in label_lower and "walk" in label_lower:
-            if "pack" in label_lower:
-                return "WALK_SHORT_PACKS"
-            else:
-                return "WALK_SHORT_SINGLE"
-        elif "long" in label_lower and "walk" in label_lower:
-            if "pack" in label_lower:
-                return "WALK_LONG_PACKS"
-            else:
-                return "WALK_LONG_SINGLE"
-        elif "home visit" in label_lower or "home-visit" in label_lower:
-            if "30m" in label_lower and "2" in label_lower:
-                return "HOME_VISIT_30M_2X_SINGLE"
-            else:
-                return "HOME_VISIT_30M_SINGLE"
-        elif "pickup" in label_lower or "drop" in label_lower:
-            return "PICKUP_DROPOFF_SINGLE"
-        elif "scoop" in label_lower or "poop" in label_lower:
-            if "weekly" in label_lower or "monthly" in label_lower:
-                return "SCOOP_WEEKLY_MONTHLY"
-            else:
-                return "SCOOP_SINGLE"
         elif "walk" in label_lower:
-            return "WALK_GENERAL"
-        else:
-            # Convert label to a reasonable service type code
-            return label.upper().replace(" ", "_").replace("-", "_").replace("(", "").replace(")", "")
+            if "short" in label_lower:
+                if "pack" in label_lower and "5" in label_lower:
+                    return "WALK_SHORT_PACK5"
+                elif "weekly" in label_lower:
+                    return "WALK_SHORT_WEEKLY"
+                else:
+                    return "WALK_SHORT_SINGLE"
+            elif "long" in label_lower:
+                if "pack" in label_lower and "5" in label_lower:
+                    return "WALK_LONG_PACK5"
+                elif "weekly" in label_lower:
+                    return "WALK_LONG_WEEKLY"
+                else:
+                    return "WALK_LONG_SINGLE"
+        elif "home" in label_lower and "visit" in label_lower:
+            if "2" in label_lower and "day" in label_lower:
+                if "pack" in label_lower and "5" in label_lower:
+                    return "HV_30_2X_PACK5"
+                else:
+                    return "HV_30_2X_SINGLE"
+            else:
+                if "pack" in label_lower and "5" in label_lower:
+                    return "HV_30_1X_PACK5"
+                else:
+                    return "HV_30_1X_SINGLE"
+        elif "pickup" in label_lower or "drop" in label_lower:
+            if "fortnightly" in label_lower:
+                return "PICKUP_FORTNIGHTLY_PER_VISIT"
+            elif "weekly" in label_lower:
+                return "PICKUP_WEEKLY_PER_VISIT"
+            elif "pack" in label_lower and "5" in label_lower:
+                return "PICKUP_DROPOFF_PACK5"
+            else:
+                return "PICKUP_DROPOFF"
+        elif "scoop" in label_lower or "poop" in label_lower:
+            if "twice" in label_lower and "weekly" in label_lower:
+                return "SCOOP_TWICE_WEEKLY_MONTH"
+            elif "fortnightly" in label_lower:
+                return "SCOOP_FORTNIGHTLY_MONTH"
+            elif "weekly" in label_lower:
+                return "SCOOP_WEEKLY_MONTH"
+            else:
+                return "SCOOP_ONCE_SINGLE"
+        elif "overnight" in label_lower or "sitting" in label_lower:
+            if "pack" in label_lower and "5" in label_lower:
+                return "BOARD_OVERNIGHT_PACK5"
+            else:
+                return "BOARD_OVERNIGHT_SINGLE"
+        
+        # Final fallback - return a safe default
+        return "WALK_SHORT_SINGLE"
 
     def import_from_invoices(self):
         try:
