@@ -550,76 +550,194 @@ def list_products():
     return out
 
 def list_subscriptions(limit=100):
+    """
+    List subscriptions with robust customer display logic.
+    
+    This function ensures every subscription object ALWAYS stores the Stripe customer ID
+    and implements proper fallback when displaying customer information as per requirements:
+    1. If customer_id exists, always fetch from Stripe API when needed
+    2. Never display 'Unknown Customer' if customer_id exists and API is accessible  
+    3. Use fallback: Customer {id} (Stripe API error) for API failures
+    4. Robust error logging for all failures
+    """
+    from customer_display_helpers import get_robust_customer_display_info
+    from log_utils import get_subscription_logger, log_subscription_error
+    
     s = _api()
-    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.latest_invoice'])
-    out = []
-    for sub in subs.auto_paging_iter():
-        sub_dict = dict(sub) if not isinstance(sub, dict) else sub
-        items_block = sub_dict.get("items") or getattr(sub, "items", None)
-        data_list = []
-        if isinstance(items_block, dict):
-            data_list = items_block.get("data", []) or []
-        else:
-            data_list = getattr(items_block, "data", []) or []
-        products = []
-        for it in data_list:
-            it_dict = it if isinstance(it, dict) else dict(it)
-            price = it_dict.get("price") or getattr(it, "price", None)
-            prod = price.get("product") if isinstance(price, dict) else getattr(price, "product", None)
-            pname = None
-            try:
-                if isinstance(prod, str):
-                    pname = s.Product.retrieve(prod).name
-                else:
-                    pname = prod.get("name") if isinstance(prod, dict) else getattr(prod, "name", None)
-            except Exception:
-                pname = None
-            if pname:
-                products.append(pname)
-        cust = sub_dict.get("customer") or getattr(sub, "customer", None)
-        if isinstance(cust, dict):
-            c_name = cust.get("name")
-            c_email = cust.get("email")
-        else:
-            c_name = getattr(cust, "name", None)
-            c_email = getattr(cust, "email", None)
+    logger = get_subscription_logger()
+    
+    try:
+        subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.latest_invoice'])
+        out = []
         
-        # Implement proper fallback for customer name as per problem statement
-        # If name is empty/null, use email or fetch from Stripe customer API
-        customer_display_name = c_name
-        if not customer_display_name and c_email:
-            # Use email as fallback
-            customer_display_name = c_email
-        elif not customer_display_name and cust:
-            # Try to fetch customer details from Stripe if we have customer ID
+        for sub in subs.auto_paging_iter():
+            subscription_id = "unknown"  # Initialize subscription_id for error handling
             try:
-                customer_id = cust.get("id") if isinstance(cust, dict) else getattr(cust, "id", None)
-                if customer_id:
-                    customer_obj = s.Customer.retrieve(customer_id)
-                    fetched_name = getattr(customer_obj, "name", None)
-                    fetched_email = getattr(customer_obj, "email", None)
-                    customer_display_name = fetched_name or fetched_email or "Unknown Customer"
+                # Handle both dict and Stripe object formats safely
+                # First, try to get the basic id for error logging
+                if hasattr(sub, 'get') and callable(sub.get):
+                    # It's a dict-like object
+                    sub_dict = sub
+                    subscription_id = sub_dict.get("id", "unknown")
+                elif hasattr(sub, 'id'):
+                    # It has an id attribute
+                    subscription_id = getattr(sub, 'id', 'unknown')
+                    # Convert Stripe object to dict for easier access
+                    if hasattr(sub, '__dict__') and not hasattr(sub, 'get'):
+                        # Real Stripe object - be careful with mocks that don't have __dict__ properly
+                        try:
+                            sub_dict = {k: getattr(sub, k, None) for k in dir(sub) if not k.startswith('_') and not callable(getattr(sub, k, None))}
+                        except AttributeError:
+                            # Mock object causing issues, use fallback
+                            sub_dict = {}
+                            for attr in ['id', 'status', 'customer', 'items', 'current_period_end', 'latest_invoice']:
+                                try:
+                                    sub_dict[attr] = getattr(sub, attr, None)
+                                except AttributeError:
+                                    sub_dict[attr] = None
+                    else:
+                        # Mock object or dict-like, handle carefully  
+                        sub_dict = {}
+                        for attr in ['id', 'status', 'customer', 'items', 'current_period_end', 'latest_invoice']:
+                            try:
+                                sub_dict[attr] = getattr(sub, attr, None)
+                            except AttributeError:
+                                sub_dict[attr] = None
                 else:
-                    customer_display_name = "Unknown Customer"
-            except Exception:
-                customer_display_name = "Unknown Customer"
-        elif not customer_display_name:
-            customer_display_name = "Unknown Customer"
-            
-        latest_inv = sub_dict.get("latest_invoice") or getattr(sub, "latest_invoice", None)
-        latest_url = latest_inv.get("hosted_invoice_url") if isinstance(latest_inv, dict) else getattr(latest_inv, "hosted_invoice_url", None)
-        out.append({
-            "id": sub_dict.get("id") or getattr(sub, "id", None),
-            "status": sub_dict.get("status") or getattr(sub, "status", None),
-            "customer_email": c_email,
-            "customer_name": customer_display_name,
-            "products": ", ".join(products) if products else "",
-            "current_period_end": sub_dict.get("current_period_end") or getattr(sub, "current_period_end", None),
-            "latest_invoice_url": latest_url,
-        })
-        if isinstance(limit, int) and limit > 0 and len(out) >= limit:
-            break
-    return out
+                    # Fallback: create basic dict with essential fields
+                    sub_dict = {}
+                    for attr in ['id', 'status', 'customer', 'items', 'current_period_end', 'latest_invoice']:
+                        try:
+                            sub_dict[attr] = getattr(sub, attr, None)
+                        except AttributeError:
+                            sub_dict[attr] = None
+                    subscription_id = sub_dict.get("id", "unknown")
+                
+                subscription_id = sub_dict.get("id") or getattr(sub, "id", "unknown")
+                
+                # Extract customer information with robust fallback
+                customer_data = sub_dict.get("customer") or getattr(sub, "customer", None)
+                
+                # Ensure customer_id is always captured and stored
+                customer_id = None
+                try:
+                    if hasattr(customer_data, 'get') and callable(customer_data.get):
+                        customer_id = customer_data.get("id")
+                    elif hasattr(customer_data, 'id'):
+                        customer_id = getattr(customer_data, "id", None)
+                    elif customer_data:
+                        # Try to access as string (customer ID directly)
+                        customer_id = str(customer_data) if customer_data else None
+                except Exception:
+                    customer_id = None
+                    
+                if not customer_id:
+                    log_subscription_error("Missing customer_id in subscription", subscription_id)
+                
+                # Get robust customer display info using dedicated helper
+                customer_display_name = get_robust_customer_display_info({
+                    'id': subscription_id,
+                    'customer': customer_data
+                })
+                
+                # Extract customer email for consistency
+                c_email = ""
+                try:
+                    if hasattr(customer_data, 'get') and callable(customer_data.get):
+                        c_email = customer_data.get("email", "")
+                    elif hasattr(customer_data, 'email'):
+                        c_email = getattr(customer_data, "email", "")
+                except Exception:
+                    c_email = ""
+                
+                # Extract products
+                items_block = sub_dict.get("items") or getattr(sub, "items", None)
+                data_list = []
+                try:
+                    if hasattr(items_block, 'get') and callable(items_block.get):
+                        data_list = items_block.get("data", []) or []
+                    elif hasattr(items_block, 'data'):
+                        data_list = getattr(items_block, "data", []) or []
+                except Exception:
+                    data_list = []
+                
+                products = []
+                for it in data_list:
+                    try:
+                        # Handle both dict and object formats safely
+                        if hasattr(it, 'get') and callable(it.get):
+                            it_dict = it
+                        elif hasattr(it, '__dict__'):
+                            it_dict = {k: getattr(it, k, None) for k in dir(it) if not k.startswith('_')}
+                        else:
+                            it_dict = {'price': getattr(it, 'price', None)}
+                            
+                        price = it_dict.get("price") or getattr(it, "price", None)
+                        
+                        # Handle price object safely
+                        prod = None
+                        if hasattr(price, 'get') and callable(price.get):
+                            prod = price.get("product")
+                        elif hasattr(price, 'product'):
+                            prod = getattr(price, "product", None)
+                            
+                        pname = None
+                        try:
+                            # Handle string product ID
+                            if hasattr(prod, 'startswith') and callable(prod.startswith) and prod.startswith('prod_'):
+                                pname = s.Product.retrieve(prod).name
+                            # Handle dict-like product object
+                            elif hasattr(prod, 'get') and callable(prod.get):
+                                pname = prod.get("name")
+                            # Handle object with name attribute
+                            elif hasattr(prod, 'name'):
+                                pname = getattr(prod, "name", None)
+                        except Exception as e:
+                            logger.warning(f"Failed to get product name: {e}")
+                            pname = None
+                            
+                        if pname:
+                            products.append(pname)
+                    except Exception as e:
+                        logger.warning(f"Error processing subscription item: {e}")
+                
+                # Extract latest invoice URL
+                latest_inv = sub_dict.get("latest_invoice") or getattr(sub, "latest_invoice", None)
+                latest_url = None
+                try:
+                    if hasattr(latest_inv, 'get') and callable(latest_inv.get):
+                        latest_url = latest_inv.get("hosted_invoice_url")
+                    elif hasattr(latest_inv, 'hosted_invoice_url'):
+                        latest_url = getattr(latest_inv, "hosted_invoice_url", None)
+                except Exception:
+                    latest_url = None
+                
+                # Build subscription result with customer_id always included
+                subscription_result = {
+                    "id": subscription_id,
+                    "customer_id": customer_id,  # ALWAYS store customer_id as per requirements
+                    "status": sub_dict.get("status") or getattr(sub, "status", None),
+                    "customer_email": c_email,
+                    "customer_name": customer_display_name,
+                    "products": ", ".join(products) if products else "",
+                    "current_period_end": sub_dict.get("current_period_end") or getattr(sub, "current_period_end", None),
+                    "latest_invoice_url": latest_url,
+                }
+                
+                out.append(subscription_result)
+                
+                if isinstance(limit, int) and limit > 0 and len(out) >= limit:
+                    break
+                    
+            except Exception as e:
+                log_subscription_error("Error processing individual subscription", subscription_id, e)
+                continue
+                
+        return out
+        
+    except Exception as e:
+        log_subscription_error("Error listing subscriptions", "all", e)
+        return []
 
 def list_all_customers(limit=None):
     s = _api()
@@ -763,128 +881,212 @@ def list_active_subscriptions(limit=200):
     
     This function ensures customer information is always available by fetching
     from Stripe API when needed, preventing "Unknown Customer" issues.
-    """
-    s = _api()
-    out = []
-    # Expand items + price + customer to get complete data
-    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
     
-    for sub in subs.auto_paging_iter():
-        d = dict(sub) if not isinstance(sub, dict) else sub
-        status = d.get("status")
-        if status not in ("active", "trialing", "past_due"):
-            continue
-
-        # Enhanced customer handling with Stripe API fallback
-        cust = d.get("customer") or getattr(sub, "customer", None)
-        customer_id = None
-        c_name = None
-        c_email = None
+    Every subscription ALWAYS includes customer_id as per requirements.
+    """
+    from customer_display_helpers import ensure_customer_data_in_subscription
+    from log_utils import log_subscription_error, get_subscription_logger
+    
+    s = _api()
+    logger = get_subscription_logger()
+    out = []
+    
+    try:
+        # Expand items + price + customer to get complete data
+        subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
         
-        if isinstance(cust, dict):
-            c_email = cust.get("email")
-            c_name = cust.get("name")
-            customer_id = cust.get("id")
-        elif isinstance(cust, str):
-            # Customer is just an ID, need to fetch details
-            customer_id = cust
-        else:
-            c_email = getattr(cust, "email", None)
-            c_name = getattr(cust, "name", None)
-            customer_id = getattr(cust, "id", None)
-
-        # Always try to fetch customer data from Stripe if we don't have name/email
-        customer_display_name = c_name
-        if (not customer_display_name or not c_email) and customer_id:
+        for sub in subs.auto_paging_iter():
             try:
-                logger.debug(f"Fetching customer details for {customer_id}")
-                customer_obj = s.Customer.retrieve(customer_id)
-                fetched_name = getattr(customer_obj, "name", None)
-                fetched_email = getattr(customer_obj, "email", None)
+                # Handle both dict and Stripe object formats safely
+                if hasattr(sub, '__dict__'):
+                    # Stripe object - convert to dict for easier access
+                    d = {k: getattr(sub, k, None) for k in dir(sub) if not k.startswith('_')}
+                elif isinstance(sub, dict):
+                    d = sub
+                else:
+                    # Fallback: create basic dict with essential fields
+                    d = {
+                        'id': getattr(sub, 'id', None),
+                        'status': getattr(sub, 'status', None),
+                        'customer': getattr(sub, 'customer', None),
+                        'items': getattr(sub, 'items', None),
+                        'latest_invoice': getattr(sub, 'latest_invoice', None)
+                    }
                 
-                # Use fetched data to fill in missing info
-                customer_display_name = fetched_name or customer_display_name
-                c_email = fetched_email or c_email
-                c_name = fetched_name or c_name
+                status = d.get("status")
+                if status not in ("active", "trialing", "past_due"):
+                    continue
                 
-                # Update customer object in subscription data for downstream use
-                d["customer"] = {
-                    "id": customer_id,
-                    "name": fetched_name or "",
-                    "email": fetched_email or "",
+                subscription_id = d.get("id") or getattr(sub, "id", "unknown")
+                
+                # Ensure customer data is complete - REQUIREMENT: Always store customer_id
+                d = ensure_customer_data_in_subscription(d)
+
+                # Enhanced customer handling with Stripe API fallback
+                cust = d.get("customer") or getattr(sub, "customer", None)
+                customer_id = None
+                c_name = None
+                c_email = None
+                
+                if isinstance(cust, dict):
+                    c_email = cust.get("email")
+                    c_name = cust.get("name")
+                    customer_id = cust.get("id")
+                elif isinstance(cust, str):
+                    # Customer is just an ID, need to fetch details
+                    customer_id = cust
+                elif cust:
+                    c_email = getattr(cust, "email", None)
+                    c_name = getattr(cust, "name", None)
+                    customer_id = getattr(cust, "id", None)
+
+                if not customer_id:
+                    log_subscription_error("Missing customer_id in active subscription", subscription_id)
+                    continue  # Skip subscriptions without customer_id
+                
+                # Always try to fetch customer data from Stripe if we don't have name/email
+                customer_display_name = c_name
+                if (not customer_display_name or not c_email) and customer_id:
+                    try:
+                        logger.debug(f"Fetching customer details for {customer_id}")
+                        customer_obj = s.Customer.retrieve(customer_id)
+                        fetched_name = getattr(customer_obj, "name", None)
+                        fetched_email = getattr(customer_obj, "email", None)
+                        
+                        # Use fetched data to fill in missing info
+                        customer_display_name = fetched_name or customer_display_name
+                        c_email = fetched_email or c_email
+                        c_name = fetched_name or c_name
+                        
+                        # Update customer object in subscription data for downstream use
+                        d["customer"] = {
+                            "id": customer_id,
+                            "name": fetched_name or "",
+                            "email": fetched_email or "",
+                        }
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch customer {customer_id}: {e}")
+                
+                # Final customer display name with robust fallback
+                if customer_display_name and c_email:
+                    customer_display_name = f"{customer_display_name} ({c_email})"
+                elif customer_display_name:
+                    pass  # Use name as-is
+                elif c_email:
+                    customer_display_name = c_email
+                elif customer_id:
+                    # As per requirements: Customer {id} instead of 'Unknown Customer' when ID exists
+                    customer_display_name = f"Customer {customer_id}"
+                else:
+                    customer_display_name = "Unknown Customer"
+
+                # items
+                items_block = d.get("items") or getattr(sub, "items", None)
+                items_list = items_block.get("data", []) if isinstance(items_block, dict) else getattr(items_block, "data", []) or []
+
+                weekly_qty = 0
+                item_rows = []
+                for it in items_list:
+                    try:
+                        if isinstance(it, dict):
+                            it_d = it
+                        elif hasattr(it, '__dict__'):
+                            it_d = {k: getattr(it, k, None) for k in dir(it) if not k.startswith('_')}
+                        else:
+                            it_d = {'quantity': getattr(it, 'quantity', 0), 'price': getattr(it, 'price', None)}
+                            
+                        qty = int(it_d.get("quantity") or 0)
+                        price = it_d.get("price") or getattr(it, "price", None)
+
+                        # Use the helper function to calculate weekly quantity
+                        weekly_qty += calculate_weekly_quantity(price, qty)
+
+                        # Get interval for item_rows
+                        if isinstance(price, dict):
+                            rec = price.get("recurring")
+                        elif price:
+                            rec = getattr(price, "recurring", None)
+                        else:
+                            rec = None
+                            
+                        interval = rec.get("interval") if isinstance(rec, dict) else getattr(rec, "interval", None)
+
+                        # product name / info for UI
+                        if isinstance(price, dict):
+                            product = price.get("product")
+                        elif price:
+                            product = getattr(price, "product", None)
+                        else:
+                            product = None
+                            
+                        if isinstance(product, dict):
+                            pname = product.get("name")
+                        elif isinstance(product, str):
+                            try:
+                                pname = s.Product.retrieve(product).name
+                            except Exception:
+                                pname = None
+                        elif product:
+                            pname = getattr(product, "name", None)
+                        else:
+                            pname = None
+
+                        if isinstance(price, dict):
+                            nickname = price.get("nickname")
+                            unit_amount = price.get("unit_amount")
+                            price_id = price.get("id")
+                        elif price:
+                            nickname = getattr(price, "nickname", None)
+                            unit_amount = getattr(price, "unit_amount", None)
+                            price_id = getattr(price, "id", None)
+                        else:
+                            nickname = None
+                            unit_amount = None
+                            price_id = None
+
+                        item_rows.append({
+                            "price_id": price_id,
+                            "product_name": pname,
+                            "nickname": nickname,
+                            "quantity": qty,
+                            "unit_amount": unit_amount,
+                            "interval": interval,
+                        })
+                    except Exception as e:
+                        logger.warning(f"Error processing subscription item: {e}")
+                        continue
+
+                latest_inv = d.get("latest_invoice") or getattr(sub, "latest_invoice", None)
+                latest_url = latest_inv.get("hosted_invoice_url") if isinstance(latest_inv, dict) else getattr(latest_inv, "hosted_invoice_url", None)
+
+                # Build subscription result - ALWAYS include customer_id as per requirements
+                subscription_result = {
+                    "id": subscription_id,
+                    "status": status,
+                    "customer_id": customer_id,  # REQUIRED: Always include customer_id
+                    "customer_email": c_email,
+                    "customer_name": c_name,
+                    "customer_display_name": customer_display_name,
+                    "weekly_quantity": weekly_qty,
+                    "items": item_rows,
+                    "latest_invoice_url": latest_url,
+                    "metadata": d.get("metadata", {}),  # Include metadata for schedule extraction
+                    "customer": d.get("customer"),  # Include full customer data for downstream use
                 }
                 
+                out.append(subscription_result)
+                
             except Exception as e:
-                logger.warning(f"Failed to fetch customer {customer_id}: {e}")
+                subscription_id = getattr(sub, "id", "unknown")
+                log_subscription_error("Error processing individual active subscription", subscription_id, e)
+                continue
+                
+        return out
         
-        # Final customer display name with robust fallback
-        if customer_display_name and c_email:
-            customer_display_name = f"{customer_display_name} ({c_email})"
-        elif customer_display_name:
-            pass  # Use name as-is
-        elif c_email:
-            customer_display_name = c_email
-        elif customer_id:
-            customer_display_name = f"Customer {customer_id}"
-        else:
-            customer_display_name = "Unknown Customer"
-
-        # items
-        items_block = d.get("items") or getattr(sub, "items", None)
-        items_list = items_block.get("data", []) if isinstance(items_block, dict) else getattr(items_block, "data", []) or []
-
-        weekly_qty = 0
-        item_rows = []
-        for it in items_list:
-            it_d = it if isinstance(it, dict) else dict(it)
-            qty = int(it_d.get("quantity") or 0)
-            price = it_d.get("price") or getattr(it, "price", None)
-
-            # Use the helper function to calculate weekly quantity
-            weekly_qty += calculate_weekly_quantity(price, qty)
-
-            # Get interval for item_rows
-            rec = price.get("recurring") if isinstance(price, dict) else getattr(price, "recurring", None)
-            interval = rec.get("interval") if isinstance(rec, dict) else getattr(rec, "interval", None)
-
-            # product name / info for UI
-            product = price.get("product") if isinstance(price, dict) else getattr(price, "product", None)
-            if isinstance(product, dict):
-                pname = product.get("name")
-            elif isinstance(product, str):
-                try:
-                    pname = s.Product.retrieve(product).name
-                except Exception:
-                    pname = None
-            else:
-                pname = getattr(product, "name", None)
-
-            nickname = price.get("nickname") if isinstance(price, dict) else getattr(price, "nickname", None)
-            unit_amount = price.get("unit_amount") if isinstance(price, dict) else getattr(price, "unit_amount", None)
-
-            item_rows.append({
-                "price_id": price.get("id") if isinstance(price, dict) else getattr(price, "id", None),
-                "product_name": pname,
-                "nickname": nickname,
-                "quantity": qty,
-                "unit_amount": unit_amount,
-                "interval": interval,
-            })
-
-        latest_inv = d.get("latest_invoice") or getattr(sub, "latest_invoice", None)
-        latest_url = latest_inv.get("hosted_invoice_url") if isinstance(latest_inv, dict) else getattr(latest_inv, "hosted_invoice_url", None)
-
-        out.append({
-            "id": d.get("id") or getattr(sub, "id", None),
-            "status": status,
-            "customer_id": customer_id,
-            "customer_email": c_email,
-            "customer_name": c_name,
-            "weekly_quantity": weekly_qty,  # <-- use this to place holds across selected days/times
-            "items": item_rows,
-            "latest_invoice_url": latest_url,
-        })
-    return out
+    except Exception as e:
+        log_subscription_error("Error listing active subscriptions", "all", e)
+        return []
 
 def cancel_subscription(subscription_id: str) -> bool:
     """

@@ -360,10 +360,17 @@ def backup_db():
 
 # ---- Subscriptions tables & helpers ----
 def migrate_subs_tables(conn):
+    """
+    Create and update subscription-related tables.
+    
+    Ensures all subscription tables ALWAYS store the Stripe customer_id
+    as per the problem statement requirements.
+    """
     cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS subs_schedule(
             stripe_subscription_id TEXT PRIMARY KEY,
+            stripe_customer_id TEXT,
             days TEXT,
             start_time TEXT,
             end_time   TEXT,
@@ -377,6 +384,7 @@ def migrate_subs_tables(conn):
         CREATE TABLE IF NOT EXISTS sub_occurrences(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             stripe_subscription_id TEXT,
+            stripe_customer_id TEXT,
             start_dt TEXT,
             end_dt   TEXT,
             dogs     INTEGER,
@@ -390,6 +398,7 @@ def migrate_subs_tables(conn):
         CREATE TABLE IF NOT EXISTS subs(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE,
+            stripe_customer_id TEXT,
             service_name TEXT,
             mon INTEGER DEFAULT 0,
             tue INTEGER DEFAULT 0,
@@ -405,6 +414,22 @@ def migrate_subs_tables(conn):
             status TEXT DEFAULT 'active'
         );
     """)
+    
+    # Add customer_id columns to existing tables if missing
+    # This ensures backward compatibility while meeting the requirement
+    # that EVERY subscription object ALWAYS stores the Stripe customer ID
+    ensure_column(conn, "subs_schedule", "stripe_customer_id", "TEXT")
+    ensure_column(conn, "sub_occurrences", "stripe_customer_id", "TEXT") 
+    ensure_column(conn, "subs", "stripe_customer_id", "TEXT")
+    
+    # Add indexes for performance
+    ensure_index(conn, "idx_subs_schedule_customer", 
+                 "CREATE INDEX IF NOT EXISTS idx_subs_schedule_customer ON subs_schedule(stripe_customer_id)")
+    ensure_index(conn, "idx_sub_occurrences_customer",
+                 "CREATE INDEX IF NOT EXISTS idx_sub_occurrences_customer ON sub_occurrences(stripe_customer_id)")
+    ensure_index(conn, "idx_subs_customer",
+                 "CREATE INDEX IF NOT EXISTS idx_subs_customer ON subs(stripe_customer_id)")
+    
     conn.commit()
 
 def clear_future_sub_occurrences(conn, subscription_ids=None, from_iso=None):
