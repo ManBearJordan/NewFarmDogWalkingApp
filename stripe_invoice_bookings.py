@@ -193,7 +193,10 @@ def import_invoice_bookings(conn, lookback_days: int = 90):
                     price_md = dict(getattr(li.price, 'metadata', {}) or {})
                     if price_md.get('service_name') and not service_label:
                         service_label = price_md['service_name'].strip()
-                    if price_md.get('service_code') and not service_type:
+                    # Check price_code first (more specific), then fallback to service_code
+                    if price_md.get('price_code') and not service_type:
+                        service_type = price_md['price_code'].strip()
+                    elif price_md.get('service_code') and not service_type:
                         service_type = price_md['service_code'].strip()
                     
                     # Try product name as last resort
@@ -207,7 +210,10 @@ def import_invoice_bookings(conn, lookback_days: int = 90):
                             prod_md = dict(product.metadata)
                             if prod_md.get('service_name') and not service_label:
                                 service_label = prod_md['service_name'].strip()
-                            if prod_md.get('service_code') and not service_type:
+                            # Check price_code first (more specific), then fallback to service_code
+                            if prod_md.get('price_code') and not service_type:
+                                service_type = prod_md['price_code'].strip()
+                            elif prod_md.get('service_code') and not service_type:
                                 service_type = prod_md['service_code'].strip()
                     
                     # Break if we have both

@@ -880,7 +880,9 @@ class BookingsTab(QWidget):
             
         service_data = self.service.currentData() or {}
         service_label = service_data.get("display") or service_data.get("price_nickname") or self.service.currentText()
-        service_type = service_data.get("service_code") or service_label
+        service_type = (service_data.get("price_code") or 
+                       service_data.get("service_code") or 
+                       service_label)
         location = self.location.text().strip()
         dogs_count = self.dogs.value()
         price_cents = self.price.value() or int(service_data.get("amount_cents") or 0)
@@ -2021,8 +2023,9 @@ class SubscriptionsTab(QWidget):
                 # Try to get service info from price metadata
                 if price and hasattr(price, 'metadata') and price.metadata:
                     price_metadata = dict(price.metadata)
-                    # Check both service_code and service_type (interchangeable)
-                    service_type = (price_metadata.get('service_code') or 
+                    # Check price_code first (more specific), then fallbacks
+                    service_type = (price_metadata.get('price_code') or
+                                  price_metadata.get('service_code') or 
                                   price_metadata.get('service_type') or 
                                   service_type)
                     service_label = (price_metadata.get('service_name') or 
@@ -2036,8 +2039,9 @@ class SubscriptionsTab(QWidget):
                 if price and hasattr(price, 'product') and hasattr(price.product, 'metadata'):
                     product_metadata = dict(price.product.metadata or {})
                     if not service_type or service_type == "WALK_GENERAL":
-                        # Check both service_code and service_type (interchangeable)
-                        service_type = (product_metadata.get('service_code') or 
+                        # Check price_code first (more specific), then fallbacks
+                        service_type = (product_metadata.get('price_code') or
+                                      product_metadata.get('service_code') or 
                                       product_metadata.get('service_type') or 
                                       service_type)
                     if not service_label or service_label == "Dog Walking Service":

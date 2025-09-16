@@ -166,7 +166,9 @@ def fix_subscription_bookings():
                 # Check invoice metadata first
                 if hasattr(invoice, 'metadata') and invoice.metadata:
                     service_label = invoice.metadata.get('service') or invoice.metadata.get('service_name')
-                    service_type = invoice.metadata.get('service_type') or invoice.metadata.get('service_code')
+                    service_type = (invoice.metadata.get('service_type') or 
+                                  invoice.metadata.get('price_code') or
+                                  invoice.metadata.get('service_code'))
                 
                 # If not found, check line items
                 if not service_label and hasattr(invoice, 'lines') and invoice.lines.data:
@@ -181,14 +183,18 @@ def fix_subscription_bookings():
                         if not service_label:
                             service_label = line.metadata.get('service') or line.metadata.get('service_name')
                         if not service_type:
-                            service_type = line.metadata.get('service_type') or line.metadata.get('service_code')
+                            service_type = (line.metadata.get('service_type') or 
+                                          line.metadata.get('price_code') or
+                                          line.metadata.get('service_code'))
                     
                     # Check price metadata
                     if hasattr(line, 'price') and hasattr(line.price, 'metadata') and line.price.metadata:
                         if not service_label:
                             service_label = line.price.metadata.get('service_name')
                         if not service_type:
-                            service_type = line.price.metadata.get('service_code')
+                            service_type = (line.price.metadata.get('service_type') or 
+                                          line.price.metadata.get('price_code') or
+                                          line.price.metadata.get('service_code'))
                     
                     # Check product metadata
                     if hasattr(line, 'price') and hasattr(line.price, 'product'):
@@ -199,7 +205,9 @@ def fix_subscription_bookings():
                             if not service_label:
                                 service_label = product.metadata.get('service_name')
                             if not service_type:
-                                service_type = product.metadata.get('service_code')
+                                service_type = (product.metadata.get('service_type') or 
+                                              product.metadata.get('price_code') or
+                                              product.metadata.get('service_code'))
                 
                 # Derive service_type from service_label if not found
                 if service_label and not service_type:
