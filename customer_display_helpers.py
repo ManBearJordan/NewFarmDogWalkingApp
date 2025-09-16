@@ -38,20 +38,30 @@ def get_robust_customer_display_info(subscription_data: Dict[str, Any]) -> str:
         customer = subscription_data.get("customer", {})
         
         # Handle different customer data formats
-        if isinstance(customer, str):
-            # Customer is just an ID string
+        name = ""
+        email = ""
+        customer_id = ""
+        
+        try:
+            if hasattr(customer, 'startswith') and callable(customer.startswith):
+                # Customer is just an ID string
+                name = ""
+                email = ""
+                customer_id = customer
+            elif hasattr(customer, 'get') and callable(customer.get):
+                # Customer is dict-like
+                name = customer.get("name", "")
+                email = customer.get("email", "")
+                customer_id = customer.get("id", "")
+            elif customer:
+                # Customer is an object from Stripe API
+                name = getattr(customer, "name", "")
+                email = getattr(customer, "email", "")
+                customer_id = getattr(customer, "id", "")
+        except Exception:
             name = ""
             email = ""
-            customer_id = customer
-        elif isinstance(customer, dict):
-            name = customer.get("name", "")
-            email = customer.get("email", "")
-            customer_id = customer.get("id", "")
-        else:
-            # Customer is an object from Stripe API
-            name = getattr(customer, "name", "") if customer else ""
-            email = getattr(customer, "email", "") if customer else ""
-            customer_id = getattr(customer, "id", "") if customer else ""
+            customer_id = ""
         
         # If we have good expanded data, use it
         if name and email:
@@ -113,11 +123,12 @@ def get_customer_info_with_fallback(customer_data: Any) -> Tuple[str, str, str]:
     
     try:
         # Handle different customer data formats
-        if isinstance(customer_data, dict):
+        if hasattr(customer_data, 'get') and callable(customer_data.get):
+            # Dict-like customer data
             name = customer_data.get("name", "")
             email = customer_data.get("email", "")
             customer_id = customer_data.get("id", "")
-        elif isinstance(customer_data, str):
+        elif hasattr(customer_data, 'startswith') and callable(customer_data.startswith):
             # Customer ID string
             customer_id = customer_data
         elif customer_data:
@@ -198,8 +209,8 @@ def ensure_customer_data_in_subscription(subscription_data: Dict[str, Any]) -> D
                 logger.warning(f"Failed to expand customer data for {customer}: {e}")
         
         # If customer data exists but is missing name/email, try to fetch it
-        elif isinstance(customer, dict) and customer.get("id"):
-            customer_id = customer["id"]
+        elif hasattr(customer, 'get') and callable(customer.get) and customer.get("id"):
+            customer_id = customer.get("id")
             if not customer.get("name") and not customer.get("email"):
                 try:
                     from stripe_integration import _api

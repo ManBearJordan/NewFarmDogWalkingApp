@@ -85,14 +85,14 @@ class TestCustomerNameFixes(unittest.TestCase):
         with patch('builtins.dict', mock_dict):
             subscriptions = list_subscriptions(limit=1)
         
-        # Verify customer name was fetched from Stripe Customer API
+        # Verify customer name was fetched from Stripe Customer API and formatted properly with email
         self.assertEqual(len(subscriptions), 1)
-        self.assertEqual(subscriptions[0]['customer_name'], 'John Doe')
+        self.assertEqual(subscriptions[0]['customer_name'], 'John Doe (john@example.com)')  # Updated per requirements
         mock_stripe_api.Customer.retrieve.assert_called_once_with('cus_test456')
     
     @patch('stripe_integration._api')
-    def test_unknown_customer_as_final_fallback(self, mock_api):
-        """Test that 'Unknown Customer' is used as final fallback"""
+    def test_stripe_api_error_fallback(self, mock_api):
+        """Test that Stripe API errors fall back to Customer {id} (Stripe API error) instead of Unknown Customer"""
         
         mock_stripe_api = Mock()
         mock_api.return_value = mock_stripe_api
@@ -123,9 +123,9 @@ class TestCustomerNameFixes(unittest.TestCase):
         with patch('builtins.dict', mock_dict):
             subscriptions = list_subscriptions(limit=1)
         
-        # Verify fallback to "Unknown Customer"
+        # Verify fallback behavior per requirements: "Customer {id} (Stripe API error)" instead of "Unknown Customer"
         self.assertEqual(len(subscriptions), 1)
-        self.assertEqual(subscriptions[0]['customer_name'], 'Unknown Customer')
+        self.assertEqual(subscriptions[0]['customer_name'], 'Customer cus_test456 (Stripe API error)')  # Updated per requirements
     
     @patch('stripe_integration._api')
     def test_customer_name_with_valid_name(self, mock_api):
@@ -157,9 +157,9 @@ class TestCustomerNameFixes(unittest.TestCase):
         with patch('builtins.dict', mock_dict):
             subscriptions = list_subscriptions(limit=1)
         
-        # Verify valid customer name is used
+        # Verify valid customer name is used and formatted properly with email 
         self.assertEqual(len(subscriptions), 1)
-        self.assertEqual(subscriptions[0]['customer_name'], 'Jane Smith')
+        self.assertEqual(subscriptions[0]['customer_name'], 'Jane Smith (jane@example.com)')  # Updated per requirements
         self.assertEqual(subscriptions[0]['customer_email'], 'jane@example.com')
 
 

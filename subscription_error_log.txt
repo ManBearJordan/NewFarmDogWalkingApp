@@ -31,3 +31,244 @@ Traceback (most recent call last):
     raise ValueError("Test exception for logging")
 ValueError: Test exception for logging
 2025-09-16 19:58:23,295 ERROR [SUB:sub_test_missing] Unknown Customer: No name, email, or customer_id found in subscription_data
+2025-09-16 10:20:32,909 ERROR [SUB:all] Error listing subscriptions - Exception: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=1&expand%5B0%5D=data.customer&expand%5B1%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 790, in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 969, in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+               ^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 480, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 524, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 455, in wrap_socket
+    return self.sslsocket_class._create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 1042, in _create
+    self.do_handshake()
+  File "/usr/lib/python3.12/ssl.py", line 1320, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+urllib3.exceptions.SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=1&expand%5B0%5D=data.customer&expand%5B1%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 672, in _request_internal
+    result = cast(
+             ^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 675, in send
+    raise SSLError(e, request=request)
+requests.exceptions.SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=1&expand%5B0%5D=data.customer&expand%5B1%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 570, in list_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 187, in request
+    rbody, rcode, rheaders = requestor.request_raw(
+                             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 719, in request_raw
+    ) = self._get_http_client().request_with_retries(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 291, in request_with_retries
+    return self._request_with_retries_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 378, in _request_with_retries_internal
+    raise connection_error
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 345, in _request_with_retries_internal
+    response = self.request(method, url, headers, post_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 610, in request
+    return self._request_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 704, in _request_internal
+    self._handle_request_error(e)
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 759, in _handle_request_error
+    raise APIConnectionError(msg, should_retry=should_retry) from e
+stripe._error.APIConnectionError: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=1&expand%5B0%5D=data.customer&expand%5B1%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+2025-09-16 10:20:43,644 ERROR [SUB:all] Error listing subscriptions - Exception: cannot access local variable 'subscription_id' where it is not associated with a value
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 578, in list_subscriptions
+    sub_dict = {k: getattr(sub, k, None) for k in dir(sub) if not k.startswith('_')}
+                                                  ^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 754, in __dir__
+    extras = self._mock_methods or []
+             ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 655, in __getattr__
+    raise AttributeError(name)
+AttributeError: _mock_methods
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 690, in list_subscriptions
+    log_subscription_error("Error processing individual subscription", subscription_id, e)
+                                                                       ^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'subscription_id' where it is not associated with a value
+2025-09-16 10:20:43,646 ERROR [SUB:all] Error listing subscriptions - Exception: cannot access local variable 'subscription_id' where it is not associated with a value
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 578, in list_subscriptions
+    sub_dict = {k: getattr(sub, k, None) for k in dir(sub) if not k.startswith('_')}
+                                                  ^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 754, in __dir__
+    extras = self._mock_methods or []
+             ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 655, in __getattr__
+    raise AttributeError(name)
+AttributeError: _mock_methods
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 690, in list_subscriptions
+    log_subscription_error("Error processing individual subscription", subscription_id, e)
+                                                                       ^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'subscription_id' where it is not associated with a value
+2025-09-16 10:20:43,647 ERROR [SUB:all] Error listing subscriptions - Exception: cannot access local variable 'subscription_id' where it is not associated with a value
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 578, in list_subscriptions
+    sub_dict = {k: getattr(sub, k, None) for k in dir(sub) if not k.startswith('_')}
+                                                  ^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 754, in __dir__
+    extras = self._mock_methods or []
+             ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 655, in __getattr__
+    raise AttributeError(name)
+AttributeError: _mock_methods
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 690, in list_subscriptions
+    log_subscription_error("Error processing individual subscription", subscription_id, e)
+                                                                       ^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'subscription_id' where it is not associated with a value
+2025-09-16 10:20:43,648 ERROR [SUB:all] Error listing subscriptions - Exception: cannot access local variable 'subscription_id' where it is not associated with a value
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 578, in list_subscriptions
+    sub_dict = {k: getattr(sub, k, None) for k in dir(sub) if not k.startswith('_')}
+                                                  ^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 754, in __dir__
+    extras = self._mock_methods or []
+             ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 655, in __getattr__
+    raise AttributeError(name)
+AttributeError: _mock_methods
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 690, in list_subscriptions
+    log_subscription_error("Error processing individual subscription", subscription_id, e)
+                                                                       ^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'subscription_id' where it is not associated with a value
+2025-09-16 10:22:35,998 ERROR [SUB:sub_test123] Error processing individual subscription - Exception: isinstance() arg 2 must be a type, a tuple of types, or a union
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 623, in list_subscriptions
+    if isinstance(customer_data, dict):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union
+2025-09-16 10:22:36,000 ERROR [SUB:sub_test123] Error processing individual subscription - Exception: isinstance() arg 2 must be a type, a tuple of types, or a union
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 623, in list_subscriptions
+    if isinstance(customer_data, dict):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union
+2025-09-16 10:22:36,001 ERROR [SUB:sub_test123] Error processing individual subscription - Exception: isinstance() arg 2 must be a type, a tuple of types, or a union
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 623, in list_subscriptions
+    if isinstance(customer_data, dict):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union
+2025-09-16 10:22:36,002 ERROR [SUB:sub_test123] Error processing individual subscription - Exception: isinstance() arg 2 must be a type, a tuple of types, or a union
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 623, in list_subscriptions
+    if isinstance(customer_data, dict):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union
+2025-09-16 10:25:45,488 DEBUG [SUB:sub_test123] Fetching customer details from Stripe for cus_test456
+2025-09-16 10:25:45,490 DEBUG [SUB:sub_test123] Fetching customer details from Stripe for cus_test456
+2025-09-16 10:25:45,490 ERROR [SUB:sub_test123] Stripe API failed for customer cus_test456 - Exception: API Error
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/customer_display_helpers.py", line 81, in get_robust_customer_display_info
+    customer_obj = stripe_api.Customer.retrieve(customer_id)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1134, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1138, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1193, in _execute_mock_call
+    raise effect
+Exception: API Error
+2025-09-16 10:27:11,054 DEBUG [SUB:sub_test123] Fetching customer details from Stripe for cus_test456
+2025-09-16 10:27:11,056 DEBUG [SUB:sub_test123] Fetching customer details from Stripe for cus_test456
+2025-09-16 10:27:11,056 ERROR [SUB:sub_test123] Stripe API failed for customer cus_test456 - Exception: API Error
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/customer_display_helpers.py", line 81, in get_robust_customer_display_info
+    customer_obj = stripe_api.Customer.retrieve(customer_id)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1134, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1138, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1193, in _execute_mock_call
+    raise effect
+Exception: API Error
