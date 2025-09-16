@@ -105,12 +105,30 @@ class TestSubscriptionValidation(unittest.TestCase):
         
         missing_data_subs = get_subscriptions_missing_schedule_data(subscriptions)
         
-        self.assertEqual(len(missing_data_subs), 1)
-        self.assertEqual(missing_data_subs[0]['id'], 'sub_incomplete')
-        self.assertIn('days', missing_data_subs[0]['missing_fields'])
-        self.assertIn('start_time', missing_data_subs[0]['missing_fields'])
-        self.assertIn('end_time', missing_data_subs[0]['missing_fields'])
-        self.assertIn('location', missing_data_subs[0]['missing_fields'])
+        # Both subscriptions should be flagged - complete one missing service_code, incomplete one missing multiple fields
+        self.assertEqual(len(missing_data_subs), 2)
+        
+        # Find the incomplete subscription
+        incomplete_sub = None
+        complete_sub = None
+        for sub in missing_data_subs:
+            if sub['id'] == 'sub_incomplete':
+                incomplete_sub = sub
+            elif sub['id'] == 'sub_complete':
+                complete_sub = sub
+        
+        self.assertIsNotNone(incomplete_sub)
+        self.assertIsNotNone(complete_sub)
+        
+        # Complete subscription should only be missing service_code
+        self.assertIn('service_code', complete_sub['missing_fields'])
+        
+        # Incomplete subscription should be missing multiple fields including service_code
+        self.assertIn('service_code', incomplete_sub['missing_fields'])
+        self.assertIn('days', incomplete_sub['missing_fields'])
+        self.assertIn('start_time', incomplete_sub['missing_fields'])
+        self.assertIn('end_time', incomplete_sub['missing_fields'])
+        self.assertIn('location', incomplete_sub['missing_fields'])
 
     def test_partial_missing_data(self):
         """Test subscription with some missing fields."""
@@ -128,7 +146,8 @@ class TestSubscriptionValidation(unittest.TestCase):
         missing_data_subs = get_subscriptions_missing_schedule_data([subscription])
         
         self.assertEqual(len(missing_data_subs), 1)
-        self.assertEqual(missing_data_subs[0]['missing_fields'], ['location'])
+        # Should be missing both service_code and location  
+        self.assertCountEqual(missing_data_subs[0]['missing_fields'], ['service_code', 'location'])
 
     def test_edge_cases(self):
         """Test edge cases in subscription validation."""
