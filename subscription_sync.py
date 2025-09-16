@@ -120,7 +120,7 @@ def extract_schedule_from_subscription(subscription_data: Dict[str, Any]) -> Dic
         "start_time": get_metadata_value(["schedule_start_time", "start_time"], "09:00"),
         "end_time": get_metadata_value(["schedule_end_time", "end_time"], "10:00"),
         "location": get_metadata_value(["schedule_location", "location"]),
-        "dogs": int(get_metadata_value(["schedule_dogs", "dogs"], "1")),
+        "dogs": int(get_metadata_value(["schedule_dogs", "dogs"], "0")),  # Use 0 as default to detect missing
         "notes": get_metadata_value(["schedule_notes", "notes"])
     }
     

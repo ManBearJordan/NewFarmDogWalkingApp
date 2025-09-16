@@ -144,7 +144,7 @@ class TestSubscriptionSync(unittest.TestCase):
         
         self.assertEqual(schedule["start_time"], "09:00")
         self.assertEqual(schedule["end_time"], "10:00")
-        self.assertEqual(schedule["dogs"], 1)
+        self.assertEqual(schedule["dogs"], 0)  # Default is 0 to detect missing dogs for validation
         self.assertEqual(schedule["day_list"], [])
     
     def test_generate_booking_occurrences(self):
