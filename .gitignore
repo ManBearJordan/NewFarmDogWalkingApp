@@ -25,3 +25,11 @@ build/
 
 # Secrets (we’ll commit a template instead)
 secrets_config.py
+
+# Legacy cleanup - exclude temporary files
+*_backup.py
+*_fix.py
+*cleanup*
+*.sql.bak
+patches/
+temp_*

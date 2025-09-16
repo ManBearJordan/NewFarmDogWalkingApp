@@ -63,125 +63,37 @@ def resolve_client_id(conn: sqlite3.Connection, stripe_customer_id: str) -> Opti
 
 def service_type_from_label(name_or_metadata: str) -> str:
     """
-    Single, robust service_type derivation using central service map.
+    Get canonical service type from display name using central service map.
     
-    This function:
-    - Normalizes Unicode (– → -, × → x)
-    - Tries exact matching with central service map first
-    - Falls back to fuzzy matching for backward compatibility
-    - Maps to canonical codes from the 26-service central map
-    
-    Used everywhere bookings are created: importer + subscription writer + manual booking UI.
+    This function now only uses exact mapping with the central service map.
+    No fallback logic or inference is performed - subscription metadata 
+    should provide canonical service codes directly.
     
     Args:
         name_or_metadata: Service name or metadata string
-    
+        
     Returns:
         Canonical service type code from central service map
     """
-    from service_map import get_service_code, DISPLAY_TO_SERVICE_CODE
+    from service_map import get_service_code
     
     if not name_or_metadata:
         return "WALK_SHORT_SINGLE"  # Safe default from central map
     
-    # Step 1: Normalize Unicode characters
-    label = name_or_metadata
+    # Normalize Unicode characters
+    label = name_or_metadata.strip()
     label = label.replace('–', '-')  # em dash to hyphen
-    label = label.replace('—', '-')  # en dash to hyphen
+    label = label.replace('—', '-')  # en dash to hyphen  
     label = label.replace('×', 'x')  # multiplication sign to x
     label = label.replace('•', '')   # bullet point
     
-    # Step 2: Try exact match with central service map first
+    # Try exact match with central service map
     exact_match = get_service_code(label.strip())
     if exact_match:
         return exact_match
     
-    # Step 3: Strip parentheses and extra punctuation, normalize case for fuzzy matching
-    normalized_label = re.sub(r'[()[\]{}]', '', label)  # Remove brackets/parentheses
-    normalized_label = re.sub(r'[^\w\s-]', '', normalized_label)   # Remove other punctuation except hyphens
-    normalized_label = normalized_label.lower().strip()
-    
-    # Handle generic/placeholder labels
-    if normalized_label in ['subscription', 'service', 'none', '']:
-        return "WALK_SHORT_SINGLE"
-    
-    # Step 4: Try partial matching against all display names from central map
-    for display_name, service_code in DISPLAY_TO_SERVICE_CODE.items():
-        if normalized_label in display_name.lower():
-            return service_code
-    
-    # Step 5: Legacy fuzzy matching for common variations
-    if 'daycare' in normalized_label or 'day care' in normalized_label:
-        if 'pack' in normalized_label and '5' in normalized_label:
-            return "DAYCARE_PACK5"
-        elif 'weekly' in normalized_label:
-            return "DAYCARE_WEEKLY"
-        elif 'fortnightly' in normalized_label:
-            return "DAYCARE_FORTNIGHTLY_PER_VISIT"
-        else:
-            return "DAYCARE_SINGLE"
-    
-    elif 'walk' in normalized_label:
-        if 'short' in normalized_label:
-            if 'pack' in normalized_label and '5' in normalized_label:
-                return "WALK_SHORT_PACK5"
-            elif 'weekly' in normalized_label:
-                return "WALK_SHORT_WEEKLY"
-            else:
-                return "WALK_SHORT_SINGLE"
-        elif 'long' in normalized_label:
-            if 'pack' in normalized_label and '5' in normalized_label:
-                return "WALK_LONG_PACK5"
-            elif 'weekly' in normalized_label:
-                return "WALK_LONG_WEEKLY"
-            else:
-                return "WALK_LONG_SINGLE"
-        else:
-            return "WALK_SHORT_SINGLE"  # Default walk type
-    
-    elif 'home' in normalized_label and ('visit' in normalized_label or 'home-visit' in normalized_label):
-        if '2' in normalized_label and ('day' in normalized_label or 'daily' in normalized_label or 'twice' in normalized_label):
-            if 'pack' in normalized_label and '5' in normalized_label:
-                return "HV_30_2X_PACK5"
-            elif 'weekly' in normalized_label:
-                return "HOME_30_2_DAY_WEEKLY"
-            else:
-                return "HV_30_2X_SINGLE"
-        else:
-            if 'pack' in normalized_label and '5' in normalized_label:
-                return "HV_30_1X_PACK5"
-            elif 'weekly' in normalized_label:
-                return "HOME_30WEEKLY"
-            else:
-                return "HV_30_1X_SINGLE"
-    
-    elif 'overnight' in normalized_label or 'sitting' in normalized_label:
-        if 'pack' in normalized_label and '5' in normalized_label:
-            return "BOARD_OVERNIGHT_PACK5"
-        else:
-            return "BOARD_OVERNIGHT_SINGLE"
-    
-    elif 'pickup' in normalized_label or 'pick up' in normalized_label or 'drop' in normalized_label:
-        if 'fortnightly' in normalized_label:
-            return "PICKUP_FORTNIGHTLY_PER_VISIT"
-        elif 'weekly' in normalized_label:
-            return "PICKUP_WEEKLY_PER_VISIT"
-        elif 'pack' in normalized_label and '5' in normalized_label:
-            return "PICKUP_DROPOFF_PACK5"
-        else:
-            return "PICKUP_DROPOFF"
-    
-    elif 'scoop' in normalized_label or 'poop' in normalized_label:
-        if 'twice' in normalized_label and 'weekly' in normalized_label:
-            return "SCOOP_TWICE_WEEKLY_MONTH"
-        elif 'fortnightly' in normalized_label:
-            return "SCOOP_FORTNIGHTLY_MONTH"
-        elif 'weekly' in normalized_label:
-            return "SCOOP_WEEKLY_MONTH"
-        else:
-            return "SCOOP_ONCE_SINGLE"
-    
-    # Final fallback - return a safe default from central map
+    # No fallback logic - subscription metadata should provide canonical codes
+    # Return safe default if no match found
     return "WALK_SHORT_SINGLE"
 
 

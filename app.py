@@ -1399,17 +1399,20 @@ class BookingsTab(QWidget):
 
     def import_from_invoices(self):
         try:
-            from stripe_invoice_bookings import import_invoice_bookings, promote_subscription_invoices
+            from stripe_invoice_bookings import import_invoice_bookings
+            from subscription_sync import sync_subscriptions_to_bookings_and_calendar
+            
             count = import_invoice_bookings(self.conn)
             
-            # Auto-promote subscription invoices
+            # Use unified subscription sync instead of legacy promote function
             try:
-                promote_subscription_invoices(self.conn, when="open", lookback_days=90)
+                sync_stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
+                print(f"Unified subscription sync: {sync_stats}")
             except Exception as e:
-                print("Auto-promote subs error:", e)
+                print("Unified subscription sync error:", e)
             
             self.refresh_two_weeks()
-            QMessageBox.information(self, "Import Complete", f"Imported {count} bookings from invoices.")
+            QMessageBox.information(self, "Import Complete", f"Imported {count} bookings from invoices and synced subscriptions.")
         except Exception as e:
             QMessageBox.critical(self, "Import Error", str(e))
 
@@ -1523,11 +1526,17 @@ class CalendarTab(QWidget):
         self.conn = get_conn()
         layout = QVBoxLayout(self)
 
-        # Add refresh button at the top
+        # Add refresh and sync buttons at the top
         button_row = QHBoxLayout()
-        self.refresh_calendar_btn = QPushButton("Refresh calendar")
+        self.refresh_calendar_btn = QPushButton("Refresh Calendar")
         self.refresh_calendar_btn.clicked.connect(self.refresh_calendar)
         button_row.addWidget(self.refresh_calendar_btn)
+        
+        self.sync_subscriptions_btn = QPushButton("Sync Subscriptions")
+        self.sync_subscriptions_btn.clicked.connect(self.manual_subscription_sync)
+        self.sync_subscriptions_btn.setToolTip("Manually sync all subscriptions from Stripe to update bookings and calendar")
+        button_row.addWidget(self.sync_subscriptions_btn)
+        
         button_row.addStretch()
         layout.addLayout(button_row)
 
@@ -1620,6 +1629,47 @@ Subscriptions are now the single source of truth for bookings and calendar."""
             
         except Exception as e:
             QMessageBox.critical(self, "Refresh Calendar Error", f"Failed to refresh calendar: {str(e)}")
+
+    def manual_subscription_sync(self):
+        """
+        Manually trigger subscription sync.
+        
+        This allows users to immediately sync subscriptions from Stripe
+        without waiting for automatic sync triggers.
+        """
+        try:
+            from subscription_sync import sync_subscriptions_to_bookings_and_calendar
+            
+            # Show progress message
+            progress_msg = QMessageBox(self)
+            progress_msg.setWindowTitle("Subscription Sync")
+            progress_msg.setText("Syncing subscriptions from Stripe...")
+            progress_msg.setStandardButtons(QMessageBox.NoButton)
+            progress_msg.show()
+            QApplication.processEvents()
+            
+            # Perform sync
+            stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
+            
+            # Close progress and refresh view
+            progress_msg.close()
+            self.refresh_day()
+            
+            # Show results
+            msg = f"""Manual subscription sync complete!
+            
+📊 Sync Statistics:
+• Subscriptions processed: {stats['subscriptions_processed']}
+• Bookings created: {stats['bookings_created']}  
+• Bookings cleaned up: {stats['bookings_cleaned']}
+
+✅ All subscriptions are now synchronized with bookings and calendar.
+Subscriptions are the single source of truth."""
+            
+            QMessageBox.information(self, "Subscription Sync Complete", msg)
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Subscription Sync Error", f"Failed to sync subscriptions: {str(e)}")
 
     # REMOVED: No longer compute subscription holds - only show real bookings
 
