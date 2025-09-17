@@ -8,6 +8,7 @@ but use Django ORM for improved maintainability and scalability.
 
 from django.db import models
 from django.core.validators import MinValueValidator, RegexValidator
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from datetime import timedelta
 import json
@@ -87,12 +88,21 @@ class Subscription(models.Model):
     )
     schedule_start_time = models.TimeField(help_text="Start time in HH:MM format")
     schedule_end_time = models.TimeField(help_text="End time in HH:MM format")
-    schedule_location = models.CharField(max_length=200, blank=True, null=True)
+    schedule_location = models.CharField(
+        max_length=200, 
+        blank=True, 
+        null=True,
+        help_text="Full address where the dog walking service will be provided"
+    )
     schedule_dogs = models.IntegerField(
         validators=[MinValueValidator(1)],
-        help_text="Number of dogs for the service"
+        help_text="Number of dogs to be walked during this service (minimum 1)"
     )
-    schedule_notes = models.TextField(blank=True, null=True)
+    schedule_notes = models.TextField(
+        blank=True, 
+        null=True,
+        help_text="Additional notes or special instructions for the dog walker"
+    )
     
     # Metadata and tracking
     created_from_stripe = models.BooleanField(default=True)
@@ -111,6 +121,36 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f"{self.client.name} - {self.service_name} ({self.stripe_subscription_id})"
+    
+    def clean(self):
+        """Validate subscription data"""
+        errors = {}
+        
+        # Validate time range
+        if self.schedule_start_time and self.schedule_end_time:
+            if self.schedule_end_time <= self.schedule_start_time:
+                errors['schedule_end_time'] = 'End time must be after start time'
+        
+        # Validate days format
+        if self.schedule_days:
+            valid_days = {'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'}
+            days_list = [day.strip().upper() for day in self.schedule_days.split(',')]
+            
+            # Check for invalid days
+            invalid_days = [day for day in days_list if day not in valid_days]
+            if invalid_days:
+                errors['schedule_days'] = f'Invalid days: {", ".join(invalid_days)}. Use: MON, TUE, WED, THU, FRI, SAT, SUN'
+            
+            # Check for duplicates
+            if len(days_list) != len(set(days_list)):
+                errors['schedule_days'] = 'Duplicate days are not allowed'
+        
+        # Validate service code is not empty
+        if not self.service_code or not self.service_code.strip():
+            errors['service_code'] = 'Service code is required'
+            
+        if errors:
+            raise ValidationError(errors)
 
     @property
     def schedule_days_list(self):
