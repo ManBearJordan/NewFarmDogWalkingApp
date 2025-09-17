@@ -9,6 +9,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils import timezone
+from django.contrib import messages
 from datetime import datetime, timedelta
 from .models import Client, Subscription, Booking, Schedule
 
@@ -78,25 +79,37 @@ class SubscriptionAdmin(admin.ModelAdmin):
     ]
     
     fieldsets = (
-        ('Subscription Details', {
-            'fields': ('stripe_subscription_id', 'client', 'status', 'created_from_stripe')
+        ('Subscription Information', {
+            'fields': ('stripe_subscription_id', 'client', 'status', 'created_from_stripe'),
+            'description': 'Basic subscription details. Stripe ID cannot be changed.'
         }),
-        ('Service Information', {
-            'fields': ('service_code', 'service_name')
+        ('Service Configuration', {
+            'fields': ('service_code', 'service_name'),
+            'description': 'Service details. Service code must match your service catalog.'
         }),
-        ('Schedule Configuration', {
+        ('Schedule Settings', {
             'fields': (
                 'schedule_days', 'schedule_start_time', 'schedule_end_time',
                 'schedule_duration_display', 'schedule_location', 'schedule_dogs', 'schedule_notes'
-            )
+            ),
+            'description': '''
+                <strong>How to update schedules:</strong><br>
+                • <strong>Days:</strong> Use 3-letter codes separated by commas (MON,WED,FRI)<br>
+                • <strong>Times:</strong> Use 24-hour format (14:30 for 2:30 PM)<br>
+                • <strong>Location:</strong> Full address where service will be provided<br>
+                • <strong>Dogs:</strong> Number of dogs to be walked<br>
+                • After saving changes, bookings will be automatically updated
+            '''
         }),
-        ('Computed Fields', {
+        ('Schedule Preview', {
             'fields': ('next_occurrence',),
-            'classes': ('collapse',)
+            'classes': ('collapse',),
+            'description': 'Preview of when the next service will occur'
         }),
-        ('Timestamps', {
+        ('System Information', {
             'fields': ('stripe_created_at', 'last_sync_at', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
+            'classes': ('collapse',),
+            'description': 'System tracking information - for reference only'
         }),
     )
 
@@ -122,20 +135,203 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
     def sync_with_stripe(self, request, queryset):
         """Sync selected subscriptions with Stripe"""
-        # This would integrate with existing sync logic
-        count = queryset.count()
-        self.message_user(request, f'Initiated sync for {count} subscriptions')
-    sync_with_stripe.short_description = 'Sync with Stripe'
+        try:
+            from core.tasks import update_subscription_from_stripe
+            
+            successful_syncs = 0
+            failed_syncs = 0
+            
+            for subscription in queryset:
+                try:
+                    # Trigger async task to update subscription from Stripe
+                    result = update_subscription_from_stripe.delay(subscription.stripe_subscription_id)
+                    successful_syncs += 1
+                except Exception as e:
+                    failed_syncs += 1
+                    self.message_user(request, 
+                        f'Failed to sync subscription {subscription.stripe_subscription_id}: {str(e)}', 
+                        level=messages.ERROR)
+            
+            if successful_syncs > 0:
+                self.message_user(request, 
+                    f'Successfully initiated sync for {successful_syncs} subscriptions')
+            
+            if failed_syncs > 0:
+                self.message_user(request, 
+                    f'{failed_syncs} subscriptions failed to sync', 
+                    level=messages.WARNING)
+                    
+        except ImportError:
+            self.message_user(request, 
+                'Sync functionality not available - tasks not configured', 
+                level=messages.ERROR)
+    
+    sync_with_stripe.short_description = 'Sync selected subscriptions with Stripe'
 
     def generate_bookings(self, request, queryset):
         """Generate bookings for selected subscriptions"""
-        # This would integrate with existing booking generation
-        count = 0
-        for subscription in queryset:
-            # Integration point with existing booking logic
-            count += 1
-        self.message_user(request, f'Generated bookings for {count} subscriptions')
-    generate_bookings.short_description = 'Generate Bookings'
+        try:
+            from core.tasks import generate_subscription_bookings
+            
+            successful_generations = 0
+            failed_generations = 0
+            
+            for subscription in queryset:
+                try:
+                    # Trigger async task to generate bookings
+                    result = generate_subscription_bookings.delay(subscription.stripe_subscription_id)
+                    successful_generations += 1
+                except Exception as e:
+                    failed_generations += 1
+                    self.message_user(request, 
+                        f'Failed to generate bookings for {subscription.stripe_subscription_id}: {str(e)}', 
+                        level=messages.ERROR)
+            
+            if successful_generations > 0:
+                self.message_user(request, 
+                    f'Successfully initiated booking generation for {successful_generations} subscriptions. '
+                    f'Check the Bookings section to see new appointments.')
+            
+            if failed_generations > 0:
+                self.message_user(request, 
+                    f'{failed_generations} subscriptions failed to generate bookings', 
+                    level=messages.WARNING)
+                    
+        except ImportError:
+            # Fallback to direct booking generation if tasks not available
+            try:
+                from booking_utils import generate_bookings_and_update_calendar
+                
+                successful_generations = 0
+                failed_generations = 0
+                
+                for subscription in queryset:
+                    # Prepare schedule data from subscription
+                    schedule_data = {
+                        'service_code': subscription.service_code,
+                        'days': subscription.schedule_days,
+                        'start_time': subscription.schedule_start_time.strftime('%H:%M'),
+                        'end_time': subscription.schedule_end_time.strftime('%H:%M'),
+                        'location': subscription.schedule_location or '',
+                        'dogs': subscription.schedule_dogs,
+                        'notes': subscription.schedule_notes or ''
+                    }
+                    
+                    try:
+                        result = generate_bookings_and_update_calendar(
+                            subscription.stripe_subscription_id, 
+                            schedule_data
+                        )
+                        
+                        if result.get('success'):
+                            successful_generations += 1
+                            bookings_created = result.get('bookings_created', 0)
+                            if bookings_created > 0:
+                                self.message_user(request, 
+                                    f'Generated {bookings_created} bookings for subscription {subscription.stripe_subscription_id}')
+                        else:
+                            failed_generations += 1
+                            error_msg = result.get('error', 'Unknown error')
+                            self.message_user(request, 
+                                f'Failed to generate bookings for {subscription.stripe_subscription_id}: {error_msg}', 
+                                level=messages.ERROR)
+                    except Exception as e:
+                        failed_generations += 1
+                        self.message_user(request, 
+                            f'Error generating bookings for {subscription.stripe_subscription_id}: {str(e)}', 
+                            level=messages.ERROR)
+                
+                if successful_generations > 0:
+                    self.message_user(request, 
+                        f'Successfully generated bookings for {successful_generations} subscriptions. '
+                        f'Check the Bookings section to see new appointments.')
+                        
+            except ImportError as e:
+                self.message_user(request, 
+                    f'Booking generation not available - missing dependencies: {str(e)}', 
+                    level=messages.ERROR)
+    
+    generate_bookings.short_description = 'Generate bookings from subscription schedule'
+    
+    def save_model(self, request, obj, form, change):
+        """
+        Save the subscription and automatically update bookings if schedule changed.
+        """
+        # Track if this is an update with schedule changes
+        schedule_changed = False
+        if change:
+            # Get the original object to compare
+            try:
+                original = Subscription.objects.get(pk=obj.pk)
+                schedule_fields = [
+                    'schedule_days', 'schedule_start_time', 'schedule_end_time',
+                    'schedule_location', 'schedule_dogs', 'schedule_notes', 'service_code'
+                ]
+                
+                for field in schedule_fields:
+                    if getattr(original, field) != getattr(obj, field):
+                        schedule_changed = True
+                        break
+                        
+            except Subscription.DoesNotExist:
+                pass
+        
+        # Save the object first
+        super().save_model(request, obj, form, change)
+        
+        # If schedule changed, automatically generate bookings
+        if schedule_changed:
+            try:
+                from core.tasks import generate_subscription_bookings
+                result = generate_subscription_bookings.delay(obj.stripe_subscription_id)
+                messages.info(request, 
+                    'Schedule was updated - new bookings are being generated in the background. '
+                    'Check the Bookings section in a few moments to see updated appointments.')
+            except ImportError:
+                # Fallback to direct generation
+                try:
+                    from booking_utils import generate_bookings_and_update_calendar
+                    
+                    schedule_data = {
+                        'service_code': obj.service_code,
+                        'days': obj.schedule_days,
+                        'start_time': obj.schedule_start_time.strftime('%H:%M'),
+                        'end_time': obj.schedule_end_time.strftime('%H:%M'),
+                        'location': obj.schedule_location or '',
+                        'dogs': obj.schedule_dogs,
+                        'notes': obj.schedule_notes or ''
+                    }
+                    
+                    result = generate_bookings_and_update_calendar(
+                        obj.stripe_subscription_id, 
+                        schedule_data
+                    )
+                    
+                    if result.get('success'):
+                        bookings_created = result.get('bookings_created', 0)
+                        if bookings_created > 0:
+                            messages.success(request, 
+                                f'Schedule updated and {bookings_created} new bookings were created automatically.')
+                        else:
+                            messages.info(request, 
+                                'Schedule updated. No new bookings were needed.')
+                    else:
+                        messages.warning(request, 
+                            f'Schedule updated but booking generation failed: {result.get("error", "Unknown error")}. '
+                            f'You can manually generate bookings using the "Generate bookings" action.')
+                        
+                except ImportError:
+                    messages.warning(request, 
+                        'Schedule updated but automatic booking generation is not available. '
+                        'You can manually generate bookings using the "Generate bookings" action.')
+                except Exception as e:
+                    messages.error(request, 
+                        f'Schedule updated but booking generation failed: {str(e)}. '
+                        f'You can manually generate bookings using the "Generate bookings" action.')
+            except Exception as e:
+                messages.error(request, 
+                    f'Schedule updated but booking generation failed: {str(e)}. '
+                    f'You can manually generate bookings using the "Generate bookings" action.')
 
 
 @admin.register(Booking)
