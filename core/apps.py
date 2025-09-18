@@ -28,9 +28,15 @@ class CoreConfig(AppConfig):
             logger.info("Skipping Stripe sync during management command")
             return
         
-        # Skip during testing
+        # Skip sync during testing
         if 'test' in sys.argv or getattr(settings, 'TESTING', False):
             logger.info("Skipping Stripe sync during testing")
+            return
+            
+        # Skip sync if environment variable is set (for dev server startup)
+        import os
+        if os.environ.get('SKIP_STRIPE_SYNC'):
+            logger.info("Skipping Stripe sync due to SKIP_STRIPE_SYNC environment variable")
             return
             
         try:
