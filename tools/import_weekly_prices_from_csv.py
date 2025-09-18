@@ -8,9 +8,10 @@
 from __future__ import annotations
 import csv, os, sys, typing as t
 import stripe
+from secrets_config import STRIPE_SECRET_KEY
 
-# 🔒 Your live key hard-coded so no env var is needed
-stripe.api_key = "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"
+# Initialize Stripe API key from secrets config
+stripe.api_key = STRIPE_SECRET_KEY
 
 def die(msg: str) -> t.NoReturn:
     print(f"ERROR: {msg}")
