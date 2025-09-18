@@ -7,11 +7,15 @@ import logging
 from PySide6 import QtWidgets, QtCore, QtGui
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QMessageBox, QTabWidget, QDateTimeEdit, QComboBox, QFileDialog, QSpinBox, QDateEdit, QTimeEdit, QCheckBox, QDialog, QMenu, QGroupBox, QHeaderView)
-from PySide6.QtCore import Qt, QDateTime, QTimer, Signal, QDate, QTime
+from PySide6.QtCore import Qt, QDateTime, QTimer, Signal, QDate, QTime, QThread, QObject
 from PySide6.QtGui import QDesktopServices, QAction, QCursor, QBrush, QColor
 from PySide6.QtCore import QUrl
 from datetime import datetime, timezone, timedelta, time
 from collections import defaultdict
+import subprocess
+import threading
+import urllib.request
+import urllib.error
 
 from db import init_db, get_conn, backup_db, clear_future_sub_occurrences, materialize_sub_occurrences, add_booking, booking_items_total_cents, add_or_upsert_booking, set_booking_invoice, get_client_credit, add_client_credit, use_client_credit
 from datetime import date, datetime, timedelta
@@ -2535,6 +2539,20 @@ class AdminTab(QWidget):
         stripe_layout.addWidget(self.btn_check_stripe_status); stripe_layout.addWidget(self.btn_change_stripe_key)
         layout.addWidget(stripe_group)
 
+        # --- Django Server group
+        django_group = QGroupBox("Django Server")
+        django_layout = QHBoxLayout(django_group)
+        self.lbl_django_status = QLabel("Status: Stopped")
+        self.lbl_django_status.setStyleSheet("color: orange;")
+        self.btn_start_server = QPushButton("Start Server")
+        self.btn_start_server.clicked.connect(self.start_django_server)
+        self.btn_stop_server = QPushButton("Stop Server")
+        self.btn_stop_server.clicked.connect(self.stop_django_server)
+        self.btn_stop_server.setEnabled(False)
+        django_layout.addWidget(self.lbl_django_status); django_layout.addStretch(1)
+        django_layout.addWidget(self.btn_start_server); django_layout.addWidget(self.btn_stop_server)
+        layout.addWidget(django_group)
+
         # --- Admin tasks group
         t = QGroupBox("Admin tasks")
         tl = QVBoxLayout(t)
@@ -2559,6 +2577,13 @@ class AdminTab(QWidget):
         tl.addLayout(tools)
 
         layout.addWidget(t); layout.addStretch(1)
+        
+        # --- Django server management
+        self.django_process = None
+        self.django_server_timer = QTimer()
+        self.django_server_timer.timeout.connect(self.check_django_server_status)
+        self.django_server_timer.start(2000)  # Check every 2 seconds
+        
         self.refresh_google_status(); self.refresh_stripe_status(); self.refresh_table()
 
     # --- Google helpers (lazy imports so the tab never crashes)
@@ -2702,6 +2727,219 @@ class AdminTab(QWidget):
         if not ids: return
         self.conn.execute(f"DELETE FROM admin_events WHERE id IN ({','.join(map(str,ids))})")
         self.conn.commit(); self.refresh_table()
+
+    # --- Django Server management methods
+    def start_django_server(self):
+        """Start the Django development server"""
+        if self.django_process and self.django_process.poll() is None:
+            QMessageBox.information(self, "Server Already Running", "Django server is already running.")
+            return
+            
+        try:
+            # Prepare environment with dummy Stripe key to avoid prompts
+            env = {
+                **os.environ,
+                "DJANGO_SETTINGS_MODULE": "dogwalking_django.settings",
+                "STRIPE_SECRET_KEY": "sk_test_dummy_for_server_startup",  # Dummy key to avoid interactive prompt
+                "PYTHONHTTPSVERIFY": "0",  # Skip SSL verification in development
+                "SKIP_STRIPE_SYNC": "1"  # Skip automatic Stripe sync during development server
+            }
+            
+            # Start server in a separate thread to avoid blocking UI
+            def run_server():
+                try:
+                    self.django_process = subprocess.Popen(
+                        [sys.executable, "manage.py", "runserver", "--noreload", "127.0.0.1:8000"],
+                        cwd=os.path.dirname(os.path.abspath(__file__)),
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        stdin=subprocess.PIPE,
+                        env=env
+                    )
+                    
+                    # Send empty input to skip any remaining prompts
+                    if self.django_process.stdin:
+                        try:
+                            self.django_process.stdin.write(b"\n")
+                            self.django_process.stdin.flush()
+                            self.django_process.stdin.close()
+                        except:
+                            pass
+                        
+                except Exception as e:
+                    self.show_server_error(f"Failed to start Django server: {e}")
+                    return
+                    
+            # Run server in thread
+            server_thread = threading.Thread(target=run_server, daemon=True)
+            server_thread.start()
+            
+            # Give server time to start
+            self.update_server_status("Starting...", "blue")
+            QTimer.singleShot(5000, self.verify_server_started)
+            
+        except Exception as e:
+            self.show_server_error(f"Failed to start Django server: {e}")
+
+    def verify_server_started(self):
+        """Verify server started successfully after delay"""
+        if self.django_process:
+            if self.django_process.poll() is None:  # Still running
+                # Check if server is actually responding
+                try:
+                    import urllib.request
+                    urllib.request.urlopen("http://127.0.0.1:8000", timeout=2)
+                    self.update_server_status("Running", "green")
+                    self.btn_start_server.setEnabled(False)
+                    self.btn_stop_server.setEnabled(True)
+                    QMessageBox.information(self, "Server Started", 
+                        "Django development server started successfully!\n\n"
+                        "You can access it at: http://127.0.0.1:8000")
+                    return
+                except urllib.error.HTTPError as e:
+                    if e.code == 404:
+                        # 404 means server is running but no route configured - that's fine
+                        self.update_server_status("Running", "green")
+                        self.btn_start_server.setEnabled(False)
+                        self.btn_stop_server.setEnabled(True)
+                        QMessageBox.information(self, "Server Started", 
+                            "Django development server started successfully!\n\n"
+                            "You can access it at: http://127.0.0.1:8000\n"
+                            "(404 response is normal - no root URL configured)")
+                        return
+                    else:
+                        # Other HTTP errors - server may still be starting
+                        self.update_server_status("Starting...", "blue")
+                        QTimer.singleShot(3000, self.verify_server_started)
+                        return
+                except:
+                    # Process running but not responding yet - may still be starting
+                    self.update_server_status("Starting...", "blue")
+                    # Check again in a few seconds
+                    QTimer.singleShot(3000, self.verify_server_started)
+                    return
+                    
+            else:  # Process exited
+                try:
+                    stderr_output = self.django_process.stderr.read().decode('utf-8', errors='ignore')
+                    stdout_output = self.django_process.stdout.read().decode('utf-8', errors='ignore')
+                    
+                    # Check for common error patterns
+                    if "port is already in use" in stderr_output.lower() or "address already in use" in stderr_output.lower():
+                        self.show_server_error("Port 8000 is already in use.\n\nPlease stop any existing server running on this port, or the server may already be running externally.")
+                    elif "no module named 'django'" in stderr_output.lower():
+                        self.show_server_error("Django is not installed.\n\nPlease install Django requirements:\npip install -r requirements-django.txt")
+                    elif "permission denied" in stderr_output.lower():
+                        self.show_server_error("Permission denied when starting server.\n\nPlease check file permissions or try running as administrator.")
+                    elif "error" in stderr_output.lower() and len(stderr_output.strip()) > 0:
+                        self.show_server_error(f"Server failed to start with error:\n\n{stderr_output[:800]}")
+                    else:
+                        # Server might have exited normally during startup (e.g., Django issues)
+                        if "Quit the server with CONTROL-C" in stdout_output:
+                            # Server actually started successfully
+                            self.update_server_status("Running", "green")
+                            self.btn_start_server.setEnabled(False)
+                            self.btn_stop_server.setEnabled(True)
+                            return
+                        else:
+                            self.show_server_error(f"Server exited unexpectedly:\n\nSTDOUT:\n{stdout_output[:400]}\n\nSTDERR:\n{stderr_output[:400]}")
+                except Exception as e:
+                    self.show_server_error(f"Server failed to start: {e}")
+                    
+                self.django_process = None
+                self.update_server_status("Error", "red")
+                
+    def stop_django_server(self):
+        """Stop the Django development server"""
+        if not self.django_process:
+            QMessageBox.information(self, "No Server Running", "No Django server is currently running.")
+            return
+            
+        try:
+            # Try graceful termination first
+            self.django_process.terminate()
+            
+            # Wait a moment for graceful shutdown
+            try:
+                self.django_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # Force kill if graceful shutdown failed
+                try:
+                    self.django_process.kill()
+                    self.django_process.wait(timeout=2)
+                except:
+                    pass
+                    
+            self.django_process = None
+            self.update_server_status("Stopped", "orange")
+            self.btn_start_server.setEnabled(True)
+            self.btn_stop_server.setEnabled(False)
+            
+            QMessageBox.information(self, "Server Stopped", "Django server stopped successfully.")
+            
+        except Exception as e:
+            self.show_server_error(f"Failed to stop Django server: {e}")
+            
+    def check_django_server_status(self):
+        """Check Django server status periodically"""
+        if self.django_process:
+            if self.django_process.poll() is None:  # Still running
+                # Check if it's actually responsive (but don't fail status if not)
+                try:
+                    import urllib.request
+                    with urllib.request.urlopen("http://127.0.0.1:8000", timeout=2) as response:
+                        if response.status == 200:
+                            self.update_server_status("Running", "green")
+                            self.btn_start_server.setEnabled(False)
+                            self.btn_stop_server.setEnabled(True)
+                            return
+                except urllib.error.HTTPError as e:
+                    if e.code == 404:
+                        # 404 means server is running but no route configured - that's fine
+                        self.update_server_status("Running", "green")
+                        self.btn_start_server.setEnabled(False)
+                        self.btn_stop_server.setEnabled(True)
+                        return
+                except:
+                    pass
+                    
+                # Process running but may not be responsive yet
+                current_status = self.lbl_django_status.text()
+                if "Starting..." not in current_status:
+                    self.update_server_status("Running", "green")
+                    self.btn_start_server.setEnabled(False)
+                    self.btn_stop_server.setEnabled(True)
+            else:  # Process died
+                self.django_process = None
+                self.update_server_status("Stopped", "orange")
+                self.btn_start_server.setEnabled(True)
+                self.btn_stop_server.setEnabled(False)
+        else:
+            # No process, check if server running on port anyway (external server)
+            try:
+                import urllib.request
+                with urllib.request.urlopen("http://127.0.0.1:8000", timeout=1) as response:
+                    if response.status == 200:
+                        self.update_server_status("Running (External)", "yellow")
+                        self.btn_start_server.setEnabled(False)
+                        self.btn_stop_server.setEnabled(False)
+                        return
+            except:
+                pass
+                
+            # No server running
+            self.update_server_status("Stopped", "orange")
+            self.btn_start_server.setEnabled(True)
+            self.btn_stop_server.setEnabled(False)
+            
+    def update_server_status(self, status_text, color):
+        """Update server status label"""
+        self.lbl_django_status.setText(f"Status: {status_text}")
+        self.lbl_django_status.setStyleSheet(f"color: {color};")
+        
+    def show_server_error(self, message):
+        """Show server error dialog"""
+        QMessageBox.critical(self, "Django Server Error", message)
 
 # ---------------- Main Window ----------------
 class MainWindow(QMainWindow):
