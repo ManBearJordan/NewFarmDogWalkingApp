@@ -2,11 +2,50 @@
 
 import os, webbrowser
 import stripe
+from stripe.error import AuthenticationError
 from datetime import datetime, timezone, timedelta
-from stripe_key_manager import ensure_stripe_key
+from stripe_key_manager import get_stripe_key, prompt_for_stripe_key, set_stripe_key
 
-# Initialize Stripe API key from secure storage
-stripe.api_key = ensure_stripe_key()
+def ensure_stripe_key():
+    # Always called on launch
+    key = get_stripe_key()
+    if not key:
+        # If no key exists at all, prompt for it
+        key = prompt_for_stripe_key()
+        if key:
+            set_stripe_key(key)
+    
+    if key:  # Only proceed if we have a key
+        stripe.api_key = key
+
+        # Test the key by making a lightweight API call
+        try:
+            stripe.Customer.list(limit=1)
+        except AuthenticationError:
+            # Key is invalid/expired, prompt for a new one
+            new_key = prompt_for_stripe_key()
+            if new_key:
+                set_stripe_key(new_key)
+                stripe.api_key = new_key
+                # Optionally retry the call here, or ask user to restart
+        except Exception as e:
+            # Handle other errors (like network/SSL issues) by not treating them as auth errors
+            if "authentication" in str(e).lower() or "invalid" in str(e).lower():
+                # Treat as authentication error
+                new_key = prompt_for_stripe_key()
+                if new_key:
+                    set_stripe_key(new_key)
+                    stripe.api_key = new_key
+            else:
+                # Network or other error - don't prompt for new key, just log it
+                print(f"Warning: Unable to validate Stripe key due to network error: {e}")
+                pass
+    else:
+        # No key available, set empty api key
+        stripe.api_key = ""
+
+# Call ensure_stripe_key() at app launch
+ensure_stripe_key()
 
 # -------------------------
 # Key management utilities
