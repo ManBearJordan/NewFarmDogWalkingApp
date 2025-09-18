@@ -330,3 +330,74 @@ class Schedule(models.Model):
             return json.loads(self.days_of_week)
         except (json.JSONDecodeError, TypeError):
             return []
+
+
+class StripeSettings(models.Model):
+    """
+    Model for storing Stripe API configuration via Django admin.
+    
+    This allows administrators to view and update the Stripe API key 
+    through the Django admin interface, making it accessible via web UI
+    instead of requiring desktop GUI or command line access.
+    """
+    stripe_secret_key = models.CharField(
+        max_length=200,
+        help_text="Stripe Secret Key (sk_test_... or sk_live_...)",
+        blank=True,
+        null=True
+    )
+    is_live_mode = models.BooleanField(
+        default=False,
+        help_text="Automatically determined based on key prefix"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Stripe Settings"
+        verbose_name_plural = "Stripe Settings"
+        
+    def __str__(self):
+        if self.stripe_secret_key:
+            key_type = "Live" if self.is_live_mode else "Test"
+            masked_key = self.stripe_secret_key[:12] + "..." + self.stripe_secret_key[-4:]
+            return f"{key_type} Key: {masked_key}"
+        return "No Stripe Key Set"
+    
+    def save(self, *args, **kwargs):
+        """Auto-detect live mode based on key prefix"""
+        if self.stripe_secret_key:
+            self.is_live_mode = self.stripe_secret_key.startswith('sk_live_')
+        else:
+            self.is_live_mode = False
+        super().save(*args, **kwargs)
+    
+    def clean(self):
+        """Validate Stripe key format"""
+        if self.stripe_secret_key:
+            if not (self.stripe_secret_key.startswith('sk_test_') or 
+                    self.stripe_secret_key.startswith('sk_live_')):
+                raise ValidationError({
+                    'stripe_secret_key': 'Stripe secret key must start with sk_test_ or sk_live_'
+                })
+    
+    @classmethod
+    def get_stripe_key(cls):
+        """Get the current Stripe API key"""
+        try:
+            settings_obj = cls.objects.first()
+            return settings_obj.stripe_secret_key if settings_obj else None
+        except Exception:
+            return None
+    
+    @classmethod
+    def set_stripe_key(cls, api_key):
+        """Set the Stripe API key (creates or updates the single settings record)"""
+        try:
+            settings_obj, created = cls.objects.get_or_create(defaults={'stripe_secret_key': api_key})
+            if not created:
+                settings_obj.stripe_secret_key = api_key
+                settings_obj.save()
+            return True
+        except Exception:
+            return False

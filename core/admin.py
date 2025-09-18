@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.contrib import messages
 from django.http import JsonResponse
 from datetime import datetime, timedelta
-from .models import Client, Subscription, Booking, Schedule
+from .models import Client, Subscription, Booking, Schedule, StripeSettings
 
 
 class SyncLogAdmin:
@@ -517,7 +517,50 @@ class ScheduleAdmin(admin.ModelAdmin):
     time_range.short_description = 'Time Range'
 
 
-# Custom admin site with sync functionality
+@admin.register(StripeSettings)
+class StripeSettingsAdmin(admin.ModelAdmin):
+    """Admin interface for Stripe Settings"""
+    list_display = ['__str__', 'is_live_mode', 'updated_at']
+    readonly_fields = ['is_live_mode', 'created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Stripe Configuration', {
+            'fields': ('stripe_secret_key', 'is_live_mode'),
+            'description': format_html('''
+                <div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border: 1px solid #bee5eb; border-radius: 4px;">
+                    <strong>📋 Instructions:</strong><br>
+                    • Enter your Stripe Secret Key (starts with sk_test_ or sk_live_)<br>
+                    • Test keys start with <code>sk_test_</code><br>
+                    • Live keys start with <code>sk_live_</code><br>
+                    • Mode (Test/Live) is automatically detected<br>
+                    • Only one settings record is maintained
+                </div>
+            ''')
+        }),
+        ('System Information', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def has_add_permission(self, request):
+        """Only allow one StripeSettings record"""
+        return not StripeSettings.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deletion of settings"""
+        return False
+        
+    def changelist_view(self, request, extra_context=None):
+        """Custom changelist view"""
+        # If no settings exist, redirect to add form
+        if not StripeSettings.objects.exists():
+            from django.shortcuts import redirect
+            return redirect('admin:core_stripesettings_add')
+        return super().changelist_view(request, extra_context)
+
+
+# Custom admin site with sync functionality and Stripe key warnings
 class StripeSyncAdminSite(admin.AdminSite):
     """Custom admin site with Stripe sync functionality"""
     site_header = "New Farm Dog Walking Admin"
@@ -531,6 +574,18 @@ class StripeSyncAdminSite(admin.AdminSite):
             path('sync-logs/', self.admin_view(self.sync_logs_view), name='admin-sync-logs'),
         ]
         return custom_urls + urls
+    
+    def index(self, request, extra_context=None):
+        """Custom index view with Stripe key warning"""
+        extra_context = extra_context or {}
+        
+        # Check if Stripe key is configured
+        stripe_key = StripeSettings.get_stripe_key()
+        if not stripe_key:
+            extra_context['stripe_key_missing'] = True
+            extra_context['stripe_settings_url'] = reverse('admin:core_stripesettings_changelist')
+        
+        return super().index(request, extra_context)
     
     def sync_stripe_view(self, request):
         """Manual trigger for Stripe sync"""
@@ -574,6 +629,7 @@ admin_site.register(Client, ClientAdmin)
 admin_site.register(Subscription, SubscriptionAdmin) 
 admin_site.register(Booking, BookingAdmin)
 admin_site.register(Schedule, ScheduleAdmin)
+admin_site.register(StripeSettings, StripeSettingsAdmin)
 
 # Also register with default admin site for compatibility
 admin.site.site_header = "New Farm Dog Walking Admin"
