@@ -343,3 +343,548 @@ network is not intercepting certificates.  If this problem persists,
 let us know at support@stripe.com.
 
 (Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+2025-09-18 13:06:20,512 ERROR [SUB:all] Error listing active subscriptions - Exception: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 790, in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 969, in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+               ^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 480, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 524, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 455, in wrap_socket
+    return self.sslsocket_class._create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 1042, in _create
+    self.do_handshake()
+  File "/usr/lib/python3.12/ssl.py", line 1320, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+urllib3.exceptions.SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 672, in _request_internal
+    result = cast(
+             ^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 675, in send
+    raise SSLError(e, request=request)
+requests.exceptions.SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 896, in list_active_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 187, in request
+    rbody, rcode, rheaders = requestor.request_raw(
+                             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 719, in request_raw
+    ) = self._get_http_client().request_with_retries(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 291, in request_with_retries
+    return self._request_with_retries_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 378, in _request_with_retries_internal
+    raise connection_error
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 345, in _request_with_retries_internal
+    response = self.request(method, url, headers, post_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 610, in request
+    return self._request_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 704, in _request_internal
+    self._handle_request_error(e)
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 759, in _handle_request_error
+    raise APIConnectionError(msg, should_retry=should_retry) from e
+stripe._error.APIConnectionError: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+2025-09-18 13:06:21,493 ERROR [SUB:all] Error listing active subscriptions - Exception: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 790, in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 969, in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+               ^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 480, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 524, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 455, in wrap_socket
+    return self.sslsocket_class._create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 1042, in _create
+    self.do_handshake()
+  File "/usr/lib/python3.12/ssl.py", line 1320, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+urllib3.exceptions.SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 672, in _request_internal
+    result = cast(
+             ^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 675, in send
+    raise SSLError(e, request=request)
+requests.exceptions.SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 896, in list_active_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 187, in request
+    rbody, rcode, rheaders = requestor.request_raw(
+                             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 719, in request_raw
+    ) = self._get_http_client().request_with_retries(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 291, in request_with_retries
+    return self._request_with_retries_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 378, in _request_with_retries_internal
+    raise connection_error
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 345, in _request_with_retries_internal
+    response = self.request(method, url, headers, post_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 610, in request
+    return self._request_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 704, in _request_internal
+    self._handle_request_error(e)
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 759, in _handle_request_error
+    raise APIConnectionError(msg, should_retry=should_retry) from e
+stripe._error.APIConnectionError: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+2025-09-18 13:08:43,293 ERROR [SUB:all] Error listing active subscriptions - Exception: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 790, in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 969, in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+               ^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 480, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 524, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 455, in wrap_socket
+    return self.sslsocket_class._create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 1042, in _create
+    self.do_handshake()
+  File "/usr/lib/python3.12/ssl.py", line 1320, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+urllib3.exceptions.SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 672, in _request_internal
+    result = cast(
+             ^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 675, in send
+    raise SSLError(e, request=request)
+requests.exceptions.SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 896, in list_active_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 187, in request
+    rbody, rcode, rheaders = requestor.request_raw(
+                             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 719, in request_raw
+    ) = self._get_http_client().request_with_retries(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 291, in request_with_retries
+    return self._request_with_retries_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 378, in _request_with_retries_internal
+    raise connection_error
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 345, in _request_with_retries_internal
+    response = self.request(method, url, headers, post_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 610, in request
+    return self._request_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 704, in _request_internal
+    self._handle_request_error(e)
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 759, in _handle_request_error
+    raise APIConnectionError(msg, should_retry=should_retry) from e
+stripe._error.APIConnectionError: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+2025-09-18 13:08:44,096 ERROR [SUB:all] Error listing active subscriptions - Exception: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 790, in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 969, in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+               ^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 480, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 524, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 455, in wrap_socket
+    return self.sslsocket_class._create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 1042, in _create
+    self.do_handshake()
+  File "/usr/lib/python3.12/ssl.py", line 1320, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+urllib3.exceptions.SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 672, in _request_internal
+    result = cast(
+             ^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 675, in send
+    raise SSLError(e, request=request)
+requests.exceptions.SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 896, in list_active_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 187, in request
+    rbody, rcode, rheaders = requestor.request_raw(
+                             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 719, in request_raw
+    ) = self._get_http_client().request_with_retries(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 291, in request_with_retries
+    return self._request_with_retries_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 378, in _request_with_retries_internal
+    raise connection_error
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 345, in _request_with_retries_internal
+    response = self.request(method, url, headers, post_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 610, in request
+    return self._request_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 704, in _request_internal
+    self._handle_request_error(e)
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 759, in _handle_request_error
+    raise APIConnectionError(msg, should_retry=should_retry) from e
+stripe._error.APIConnectionError: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+2025-09-18 13:10:11,414 ERROR [SUB:all] Error listing active subscriptions - Exception: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 790, in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connection.py", line 969, in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+               ^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 480, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 524, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 455, in wrap_socket
+    return self.sslsocket_class._create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ssl.py", line 1042, in _create
+    self.do_handshake()
+  File "/usr/lib/python3.12/ssl.py", line 1320, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+urllib3.exceptions.SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 672, in _request_internal
+    result = cast(
+             ^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/requests/adapters.py", line 675, in send
+    raise SSLError(e, request=request)
+requests.exceptions.SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)')))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/stripe_integration.py", line 896, in list_active_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 187, in request
+    rbody, rcode, rheaders = requestor.request_raw(
+                             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_api_requestor.py", line 719, in request_raw
+    ) = self._get_http_client().request_with_retries(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 291, in request_with_retries
+    return self._request_with_retries_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 378, in _request_with_retries_internal
+    raise connection_error
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 345, in _request_with_retries_internal
+    response = self.request(method, url, headers, post_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 610, in request
+    return self._request_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 704, in _request_internal
+    self._handle_request_error(e)
+  File "/home/runner/.local/lib/python3.12/site-packages/stripe/_http_client.py", line 759, in _handle_request_error
+    raise APIConnectionError(msg, should_retry=should_retry) from e
+stripe._error.APIConnectionError: Could not verify Stripe's SSL certificate.  Please make sure that your
+network is not intercepting certificates.  If this problem persists,
+let us know at support@stripe.com.
+
+(Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))

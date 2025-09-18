@@ -426,9 +426,7 @@ class BookingAdmin(admin.ModelAdmin):
 
     def has_invoice(self, obj):
         """Display if booking has an invoice"""
-        if obj.stripe_invoice_id:
-            return format_html('<span style="color: green;">✓</span>')
-        return format_html('<span style="color: red;">✗</span>')
+        return bool(obj.stripe_invoice_id)
     has_invoice.short_description = 'Invoiced'
     has_invoice.boolean = True
 
