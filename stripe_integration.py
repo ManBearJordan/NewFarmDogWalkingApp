@@ -3,10 +3,10 @@
 import os, webbrowser
 import stripe
 from datetime import datetime, timezone, timedelta
-from secrets_config import get_stripe_key
+from stripe_key_manager import ensure_stripe_key
 
-# Initialize Stripe API key from secrets config
-stripe.api_key = get_stripe_key()
+# Initialize Stripe API key from secure storage
+stripe.api_key = ensure_stripe_key()
 
 # -------------------------
 # Small utilities
