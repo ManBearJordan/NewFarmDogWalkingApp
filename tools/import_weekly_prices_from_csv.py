@@ -8,10 +8,10 @@
 from __future__ import annotations
 import csv, os, sys, typing as t
 import stripe
-from secrets_config import STRIPE_SECRET_KEY
+from secrets_config import get_stripe_key
 
 # Initialize Stripe API key from secrets config
-stripe.api_key = STRIPE_SECRET_KEY
+stripe.api_key = get_stripe_key()
 
 def die(msg: str) -> t.NoReturn:
     print(f"ERROR: {msg}")
