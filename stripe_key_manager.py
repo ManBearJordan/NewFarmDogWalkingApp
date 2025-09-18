@@ -52,11 +52,21 @@ KEY_NAME = "stripe_secret_key"
 
 def get_stripe_key() -> str:
     """
-    Retrieve the Stripe secret key from secure storage.
+    Retrieve the Stripe secret key from Django StripeSettings, with fallback to secure storage.
     
     Returns:
         str: The Stripe secret key, or empty string if not found
     """
+    # First, try Django StripeSettings (web admin)
+    try:
+        from core.stripe_utils import get_stripe_key_from_django
+        django_key = get_stripe_key_from_django()
+        if django_key:
+            return django_key
+    except Exception:
+        pass  # Django not available or StripeSettings not accessible
+    
+    # Fallback to keyring
     if KEYRING_AVAILABLE:
         try:
             key = keyring.get_password(SERVICE_NAME, KEY_NAME)
@@ -71,7 +81,7 @@ def get_stripe_key() -> str:
 
 def set_stripe_key(key: str) -> bool:
     """
-    Store the Stripe secret key in secure storage.
+    Store the Stripe secret key in Django StripeSettings and secure storage.
     
     Args:
         key (str): The Stripe secret key to store
@@ -89,17 +99,31 @@ def set_stripe_key(key: str) -> bool:
         print("Warning: Key doesn't appear to be a valid Stripe secret key (should start with sk_test_ or sk_live_)")
         # Continue anyway in case it's a valid key with different format
     
+    # Try to store in Django StripeSettings first
+    django_success = False
+    try:
+        from core.stripe_utils import set_stripe_key_in_django
+        django_success = set_stripe_key_in_django(key)
+        if django_success:
+            print("Stripe secret key stored in Django StripeSettings")
+    except Exception:
+        pass  # Django not available
+    
+    # Also store in keyring as backup
+    keyring_success = False
     if KEYRING_AVAILABLE:
         try:
             keyring.set_password(SERVICE_NAME, KEY_NAME, key)
-            print("Stripe secret key stored securely in system credential manager")
-            return True
+            print("Stripe secret key also stored securely in system credential manager")
+            keyring_success = True
         except Exception as e:
-            print(f"Error: Could not store key in secure storage: {e}")
-            print("Note: Key was not stored. You may need to run as administrator or check your system's credential manager.")
-            return False
+            print(f"Warning: Could not store key in secure storage: {e}")
+    
+    # Return success if at least one storage method worked
+    if django_success or keyring_success:
+        return True
     else:
-        print("Warning: Keyring not available. Consider setting STRIPE_SECRET_KEY environment variable.")
+        print("Warning: Could not store key in any storage method. Consider setting STRIPE_SECRET_KEY environment variable.")
         return False
 
 

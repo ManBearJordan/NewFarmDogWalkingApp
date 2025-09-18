@@ -1,0 +1,15 @@
+{% extends "admin/index.html" %}
+{% load i18n static %}
+
+{% block content %}
+{% if stripe_key_missing %}
+<div class="messagelist">
+    <div class="error">
+        <strong>⚠️ Stripe API Key Required</strong><br>
+        No Stripe API key is configured. Please <a href="{{ stripe_settings_url }}" style="color: #fff; text-decoration: underline;">click here to configure your Stripe settings</a> to enable payment processing functionality.
+    </div>
+</div>
+{% endif %}
+
+{{ block.super }}
+{% endblock %}
