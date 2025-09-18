@@ -35,7 +35,7 @@ class Client(models.Model):
 
     class Meta:
         db_table = 'clients'  # Use existing table name
-        managed = False
+        managed = True
 
     def __str__(self):
         return self.name
