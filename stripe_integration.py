@@ -1,12 +1,12 @@
-# stripe_integration.py  — replace the whole file with this
-# (⚠️ Sensitive: contains your live Stripe key. Do NOT share or commit publicly.)
+# stripe_integration.py
 
 import os, webbrowser
 import stripe
 from datetime import datetime, timezone, timedelta
+from secrets_config import STRIPE_SECRET_KEY
 
-# 🔒 Hard-wired live key so you never need env vars in the app
-stripe.api_key = "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"
+# Initialize Stripe API key from secrets config
+stripe.api_key = STRIPE_SECRET_KEY
 
 # -------------------------
 # Small utilities

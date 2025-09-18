@@ -2,6 +2,16 @@ New Farm Dog Walking — Desktop App (v0.3)
 - Adds REAL Stripe **Invoices** support + Invoices tab.
 - Keep using Start-App.bat. No council logic.
 
+** SETUP - IMPORTANT **
+Before using the app, you MUST set up your Stripe secret key:
+
+1) Copy secrets_config.example.py to secrets_config.py
+2) Edit secrets_config.py and replace the fake key with your actual Stripe secret key
+3) NEVER commit secrets_config.py to version control (it's already in .gitignore)
+
+Example:
+  STRIPE_SECRET_KEY = "sk_live_YOUR_ACTUAL_KEY_HERE"
+
 How to invoice:
 1) Add a Client (with email).
 2) Create a Booking.

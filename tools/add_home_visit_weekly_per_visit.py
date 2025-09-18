@@ -8,9 +8,10 @@
 # No visits_per_week metadata is written.
 
 import stripe
+from secrets_config import STRIPE_SECRET_KEY
 
-# 🔒 Your live key embedded exactly as requested
-stripe.api_key = "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"
+# Initialize Stripe API key from secrets config
+stripe.api_key = STRIPE_SECRET_KEY
 
 CURRENCY = "aud"
 NICKNAME = "Weekly (per visit)"  # how it shows in Stripe
