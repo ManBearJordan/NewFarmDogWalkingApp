@@ -35,6 +35,7 @@ class Client(models.Model):
 
     class Meta:
         db_table = 'clients'  # Use existing table name
+        managed = False  # Django should not manage this table's creation/deletion
 
     def __str__(self):
         return self.name
