@@ -148,13 +148,18 @@ def handle_stripe_api_error(error: Exception, operation: str, subscription_id: s
     """
     error_msg = str(error)
     
+    # Check if this is an authentication error that requires key update
+    is_auth_error = ("authentication" in error_msg.lower() or 
+                     "invalid_api_key" in error_msg.lower() or
+                     (hasattr(error, '__class__') and 'AuthenticationError' in error.__class__.__name__))
+    
     # Common Stripe error patterns
     if "rate_limit" in error_msg.lower():
         user_msg = "Rate limit exceeded. Please try again in a few moments."
     elif "invalid_request" in error_msg.lower():
         user_msg = "Invalid request to Stripe. Please check the subscription details."
-    elif "authentication" in error_msg.lower():
-        user_msg = "Stripe API authentication failed. Please check API key configuration."
+    elif is_auth_error:
+        user_msg = handle_stripe_authentication_error(error, operation, subscription_id)
     elif "network" in error_msg.lower() or "connection" in error_msg.lower():
         user_msg = "Network error connecting to Stripe. Please check your internet connection."
     else:
@@ -168,6 +173,63 @@ def handle_stripe_api_error(error: Exception, operation: str, subscription_id: s
     log_subscription_error(f"Stripe API - {operation}", subscription_id or "unknown", error, context)
     
     return user_msg
+
+
+def handle_stripe_authentication_error(error: Exception, operation: str, subscription_id: str = None) -> str:
+    """
+    Handle Stripe authentication errors by prompting for a new API key.
+    
+    Args:
+        error: The Stripe authentication error
+        operation: Description of the operation that failed
+        subscription_id: Optional subscription ID
+        
+    Returns:
+        User-friendly error message
+    """
+    try:
+        # Try to import and update the Stripe key
+        from stripe_key_manager import update_stripe_key
+        import stripe
+        
+        logger.warning(f"Stripe authentication failed during {operation}. Prompting for new key.")
+        
+        # Show user-friendly dialog before prompting for key
+        try:
+            from PySide6.QtWidgets import QMessageBox
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setWindowTitle("Stripe Authentication Failed")
+            msg_box.setText("Your Stripe API key appears to be invalid or expired.")
+            msg_box.setInformativeText("Would you like to enter a new Stripe API key now?")
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
+            
+            if msg_box.exec() == QMessageBox.StandardButton.Yes:
+                if update_stripe_key():
+                    # Update the Stripe module with the new key
+                    from stripe_key_manager import get_stripe_key
+                    new_key = get_stripe_key()
+                    stripe.api_key = new_key
+                    return "Stripe API key updated successfully. Please try the operation again."
+                else:
+                    return "Stripe API key update was cancelled or failed. Please check your key configuration."
+            else:
+                return "Stripe API authentication failed. Please update your API key in the Admin panel."
+        except ImportError:
+            # Fallback to console/tkinter prompt if PySide6 is not available
+            if update_stripe_key():
+                # Update the Stripe module with the new key
+                from stripe_key_manager import get_stripe_key
+                new_key = get_stripe_key()
+                stripe.api_key = new_key
+                return "Stripe API key updated successfully. Please try the operation again."
+            else:
+                return "Stripe API key update was cancelled or failed. Please check your key configuration."
+                
+    except Exception as update_error:
+        logger.error(f"Failed to update Stripe key: {update_error}")
+        return f"Stripe API authentication failed and key update failed: {update_error}"
 
 
 def handle_database_error(error: Exception, operation: str, subscription_id: str = None) -> str:

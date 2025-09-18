@@ -260,6 +260,34 @@ def ensure_stripe_key() -> str:
         return key
 
 
+def update_stripe_key() -> bool:
+    """
+    Prompt user for a new Stripe key and update the stored key.
+    
+    This function can be called both automatically (on authentication errors) 
+    and manually (from UI button). It will:
+    1. Prompt the user to enter a new key
+    2. Validate the key format
+    3. Store the key securely
+    4. Return success status
+    
+    Returns:
+        bool: True if key was successfully updated, False otherwise
+    """
+    # Prompt for new key
+    new_key = prompt_for_stripe_key()
+    if not new_key:
+        return False
+    
+    # Store the new key
+    if set_stripe_key(new_key):
+        print(f"Stripe key updated successfully! Key type: {'test' if new_key.startswith('sk_test_') else 'live'}")
+        return True
+    else:
+        print("Failed to store the new Stripe key.")
+        return False
+
+
 def get_key_status() -> dict:
     """
     Get information about the current key storage status.

@@ -56,6 +56,42 @@ stripe>=12.5.1     # Stripe API integration
 2. **GUI Setup**: Follow the dialog prompts to enter your Stripe key
 3. **Done**: Key is stored securely and retrieved automatically on future runs
 
+### 🔄 Managing Your Stripe Key
+
+#### Automatic Key Update (On Error)
+
+If your Stripe key becomes invalid or expires:
+
+1. **Automatic Detection**: The app detects authentication failures automatically
+2. **User Prompt**: You'll see a dialog asking if you want to update your key
+3. **New Key Entry**: Follow the GUI prompts to enter your new key
+4. **Seamless Update**: The app continues working with the new key immediately
+
+#### Manual Key Update (Admin Panel)
+
+You can also manually update your Stripe key anytime:
+
+1. **Open Admin Panel**: Go to the "Admin" tab in the app
+2. **Stripe Settings**: Find the "Stripe Settings" section
+3. **Change Key**: Click "Change Stripe Key" button
+4. **Enter New Key**: Follow the prompts to enter your new Stripe secret key
+5. **Status Check**: Use "Check Status" to verify your key is working
+
+#### Command Line Key Management
+
+For advanced users or automation:
+
+```bash
+# Check current key status
+python stripe_key_manager.py status
+
+# Update key via command line
+python stripe_key_manager.py set
+
+# Remove stored key
+python stripe_key_manager.py delete
+```
+
 ### 🔧 Advanced Usage
 
 #### Check Key Status
@@ -90,6 +126,33 @@ The implementation is designed for seamless migration:
 - **Current**: Desktop app with Windows Credential Manager
 - **Future**: Server deployment with environment variables
 - **Future**: Mobile app integration with platform-specific secure storage
+
+### 🛠️ Troubleshooting
+
+#### Stripe Key Issues
+
+**Problem**: Authentication errors or "invalid API key" messages
+- **Solution 1**: Use the "Change Stripe Key" button in Admin panel
+- **Solution 2**: Check your Stripe Dashboard for the correct key
+- **Solution 3**: Ensure you're using the right key type (test vs live)
+
+**Problem**: Key not saving/storing properly
+- **Solution 1**: Run the app as Administrator (Windows) 
+- **Solution 2**: Check system keyring is working: `python stripe_key_manager.py status`
+- **Solution 3**: Use environment variable fallback: set `STRIPE_SECRET_KEY=your_key`
+
+**Problem**: GUI prompts not appearing
+- **Solution 1**: Ensure tkinter is installed (usually included with Python)
+- **Solution 2**: Use command line: `python stripe_key_manager.py set`
+- **Solution 3**: Set environment variable manually
+
+#### Resetting Your Stripe Setup
+
+To completely reset your Stripe configuration:
+
+1. **Delete stored key**: `python stripe_key_manager.py delete`
+2. **Clear environment variables**: Remove `STRIPE_SECRET_KEY` if set
+3. **Restart the app**: It will prompt for a new key automatically
 
 ### 📊 Legacy Support
 

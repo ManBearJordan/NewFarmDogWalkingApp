@@ -2523,6 +2523,18 @@ class AdminTab(QWidget):
         gl.addWidget(self.btn_pick_creds); gl.addWidget(self.btn_open_token)
         layout.addWidget(g)
 
+        # --- Stripe Settings group
+        stripe_group = QGroupBox("Stripe Settings")
+        stripe_layout = QHBoxLayout(stripe_group)
+        self.lbl_stripe = QLabel("Status: checking...")
+        self.btn_change_stripe_key = QPushButton("Change Stripe Key")
+        self.btn_change_stripe_key.clicked.connect(self.change_stripe_key)
+        self.btn_check_stripe_status = QPushButton("Check Status")
+        self.btn_check_stripe_status.clicked.connect(self.check_stripe_status)
+        stripe_layout.addWidget(self.lbl_stripe); stripe_layout.addStretch(1)
+        stripe_layout.addWidget(self.btn_check_stripe_status); stripe_layout.addWidget(self.btn_change_stripe_key)
+        layout.addWidget(stripe_group)
+
         # --- Admin tasks group
         t = QGroupBox("Admin tasks")
         tl = QVBoxLayout(t)
@@ -2547,7 +2559,7 @@ class AdminTab(QWidget):
         tl.addLayout(tools)
 
         layout.addWidget(t); layout.addStretch(1)
-        self.refresh_google_status(); self.refresh_table()
+        self.refresh_google_status(); self.refresh_stripe_status(); self.refresh_table()
 
     # --- Google helpers (lazy imports so the tab never crashes)
     def refresh_google_status(self):
@@ -2571,6 +2583,87 @@ class AdminTab(QWidget):
         p = os.path.abspath("google_token.json")
         if os.path.exists(p): webbrowser.open(f"file:///{p}")
         else: QMessageBox.information(self, "Token", "No token yet. Connect Google first.")
+
+    # --- Stripe helpers
+    def refresh_stripe_status(self):
+        """Update the Stripe status label based on current key status"""
+        try:
+            from stripe_key_manager import get_key_status
+            status = get_key_status()
+            
+            if status["key_stored"]:
+                key_type = status["key_type"]
+                self.lbl_stripe.setText(f"Status: {key_type} key configured")
+                self.lbl_stripe.setStyleSheet("color: green;")
+            else:
+                self.lbl_stripe.setText("Status: no key configured")
+                self.lbl_stripe.setStyleSheet("color: orange;")
+        except Exception as e:
+            self.lbl_stripe.setText(f"Status: error checking ({e})")
+            self.lbl_stripe.setStyleSheet("color: red;")
+
+    def check_stripe_status(self):
+        """Show detailed Stripe key status information"""
+        try:
+            from stripe_key_manager import get_key_status
+            status = get_key_status()
+            
+            details = []
+            details.append(f"Key stored: {'Yes' if status['key_stored'] else 'No'}")
+            if status['key_stored']:
+                details.append(f"Key type: {status['key_type']}")
+            details.append(f"Storage method: {status['storage_method']}")
+            details.append(f"GUI available: {'Yes' if status['gui_available'] else 'No'}")
+            details.append(f"Keyring available: {'Yes' if status['keyring_available'] else 'No'}")
+            
+            QMessageBox.information(
+                self, 
+                "Stripe Key Status", 
+                "\n".join(details)
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to check Stripe status: {e}")
+
+    def change_stripe_key(self):
+        """Prompt user to enter a new Stripe key and update it"""
+        try:
+            from stripe_key_manager import update_stripe_key
+            import stripe
+            
+            # Confirm with user first
+            reply = QMessageBox.question(
+                self, 
+                "Change Stripe Key", 
+                "This will replace your current Stripe API key.\n\n"
+                "Make sure you have your new Stripe secret key ready.\n"
+                "Continue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                if update_stripe_key():
+                    # Update the Stripe module with the new key
+                    from stripe_key_manager import get_stripe_key
+                    new_key = get_stripe_key()
+                    stripe.api_key = new_key
+                    
+                    # Update the status display
+                    self.refresh_stripe_status()
+                    
+                    QMessageBox.information(
+                        self, 
+                        "Success", 
+                        "Stripe API key updated successfully!"
+                    )
+                else:
+                    QMessageBox.warning(
+                        self, 
+                        "Cancelled", 
+                        "Stripe key update was cancelled or failed."
+                    )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to update Stripe key: {e}")
 
     # --- Admin tasks CRUD (schema now handled in db.py)
 

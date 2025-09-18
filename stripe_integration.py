@@ -9,6 +9,20 @@ from stripe_key_manager import ensure_stripe_key
 stripe.api_key = ensure_stripe_key()
 
 # -------------------------
+# Key management utilities
+# -------------------------
+def refresh_stripe_api_key():
+    """Refresh the Stripe API key from secure storage"""
+    from stripe_key_manager import get_stripe_key
+    new_key = get_stripe_key()
+    stripe.api_key = new_key
+    return new_key
+
+def get_current_stripe_key():
+    """Get the currently configured Stripe API key"""
+    return getattr(stripe, "api_key", "")
+
+# -------------------------
 # Small utilities
 # -------------------------
 def calculate_weekly_quantity(price, qty):
