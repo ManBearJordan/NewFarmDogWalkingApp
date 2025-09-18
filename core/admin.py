@@ -7,11 +7,57 @@ clients, and schedules with proper filtering, search, and display options.
 
 from django.contrib import admin
 from django.utils.html import format_html
-from django.urls import reverse
+from django.urls import reverse, path
 from django.utils import timezone
 from django.contrib import messages
+from django.http import JsonResponse
 from datetime import datetime, timedelta
 from .models import Client, Subscription, Booking, Schedule
+
+
+class SyncLogAdmin:
+    """Admin interface for viewing sync logs and triggering manual syncs"""
+    
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('sync-stripe/', self.admin_site.admin_view(self.sync_stripe_view), name='sync-stripe'),
+            path('sync-logs/', self.admin_site.admin_view(self.sync_logs_view), name='sync-logs'),
+        ]
+        return custom_urls + urls
+    
+    def sync_stripe_view(self, request):
+        """Manual trigger for Stripe sync"""
+        if request.method == 'POST':
+            try:
+                from core.services.stripe_sync import sync_stripe_data_on_startup
+                result = sync_stripe_data_on_startup()
+                return JsonResponse(result)
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)})
+        
+        return JsonResponse({'error': 'POST method required'})
+    
+    def sync_logs_view(self, request):
+        """View recent sync logs"""
+        try:
+            import os
+            from django.conf import settings
+            
+            log_file = os.path.join(settings.BASE_DIR, 'django.log')
+            if os.path.exists(log_file):
+                with open(log_file, 'r') as f:
+                    # Get last 100 lines
+                    lines = f.readlines()[-100:]
+                    # Filter for sync-related logs
+                    sync_lines = [line for line in lines if 'stripe' in line.lower() or 'sync' in line.lower()]
+                    logs = ''.join(sync_lines)
+            else:
+                logs = 'Log file not found'
+                
+            return JsonResponse({'logs': logs})
+        except Exception as e:
+            return JsonResponse({'error': str(e)})
 
 
 @admin.register(Client)
@@ -92,14 +138,14 @@ class SubscriptionAdmin(admin.ModelAdmin):
                 'schedule_days', 'schedule_start_time', 'schedule_end_time',
                 'schedule_duration_display', 'schedule_location', 'schedule_dogs', 'schedule_notes'
             ),
-            'description': '''
+            'description': format_html('''
                 <strong>How to update schedules:</strong><br>
                 • <strong>Days:</strong> Use 3-letter codes separated by commas (MON,WED,FRI)<br>
                 • <strong>Times:</strong> Use 24-hour format (14:30 for 2:30 PM)<br>
                 • <strong>Location:</strong> Full address where service will be provided<br>
                 • <strong>Dogs:</strong> Number of dogs to be walked<br>
                 • After saving changes, bookings will be automatically updated
-            '''
+            ''')
         }),
         ('Schedule Preview', {
             'fields': ('next_occurrence',),
@@ -162,9 +208,32 @@ class SubscriptionAdmin(admin.ModelAdmin):
                     level=messages.WARNING)
                     
         except ImportError:
-            self.message_user(request, 
-                'Sync functionality not available - tasks not configured', 
-                level=messages.ERROR)
+            # Fallback to direct sync
+            from core.services.stripe_sync import stripe_sync_service
+            
+            successful_syncs = 0
+            failed_syncs = 0
+            
+            for subscription in queryset:
+                try:
+                    # Use Django sync service directly
+                    result = stripe_sync_service.sync_all_stripe_data()
+                    if result.get('success'):
+                        successful_syncs += 1
+                    else:
+                        failed_syncs += 1
+                        self.message_user(request, 
+                            f'Sync failed for {subscription.stripe_subscription_id}: {result.get("error")}', 
+                            level=messages.ERROR)
+                except Exception as e:
+                    failed_syncs += 1
+                    self.message_user(request, 
+                        f'Failed to sync subscription {subscription.stripe_subscription_id}: {str(e)}', 
+                        level=messages.ERROR)
+            
+            if successful_syncs > 0:
+                self.message_user(request, 
+                    f'Successfully synced {successful_syncs} subscriptions')
     
     sync_with_stripe.short_description = 'Sync selected subscriptions with Stripe'
 
@@ -282,52 +351,21 @@ class SubscriptionAdmin(admin.ModelAdmin):
         # If schedule changed, automatically generate bookings
         if schedule_changed:
             try:
-                from core.tasks import generate_subscription_bookings
-                result = generate_subscription_bookings.delay(obj.stripe_subscription_id)
-                messages.info(request, 
-                    'Schedule was updated - new bookings are being generated in the background. '
-                    'Check the Bookings section in a few moments to see updated appointments.')
-            except ImportError:
-                # Fallback to direct generation
-                try:
-                    from booking_utils import generate_bookings_and_update_calendar
-                    
-                    schedule_data = {
-                        'service_code': obj.service_code,
-                        'days': obj.schedule_days,
-                        'start_time': obj.schedule_start_time.strftime('%H:%M'),
-                        'end_time': obj.schedule_end_time.strftime('%H:%M'),
-                        'location': obj.schedule_location or '',
-                        'dogs': obj.schedule_dogs,
-                        'notes': obj.schedule_notes or ''
-                    }
-                    
-                    result = generate_bookings_and_update_calendar(
-                        obj.stripe_subscription_id, 
-                        schedule_data
-                    )
-                    
-                    if result.get('success'):
-                        bookings_created = result.get('bookings_created', 0)
-                        if bookings_created > 0:
-                            messages.success(request, 
-                                f'Schedule updated and {bookings_created} new bookings were created automatically.')
-                        else:
-                            messages.info(request, 
-                                'Schedule updated. No new bookings were needed.')
+                from core.services.stripe_sync import stripe_sync_service
+                result = stripe_sync_service.sync_all_stripe_data()
+                if result.get('success'):
+                    bookings_created = result['stats'].get('bookings_created', 0)
+                    if bookings_created > 0:
+                        messages.success(request, 
+                            f'Schedule updated and {bookings_created} new bookings were created automatically.')
                     else:
-                        messages.warning(request, 
-                            f'Schedule updated but booking generation failed: {result.get("error", "Unknown error")}. '
-                            f'You can manually generate bookings using the "Generate bookings" action.')
-                        
-                except ImportError:
+                        messages.info(request, 
+                            'Schedule updated. No new bookings were needed.')
+                else:
                     messages.warning(request, 
-                        'Schedule updated but automatic booking generation is not available. '
-                        'You can manually generate bookings using the "Generate bookings" action.')
-                except Exception as e:
-                    messages.error(request, 
-                        f'Schedule updated but booking generation failed: {str(e)}. '
+                        f'Schedule updated but booking generation failed: {result.get("error", "Unknown error")}. '
                         f'You can manually generate bookings using the "Generate bookings" action.')
+                        
             except Exception as e:
                 messages.error(request, 
                     f'Schedule updated but booking generation failed: {str(e)}. '
@@ -339,7 +377,7 @@ class BookingAdmin(admin.ModelAdmin):
     """Admin interface for Booking model"""
     list_display = [
         'client', 'service_name', 'start_dt', 'end_dt', 'location',
-        'dogs', 'status', 'source', 'has_invoice'
+        'dogs', 'status', 'source', 'has_invoice', 'linked_subscription'
     ]
     list_filter = [
         'status', 'source', 'service_type', 'dogs',
@@ -393,6 +431,19 @@ class BookingAdmin(admin.ModelAdmin):
         return format_html('<span style="color: red;">✗</span>')
     has_invoice.short_description = 'Invoiced'
     has_invoice.boolean = True
+
+    def linked_subscription(self, obj):
+        """Display linked subscription info"""
+        if obj.subscription:
+            return format_html(
+                '<a href="{}">Subscription {}</a>',
+                reverse('admin:core_subscription_change', args=[obj.subscription.pk]),
+                obj.subscription.stripe_subscription_id[:20] + '...'
+            )
+        elif obj.created_from_sub_id:
+            return obj.created_from_sub_id[:20] + '...'
+        return 'None'
+    linked_subscription.short_description = 'Linked Subscription'
 
     def get_queryset(self, request):
         """Optimize queryset with select_related"""
@@ -468,7 +519,65 @@ class ScheduleAdmin(admin.ModelAdmin):
     time_range.short_description = 'Time Range'
 
 
-# Admin site customization
+# Custom admin site with sync functionality
+class StripeSyncAdminSite(admin.AdminSite):
+    """Custom admin site with Stripe sync functionality"""
+    site_header = "New Farm Dog Walking Admin"
+    site_title = "Dog Walking Admin"
+    index_title = "Manage Subscriptions, Bookings & Clients"
+    
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('sync-stripe/', self.admin_view(self.sync_stripe_view), name='admin-sync-stripe'),
+            path('sync-logs/', self.admin_view(self.sync_logs_view), name='admin-sync-logs'),
+        ]
+        return custom_urls + urls
+    
+    def sync_stripe_view(self, request):
+        """Manual trigger for Stripe sync"""
+        if request.method == 'POST':
+            try:
+                from core.services.stripe_sync import sync_stripe_data_on_startup
+                result = sync_stripe_data_on_startup()
+                return JsonResponse(result)
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)})
+        
+        return JsonResponse({'error': 'POST method required'})
+    
+    def sync_logs_view(self, request):
+        """View recent sync logs"""
+        try:
+            import os
+            from django.conf import settings
+            
+            log_file = os.path.join(settings.BASE_DIR, 'django.log')
+            if os.path.exists(log_file):
+                with open(log_file, 'r') as f:
+                    # Get last 100 lines
+                    lines = f.readlines()[-100:]
+                    # Filter for sync-related logs
+                    sync_lines = [line for line in lines if 'stripe' in line.lower() or 'sync' in line.lower()]
+                    logs = ''.join(sync_lines)
+            else:
+                logs = 'Log file not found'
+                
+            return JsonResponse({'logs': logs})
+        except Exception as e:
+            return JsonResponse({'error': str(e)})
+
+
+# Use custom admin site
+admin_site = StripeSyncAdminSite()
+
+# Register models with custom site
+admin_site.register(Client, ClientAdmin)
+admin_site.register(Subscription, SubscriptionAdmin) 
+admin_site.register(Booking, BookingAdmin)
+admin_site.register(Schedule, ScheduleAdmin)
+
+# Also register with default admin site for compatibility
 admin.site.site_header = "New Farm Dog Walking Admin"
 admin.site.site_title = "Dog Walking Admin"
 admin.site.index_title = "Manage Subscriptions, Bookings & Clients"
