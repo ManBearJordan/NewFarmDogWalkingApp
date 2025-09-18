@@ -26,6 +26,18 @@ import os
 import sys
 from typing import Optional
 
+# Try to import tkinter for GUI prompts, but provide fallback for headless systems
+try:
+    import tkinter as tk
+    from tkinter import simpledialog, messagebox
+    TKINTER_AVAILABLE = True
+except ImportError:
+    # Create dummy objects for testing purposes
+    tk = None
+    simpledialog = None  
+    messagebox = None
+    TKINTER_AVAILABLE = False
+
 # Try to import keyring, but provide fallback for development/testing
 try:
     import keyring
@@ -114,9 +126,56 @@ def delete_stripe_key() -> bool:
         return False
 
 
-def prompt_for_stripe_key() -> Optional[str]:
+def _show_gui_key_prompt() -> Optional[str]:
     """
-    Prompt the user to enter their Stripe secret key.
+    Show a GUI dialog to prompt for the Stripe secret key.
+    
+    Returns:
+        str: The entered key, or None if user cancelled
+    """
+    try:
+        # Create a temporary root window (will be hidden)
+        root = tk.Tk()
+        root.withdraw()  # Hide the root window
+        
+        # Show an information dialog first
+        messagebox.showinfo(
+            "Stripe Secret Key Setup",
+            "This application needs your Stripe secret key to process payments.\n\n"
+            "Your key will be stored securely in your system's credential manager.\n"
+            "Keys are never stored in plaintext or committed to version control.\n\n"
+            "To find your Stripe secret key:\n"
+            "1. Log in to your Stripe Dashboard\n"
+            "2. Go to Developers > API keys\n"
+            "3. Copy the 'Secret key' (starts with sk_test_ or sk_live_)\n\n"
+            "For development, use a test key (sk_test_...)\n"
+            "For production, use a live key (sk_live_...)"
+        )
+        
+        # Prompt for the key
+        key = simpledialog.askstring(
+            "Stripe Secret Key", 
+            "Enter your Stripe secret key:",
+            show='*'  # Hide the text input for security
+        )
+        
+        # Clean up
+        root.destroy()
+        
+        if key:
+            return key.strip()
+        else:
+            return None
+            
+    except Exception as e:
+        # If GUI fails for any reason, fall back to console
+        print(f"GUI prompt failed ({e}), falling back to console input.")
+        return None
+
+
+def _show_console_key_prompt() -> Optional[str]:
+    """
+    Show a console prompt for the Stripe secret key (fallback method).
     
     Returns:
         str: The entered key, or None if user cancelled
@@ -147,6 +206,26 @@ def prompt_for_stripe_key() -> Optional[str]:
     except EOFError:
         print("\nInput not available. Please set STRIPE_SECRET_KEY environment variable manually.")
         return None
+
+
+def prompt_for_stripe_key() -> Optional[str]:
+    """
+    Prompt the user to enter their Stripe secret key using GUI or console fallback.
+    
+    Returns:
+        str: The entered key, or None if user cancelled
+    """
+    # Try GUI first if available
+    if TKINTER_AVAILABLE:
+        try:
+            result = _show_gui_key_prompt()
+            if result is not None:  # User provided key or explicitly cancelled
+                return result
+        except Exception as e:
+            print(f"GUI prompt failed: {e}")
+    
+    # Fall back to console prompt
+    return _show_console_key_prompt()
 
 
 def ensure_stripe_key() -> str:
@@ -193,6 +272,7 @@ def get_key_status() -> dict:
     status = {
         "key_stored": key_stored,
         "keyring_available": KEYRING_AVAILABLE,
+        "gui_available": TKINTER_AVAILABLE,
         "storage_method": "keyring" if KEYRING_AVAILABLE else "environment_variables",
         "service_name": SERVICE_NAME,
         "key_name": KEY_NAME
@@ -223,6 +303,7 @@ if __name__ == "__main__":
             print(f"  Key stored: {status['key_stored']}")
             print(f"  Key type: {status['key_type'] or 'None'}")
             print(f"  Keyring available: {status['keyring_available']}")
+            print(f"  GUI available: {status['gui_available']}")
             print(f"  Storage method: {status['storage_method']}")
             
         elif command == "set":

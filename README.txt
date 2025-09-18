@@ -12,16 +12,24 @@ The app now stores your Stripe secret key securely in your system's credential m
 Keys are NEVER stored in plaintext files or committed to version control.
 
 ** SETUP - IMPORTANT **
-On first run, the app will prompt you for your Stripe secret key:
+On first run, the app will show a GUI dialog to collect your Stripe secret key:
 
 1) Run the application normally with Start-App.bat
-2) When prompted, enter your Stripe secret key (sk_test_... or sk_live_...)
-3) The key will be stored securely in Windows Credential Manager
-4) On subsequent runs, the key will be retrieved automatically
+2) A friendly dialog box will appear with setup instructions
+3) Enter your Stripe secret key (sk_test_... or sk_live_...) in the secure input field
+4) The key will be stored securely in Windows Credential Manager
+5) On subsequent runs, the key will be retrieved automatically
+
+**GUI Features:**
+✅ User-friendly dialog with clear instructions
+✅ Password-style input field that hides your key
+✅ Automatic fallback to console on headless systems
 
 Alternative setup methods:
 - Command line: python stripe_key_manager.py set
 - Environment variable: set STRIPE_SECRET_KEY=your_key_here
+
+👉 **See README.md for detailed GUI setup documentation**
 
 ** SECURITY BENEFITS **
 ✅ Keys stored in secure system credential manager
