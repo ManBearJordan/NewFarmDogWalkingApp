@@ -145,6 +145,7 @@ class SubscriptionAutoSync(QObject):
         """
         try:
             logger.info(f"Processing completed schedule for subscription {subscription_id}")
+            logger.debug(f"Schedule data received: {schedule_data}")
             
             # Validate required fields
             required_fields = ["days", "start_time", "end_time", "location", "dogs"]
@@ -152,7 +153,8 @@ class SubscriptionAutoSync(QObject):
             
             if missing_fields:
                 error_msg = f"Missing required schedule fields: {', '.join(missing_fields)}"
-                logger.error(error_msg)
+                logger.error(f"Schedule validation failed for {subscription_id}: {error_msg}")
+                logger.debug(f"Available fields: {list(schedule_data.keys())}")
                 
                 if parent_widget:
                     from PySide6.QtWidgets import QMessageBox
@@ -163,7 +165,36 @@ class SubscriptionAutoSync(QObject):
                     )
                 return False
             
+            logger.info(f"Schedule validation passed for {subscription_id}. Processing {len(schedule_data.get('days', '').split(','))} days: {schedule_data.get('days')}")
+            
+            # Additional validation: Check for common metadata naming issues
+            metadata_warnings = []
+            if 'booking_start' in str(schedule_data).lower() or 'booking_time' in str(schedule_data).lower():
+                metadata_warnings.append("Found 'booking_start' or 'booking_time' fields - ensure metadata uses 'start_time' not 'booking_start'")
+            if 'booking_end' in str(schedule_data).lower():
+                metadata_warnings.append("Found 'booking_end' fields - ensure metadata uses 'end_time' not 'booking_end'")
+            
+            if metadata_warnings:
+                logger.warning(f"Metadata naming warnings for {subscription_id}: {'; '.join(metadata_warnings)}")
+                
+            # Validate time format
+            try:
+                from datetime import datetime
+                datetime.strptime(schedule_data['start_time'], '%H:%M')
+                datetime.strptime(schedule_data['end_time'], '%H:%M')
+                logger.debug(f"Time format validation passed: {schedule_data['start_time']} - {schedule_data['end_time']}")
+            except ValueError as time_error:
+                error_msg = f"Invalid time format in schedule data: {time_error}"
+                logger.error(f"❌ {error_msg}")
+                if parent_widget:
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.warning(parent_widget, "Time Format Error", error_msg)
+                return False
+            
             # Step 1: Update Stripe subscription metadata
+            logger.info(f"Step 1: Updating Stripe subscription metadata for {subscription_id}")
+            logger.debug(f"Metadata to be saved: days='{schedule_data['days']}', time={schedule_data['start_time']}-{schedule_data['end_time']}, location='{schedule_data['location']}', dogs={schedule_data['dogs']}")
+            
             success_stripe = update_stripe_subscription_metadata(
                 subscription_id,
                 schedule_data["days"],
@@ -175,11 +206,14 @@ class SubscriptionAutoSync(QObject):
                 schedule_data.get("service_code", "")
             )
             
-            if not success_stripe:
-                logger.warning(f"Failed to update Stripe metadata for {subscription_id}")
+            if success_stripe:
+                logger.info(f"✅ Successfully updated Stripe metadata for subscription {subscription_id}")
+            else:
+                logger.warning(f"⚠️ Failed to update Stripe metadata for {subscription_id} - continuing with local update")
                 # Don't fail completely - local update is more important
             
             # Step 2: Update local database (this is critical)
+            logger.info(f"Step 2: Updating local database for subscription {subscription_id}")
             success_local = update_local_subscription_schedule(
                 self.conn,
                 subscription_id,
@@ -192,8 +226,10 @@ class SubscriptionAutoSync(QObject):
                 schedule_data.get("service_code", "")
             )
             
-            if not success_local:
-                error_msg = f"Failed to save schedule to local database for subscription {subscription_id}"
+            if success_local:
+                logger.info(f"✅ Successfully updated local database for subscription {subscription_id}")
+            else:
+                error_msg = f"❌ Failed to save schedule to local database for subscription {subscription_id}"
                 logger.error(error_msg)
                 
                 if parent_widget:
@@ -208,7 +244,7 @@ class SubscriptionAutoSync(QObject):
                 return False
             
             # Step 3: Use unified booking helpers for reliable booking generation
-            logger.info(f"Generating bookings for completed subscription {subscription_id} using purge-then-rebuild pattern")
+            logger.info(f"Step 3: Generating bookings for subscription {subscription_id} using purge-then-rebuild pattern")
             
             try:
                 # Use the unified purge-then-rebuild pattern for reliable booking generation
@@ -223,11 +259,60 @@ class SubscriptionAutoSync(QObject):
                     if day in day_names:
                         days_mask |= (1 << day_names.index(day))
                 
+                logger.debug(f"Days conversion: '{days_str}' -> {days_list} -> mask {days_mask} (binary: {bin(days_mask)})")
+                
+                # Pre-check: Verify client can be resolved before proceeding
+                try:
+                    import stripe
+                    from secrets_config import get_stripe_key
+                    from unified_booking_helpers import resolve_client_id
+                    stripe.api_key = get_stripe_key()
+                    
+                    # Get subscription with customer data
+                    subscription = stripe.Subscription.retrieve(subscription_id, expand=['customer'])
+                    customer = subscription.customer
+                    
+                    if hasattr(customer, 'id'):
+                        client_id = resolve_client_id(self.conn, customer.id)
+                        if not client_id:
+                            error_msg = f"Cannot resolve client for subscription {subscription_id}. Customer ID {customer.id} not found in local database."
+                            logger.error(f"❌ Client resolution failed: {error_msg}")
+                            if parent_widget:
+                                from PySide6.QtWidgets import QMessageBox
+                                QMessageBox.warning(
+                                    parent_widget,
+                                    "Client Resolution Error",
+                                    f"{error_msg}\n\nPlease ensure the customer exists in your clients database before creating bookings."
+                                )
+                            return False
+                        else:
+                            logger.info(f"✅ Client resolution successful: Stripe customer {customer.id} -> local client {client_id}")
+                    else:
+                        error_msg = f"Invalid customer data in subscription {subscription_id}"
+                        logger.error(f"❌ {error_msg}")
+                        if parent_widget:
+                            from PySide6.QtWidgets import QMessageBox
+                            QMessageBox.warning(parent_widget, "Customer Data Error", error_msg)
+                        return False
+                        
+                except Exception as client_check_error:
+                    logger.error(f"❌ Client resolution check failed for {subscription_id}: {client_check_error}")
+                    if parent_widget:
+                        from PySide6.QtWidgets import QMessageBox
+                        QMessageBox.warning(
+                            parent_widget,
+                            "Client Resolution Error", 
+                            f"Could not verify client data for subscription {subscription_id}:\n{client_check_error}"
+                        )
+                    return False
+                
                 # Step 3a: Purge existing future bookings to avoid conflicts
+                logger.info(f"Step 3a: Purging existing future bookings for subscription {subscription_id}")
                 purge_future_subscription_bookings(self.conn, subscription_id)
-                logger.info(f"Purged existing future bookings for subscription {subscription_id}")
+                logger.info(f"✅ Purged existing future bookings for subscription {subscription_id}")
                 
                 # Step 3b: Rebuild bookings with consistent, unified fields
+                logger.info(f"Step 3b: Creating new bookings for next 3 months - time: {schedule_data['start_time']}-{schedule_data['end_time']}, location: '{schedule_data['location']}', dogs: {schedule_data['dogs']}")
                 bookings_created = rebuild_subscription_bookings(
                     self.conn,
                     subscription_id,
@@ -241,12 +326,13 @@ class SubscriptionAutoSync(QObject):
                 )
                 
                 if bookings_created > 0:
-                    logger.info(f"Successfully created {bookings_created} bookings for subscription {subscription_id} using unified booking helpers")
+                    logger.info(f"✅ Successfully created {bookings_created} bookings for subscription {subscription_id} using unified booking helpers")
                 else:
-                    logger.warning(f"No bookings were created for subscription {subscription_id} - checking for issues...")
+                    logger.warning(f"⚠️ No bookings were created for subscription {subscription_id} - trying fallback method...")
                     
                     # Try the fallback approach if unified helpers failed
                     try:
+                        logger.info(f"Attempting fallback booking creation method for {subscription_id}")
                         # Get the updated subscription from Stripe and sync just this one
                         from stripe_integration import _api
                         stripe_api = _api()
@@ -265,19 +351,23 @@ class SubscriptionAutoSync(QObject):
                         fallback_bookings = sync_subscription_to_bookings(self.conn, subscription_data_dict, parent_widget)
                         
                         if fallback_bookings > 0:
-                            logger.info(f"Fallback method created {fallback_bookings} bookings for subscription {subscription_id}")
+                            logger.info(f"✅ Fallback method created {fallback_bookings} bookings for subscription {subscription_id}")
                             bookings_created = fallback_bookings
+                        else:
+                            logger.error(f"❌ Both unified and fallback booking generation failed for {subscription_id}")
                             
                     except Exception as fallback_error:
-                        logger.error(f"Both unified and fallback booking generation failed for {subscription_id}: {fallback_error}")
+                        logger.error(f"❌ Both unified and fallback booking generation failed for {subscription_id}: {fallback_error}")
                 
-                # Trigger calendar sync to ensure everything is up to date
+                # Step 4: Trigger calendar sync to ensure everything is up to date
+                logger.info(f"Step 4: Triggering calendar sync to update display")
                 try:
                     sync_stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
-                    logger.info(f"Calendar sync completed: {sync_stats}")
+                    logger.info(f"✅ Calendar sync completed successfully: {sync_stats}")
                 except Exception as sync_error:
-                    logger.warning(f"Calendar sync had issues but continuing: {sync_error}")
+                    logger.warning(f"⚠️ Calendar sync had issues but continuing: {sync_error}")
                 
+                logger.info(f"🎉 Schedule completion workflow finished successfully for {subscription_id} - created {bookings_created} bookings")
                 return True
                 
             except Exception as sync_error:

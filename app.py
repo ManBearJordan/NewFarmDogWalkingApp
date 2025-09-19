@@ -1908,16 +1908,47 @@ class SubscriptionsTab(QWidget):
                     if success:
                         # Refresh the subscriptions table
                         self.refresh_from_stripe()
-                        QMessageBox.information(
-                            self,
-                            "Schedule Saved Successfully",
-                            f"✅ Schedule saved and bookings generated for subscription {subscription_id}!"
-                        )
+                        
+                        # FIXED: Refresh calendar and bookings tabs to show new bookings instantly
+                        main_window = self._get_main_window()
+                        if main_window:
+                            if hasattr(main_window, 'calendar_tab'):
+                                main_window.calendar_tab.rebuild_month_markers()
+                                main_window.calendar_tab.refresh_day()
+                            if hasattr(main_window, 'bookings_tab'):
+                                main_window.bookings_tab.refresh_two_weeks()
+                        
+                        # Count actual bookings created for better user feedback
+                        try:
+                            cur = self.conn.cursor()
+                            booking_count = cur.execute("""
+                                SELECT COUNT(*) as count FROM bookings 
+                                WHERE created_from_sub_id = ? AND source = 'subscription'
+                                AND start_dt >= datetime('now')
+                            """, (subscription_id,)).fetchone()
+                            
+                            booking_count_text = f"{booking_count['count']} future bookings" if booking_count else "bookings"
+                            
+                            QMessageBox.information(
+                                self,
+                                "Schedule Saved Successfully",
+                                f"✅ Schedule saved and {booking_count_text} generated for subscription {subscription_id}!\n\n"
+                                f"The calendar and bookings tabs have been updated automatically."
+                            )
+                        except Exception:
+                            # Fallback message if counting fails
+                            QMessageBox.information(
+                                self,
+                                "Schedule Saved Successfully",
+                                f"✅ Schedule saved and bookings generated for subscription {subscription_id}!\n\n"
+                                f"The calendar and bookings tabs have been updated automatically."
+                            )
                     else:
                         QMessageBox.warning(
                             self,
                             "Partial Success",
-                            f"Schedule was saved but there was an issue generating bookings for {subscription_id}."
+                            f"Schedule was saved but there was an issue generating bookings for {subscription_id}.\n\n"
+                            f"Please try using 'Rebuild next 3 months' or check the application logs."
                         )
                 except Exception as e:
                     QMessageBox.critical(
@@ -2216,6 +2247,14 @@ class SubscriptionsTab(QWidget):
         self.save_schedule_for_selected()
 
     def rebuild_next_3_months(self):
+        """
+        Rebuild bookings and calendar entries for the next 3 months for all active subscriptions.
+        
+        This method now creates actual BOOKINGS (not just calendar holds) as per user expectations.
+        When users press 'Rebuild next 3 months', they expect to see bookings in the Bookings tab.
+        """
+        from datetime import datetime
+        
         conn = get_conn()
         c = conn.cursor()
 
@@ -2228,67 +2267,146 @@ class SubscriptionsTab(QWidget):
             QMessageBox.information(self, "Nothing to rebuild", "No saved schedules found.")
             return
 
-        # Time window
-        from datetime import date, datetime, timedelta, time
+        print(f"🔧 Rebuilding next 3 months for {len(rows)} subscriptions...")
+
+        # Use the unified booking generation approach for each subscription
+        total_bookings_created = 0
+        failed_subscriptions = []
+        
         try:
-            from zoneinfo import ZoneInfo
-            tz = ZoneInfo("Australia/Brisbane")
-        except Exception:
-            tz = None  # fall back to naive
-
-        today = date.today()
-        horizon = today.replace(day=1)
-        # 3 months horizon
-        month = horizon.month
-        year  = horizon.year
-        # compute end date ~ 3 months out
-        for _ in range(3):
-            month += 1
-            if month > 12:
-                month = 1; year += 1
-        from calendar import monthrange
-        end_date = date(year, month, monthrange(year, month)[1])
-
-        # Optional: clear future holds for these subs first
-        sub_ids = [r[0] for r in rows]
-        c.execute(f"""
-            DELETE FROM sub_occurrences
-            WHERE stripe_subscription_id IN ({",".join(["?"]*len(sub_ids))})
-              AND date(start_dt) >= date('now')
-        """, sub_ids)
-
-        # Build occurrences
-        def parse_hhmm(s: str) -> time:
-            hh, mm = map(int, s.split(":"))
-            return time(hh, mm)
-
-        for sub_id, days_mask, start_str, end_str, dogs, location in rows:
-            st = parse_hhmm(start_str)
-            et = parse_hhmm(end_str)
-            d = today
-            while d <= end_date:
-                # weekday: Monday=0 ... Sunday=6
-                if days_mask & (1 << d.weekday()):
-                    if tz:
-                        start_dt = datetime(d.year, d.month, d.day, st.hour, st.minute, tzinfo=tz)
-                        end_dt   = datetime(d.year, d.month, d.day, et.hour, et.minute, tzinfo=tz)
+            from unified_booking_helpers import purge_future_subscription_bookings, rebuild_subscription_bookings
+            
+            for sub_id, days_mask, start_str, end_str, dogs, location in rows:
+                try:
+                    print(f"Processing subscription {sub_id}...")
+                    
+                    # Step 1: Purge existing future bookings for this subscription
+                    purge_future_subscription_bookings(conn, sub_id)
+                    
+                    # Step 2: Create new bookings using unified helpers
+                    bookings_created = rebuild_subscription_bookings(
+                        conn, sub_id, days_mask, start_str, end_str,
+                        dogs, location, f"Rebuilt on {datetime.now().strftime('%Y-%m-%d')}", months_ahead=3
+                    )
+                    
+                    if bookings_created > 0:
+                        total_bookings_created += bookings_created
+                        print(f"✅ Created {bookings_created} bookings for {sub_id}")
                     else:
-                        start_dt = datetime(d.year, d.month, d.day, st.hour, st.minute)
-                        end_dt   = datetime(d.year, d.month, d.day, et.hour, et.minute)
+                        print(f"⚠️ No bookings created for {sub_id}")
+                        failed_subscriptions.append(sub_id)
+                        
+                except Exception as sub_error:
+                    print(f"❌ Error processing subscription {sub_id}: {sub_error}")
+                    failed_subscriptions.append(sub_id)
+            
+            # Also trigger calendar sync to ensure calendar holds are updated
+            try:
+                from subscription_sync import sync_subscriptions_to_bookings_and_calendar
+                sync_stats = sync_subscriptions_to_bookings_and_calendar(conn)
+                print(f"Calendar sync completed: {sync_stats}")
+            except Exception as sync_error:
+                print(f"Calendar sync warning: {sync_error}")
+            
+            # Refresh UI to show new bookings
+            main_window = self._get_main_window()
+            if main_window:
+                if hasattr(main_window, 'calendar_tab'):
+                    main_window.calendar_tab.rebuild_month_markers()
+                    main_window.calendar_tab.refresh_day()
+                if hasattr(main_window, 'bookings_tab'):
+                    main_window.bookings_tab.refresh_two_weeks()
+            
+            # Show results to user
+            if total_bookings_created > 0:
+                success_msg = f"✅ Successfully created {total_bookings_created} bookings for the next 3 months!"
+                if failed_subscriptions:
+                    success_msg += f"\n\nNote: {len(failed_subscriptions)} subscriptions had issues: {', '.join(failed_subscriptions[:3])}"
+                    if len(failed_subscriptions) > 3:
+                        success_msg += f" and {len(failed_subscriptions) - 3} more."
+                
+                success_msg += "\n\nBookings and calendar tabs have been updated automatically."
+                QMessageBox.information(self, "Rebuild Complete", success_msg)
+            else:
+                QMessageBox.warning(
+                    self, 
+                    "Rebuild Issues", 
+                    "No bookings were created. This may be due to:\n"
+                    "• Missing client data for subscriptions\n"
+                    "• Invalid schedule data\n"
+                    "• All bookings already exist\n\n"
+                    "Check the application logs for detailed error information."
+                )
+                
+        except ImportError:
+            # Fallback to the old calendar-holds-only method if unified helpers aren't available
+            print("⚠️ Unified booking helpers not available, falling back to calendar holds only...")
+            
+            # Time window
+            from datetime import date, datetime, timedelta, time
+            try:
+                from zoneinfo import ZoneInfo
+                tz = ZoneInfo("Australia/Brisbane")
+            except Exception:
+                tz = None  # fall back to naive
 
-                    # Use the existing table structure with start_dt/end_dt
-                    start_dt_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
-                    end_dt_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+            today = date.today()
+            horizon = today.replace(day=1)
+            # 3 months horizon
+            month = horizon.month
+            year  = horizon.year
+            # compute end date ~ 3 months out
+            for _ in range(3):
+                month += 1
+                if month > 12:
+                    month = 1; year += 1
+            from calendar import monthrange
+            end_date = date(year, month, monthrange(year, month)[1])
 
-                    c.execute("""
-                      INSERT OR IGNORE INTO sub_occurrences
-                        (stripe_subscription_id, start_dt, end_dt, dogs, location, active)
-                      VALUES (?,?,?,?,?, 1)
-                    """, (sub_id, start_dt_str, end_dt_str, dogs, location))
-                d += timedelta(days=1)
+            # Optional: clear future holds for these subs first
+            sub_ids = [r[0] for r in rows]
+            c.execute(f"""
+                DELETE FROM sub_occurrences
+                WHERE stripe_subscription_id IN ({",".join(["?"]*len(sub_ids))})
+                  AND date(start_dt) >= date('now')
+            """, sub_ids)
 
-        conn.commit()
-        QMessageBox.information(self, "Rebuilt", "Next 3 months of holds created. Check Calendar → Holds.")
+            # Build occurrences
+            def parse_hhmm(s: str) -> time:
+                hh, mm = map(int, s.split(":"))
+                return time(hh, mm)
+
+            for sub_id, days_mask, start_str, end_str, dogs, location in rows:
+                st = parse_hhmm(start_str)
+                et = parse_hhmm(end_str)
+                d = today
+                while d <= end_date:
+                    # weekday: Monday=0 ... Sunday=6
+                    if days_mask & (1 << d.weekday()):
+                        if tz:
+                            start_dt = datetime(d.year, d.month, d.day, st.hour, st.minute, tzinfo=tz)
+                            end_dt   = datetime(d.year, d.month, d.day, et.hour, et.minute, tzinfo=tz)
+                        else:
+                            start_dt = datetime(d.year, d.month, d.day, st.hour, st.minute)
+                            end_dt   = datetime(d.year, d.month, d.day, et.hour, et.minute)
+
+                        # Use the existing table structure with start_dt/end_dt
+                        start_dt_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+                        end_dt_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+                        c.execute("""
+                          INSERT OR IGNORE INTO sub_occurrences
+                            (stripe_subscription_id, start_dt, end_dt, dogs, location, active)
+                          VALUES (?,?,?,?,?, 1)
+                        """, (sub_id, start_dt_str, end_dt_str, dogs, location))
+                    d += timedelta(days=1)
+
+            conn.commit()
+            QMessageBox.warning(self, "Fallback Mode", "Only calendar holds were created (not bookings). Please use 'Complete Schedule' for full booking generation.")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Rebuild Error", f"Error during rebuild: {e}\n\nCheck application logs for details.")
+            print(f"❌ Rebuild error: {e}")
 
     def rebuild_occurrences(self):
         # Keep the old method name for backward compatibility
