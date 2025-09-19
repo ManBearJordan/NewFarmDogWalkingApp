@@ -900,3 +900,11 @@ Traceback (most recent call last):
                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "<string>", line 11, in list_active_subscriptions
 Exception: Simulated Stripe API error
+2025-09-19 04:29:40,106 ERROR [SUB:sub_test_error_logging_999] Test error logging functionality - Exception: Test exception
+NoneType: None
+2025-09-19 04:33:03,076 INFO [SUB:sub_error_test_123] Test info message for Aaron Love workflow
+2025-09-19 04:33:03,077 ERROR [SUB:sub_error_test_123] Aaron Love subscription validation failed - Exception: Test validation error - missing schedule data
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/test_simple_validation.py", line 82, in test_error_logging
+    raise ValueError("Test validation error - missing schedule data")
+ValueError: Test validation error - missing schedule data
