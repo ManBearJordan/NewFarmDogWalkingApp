@@ -114,6 +114,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     ViewSet for managing subscriptions.
     
     Provides CRUD operations for subscription management with Stripe integration.
+    AUTOMATICALLY GENERATES BOOKINGS when subscriptions are created or updated.
     """
     queryset = Subscription.objects.select_related('client').all()
     permission_classes = [permissions.IsAuthenticated]
@@ -129,6 +130,86 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             return SubscriptionListSerializer
         return SubscriptionDetailSerializer
+
+    def perform_create(self, serializer):
+        """Automatically trigger booking generation when subscription is created via API"""
+        subscription = serializer.save()
+        
+        logger.info(f"API: Creating subscription {subscription.stripe_subscription_id}")
+        
+        # Import logging utilities
+        from log_utils import log_subscription_info, log_subscription_error
+        log_subscription_info(f"Subscription created via API: {subscription.stripe_subscription_id}", subscription.stripe_subscription_id)
+        
+        # Automatically trigger booking generation if subscription is active and has schedule
+        if subscription.status == 'active' and self._has_valid_schedule(subscription):
+            try:
+                # Import tasks
+                from .tasks import generate_subscription_bookings_sync
+                
+                logger.info(f"AUTO-GENERATING bookings for new API subscription {subscription.stripe_subscription_id}")
+                result = generate_subscription_bookings_sync(subscription.stripe_subscription_id)
+                
+                if result.get('success'):
+                    log_subscription_info(f"API auto-booking SUCCESS: {result.get('bookings_created', 0)} bookings created", subscription.stripe_subscription_id)
+                else:
+                    log_subscription_error(f"API auto-booking FAILED: {result.get('error', 'Unknown error')}", subscription.stripe_subscription_id)
+                    
+            except Exception as e:
+                error_msg = f"Booking generation failed after API subscription creation {subscription.stripe_subscription_id}: {e}"
+                logger.error(error_msg)
+                log_subscription_error(error_msg, subscription.stripe_subscription_id, e)
+
+    def perform_update(self, serializer):
+        """Automatically trigger booking generation when subscription is updated via API"""
+        # Get original subscription to detect changes
+        original_subscription = self.get_object()
+        
+        # Check if schedule-related fields changed
+        schedule_changed = False
+        new_data = serializer.validated_data
+        
+        schedule_fields = ['schedule_days', 'schedule_start_time', 'schedule_end_time', 
+                          'schedule_location', 'schedule_dogs', 'service_code', 'status']
+        
+        for field in schedule_fields:
+            if field in new_data and getattr(original_subscription, field) != new_data[field]:
+                schedule_changed = True
+                break
+        
+        subscription = serializer.save()
+        
+        logger.info(f"API: Updated subscription {subscription.stripe_subscription_id}, schedule_changed={schedule_changed}")
+        
+        # Import logging utilities
+        from log_utils import log_subscription_info, log_subscription_error
+        log_subscription_info(f"Subscription updated via API: {subscription.stripe_subscription_id}, schedule_changed={schedule_changed}", subscription.stripe_subscription_id)
+        
+        # Automatically trigger booking generation if schedule changed and subscription is active
+        if schedule_changed and subscription.status == 'active' and self._has_valid_schedule(subscription):
+            try:
+                # Import tasks
+                from .tasks import generate_subscription_bookings_sync
+                
+                logger.info(f"AUTO-REGENERATING bookings for updated API subscription {subscription.stripe_subscription_id}")
+                result = generate_subscription_bookings_sync(subscription.stripe_subscription_id)
+                
+                if result.get('success'):
+                    log_subscription_info(f"API auto-booking update SUCCESS: {result.get('bookings_created', 0)} bookings created", subscription.stripe_subscription_id)
+                else:
+                    log_subscription_error(f"API auto-booking update FAILED: {result.get('error', 'Unknown error')}", subscription.stripe_subscription_id)
+                    
+            except Exception as e:
+                error_msg = f"Booking generation failed after API subscription update {subscription.stripe_subscription_id}: {e}"
+                logger.error(error_msg)
+                log_subscription_error(error_msg, subscription.stripe_subscription_id, e)
+
+    def _has_valid_schedule(self, subscription):
+        """Check if subscription has valid schedule metadata for booking generation"""
+        return (subscription.schedule_days and 
+                subscription.schedule_start_time and 
+                subscription.schedule_end_time and
+                subscription.service_code)
 
     @action(detail=True, methods=['get'])
     def bookings(self, request, pk=None):

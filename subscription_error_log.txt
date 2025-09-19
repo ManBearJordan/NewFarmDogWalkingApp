@@ -888,3 +888,15 @@ network is not intercepting certificates.  If this problem persists,
 let us know at support@stripe.com.
 
 (Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+2025-09-19 04:23:31,590 INFO [SUB:sub_123] Test log message
+2025-09-19 04:23:31,590 ERROR [SUB:sub_456] Test error message
+2025-09-19 04:23:44,347 INFO Main sync started - generating bookings from subscriptions
+2025-09-19 04:23:44,347 INFO Sync completed: No active subscriptions found
+2025-09-19 04:23:57,817 INFO Main sync started - generating bookings from subscriptions
+2025-09-19 04:23:57,817 ERROR [SUB:sync_main] Failed to fetch subscriptions from Stripe: Simulated Stripe API error - Exception: Simulated Stripe API error
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/subscription_sync.py", line 508, in sync_subscriptions_to_bookings_and_calendar
+    subscriptions = list_active_subscriptions()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 11, in list_active_subscriptions
+Exception: Simulated Stripe API error

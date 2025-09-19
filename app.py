@@ -1630,39 +1630,55 @@ class CalendarTab(QWidget):
         
         This replaces the removed legacy sync buttons and should only be used
         when there are sync issues that need to be resolved manually.
+        ENHANCED: Comprehensive error logging and status reporting.
         """
         try:
             from subscription_sync import sync_subscriptions_to_bookings_and_calendar
+            from log_utils import log_subscription_info, log_subscription_error
+            
+            log_subscription_info("User initiated troubleshoot sync from calendar tab")
             
             # Show progress message
             progress_msg = QMessageBox(self)
             progress_msg.setWindowTitle("Troubleshoot Sync")
-            progress_msg.setText("Performing troubleshooting sync...\nThis may take a moment.")
+            progress_msg.setText("Performing troubleshooting sync...\nThis may take a moment.\n\nAll errors will be logged for debugging.")
             progress_msg.setStandardButtons(QMessageBox.NoButton)
             progress_msg.show()
             QApplication.processEvents()
             
             # Perform sync
+            logger.info("Calendar: Starting troubleshoot sync")
             stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
             
             # Close progress and refresh view
             progress_msg.close()
             self.refresh_day()
             
-            # Show results
-            msg = f"""Troubleshooting sync completed successfully!
+            # Enhanced results with error count
+            success_msg = f"""Troubleshooting sync completed!
 
-Subscriptions processed: {stats['subscriptions_processed']}
-Bookings created: {stats['bookings_created']}
-Bookings cleaned up: {stats['bookings_cleaned']}
+Subscriptions processed: {stats.get('subscriptions_processed', 0)}
+Bookings created: {stats.get('bookings_created', 0)}
+Bookings cleaned up: {stats.get('bookings_cleaned', 0)}
+Errors encountered: {stats.get('errors_count', 0)}
 
 Note: Subscriptions are now automatically synced when the app starts.
-This troubleshooting sync should only be needed in case of sync issues."""
+This troubleshooting sync should only be needed in case of sync issues.
+
+Check the subscription error log for detailed error information."""
             
-            QMessageBox.information(self, "Troubleshoot Sync Complete", msg)
+            log_subscription_info(f"Troubleshoot sync completed: {stats.get('bookings_created', 0)} bookings created, {stats.get('errors_count', 0)} errors")
+            
+            if stats.get('errors_count', 0) > 0:
+                QMessageBox.warning(self, "Troubleshoot Sync Complete with Errors", success_msg)
+            else:
+                QMessageBox.information(self, "Troubleshoot Sync Complete", success_msg)
             
         except Exception as e:
-            QMessageBox.critical(self, "Troubleshoot Sync Error", f"Failed to perform troubleshooting sync: {str(e)}")
+            error_msg = f"Failed to perform troubleshooting sync: {str(e)}"
+            logger.error(f"Calendar: {error_msg}")
+            log_subscription_error("Calendar troubleshoot sync failed", "manual_sync", e)
+            QMessageBox.critical(self, "Troubleshoot Sync Error", error_msg)
 
     def manual_subscription_sync(self):
         """

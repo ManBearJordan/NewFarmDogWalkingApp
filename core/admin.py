@@ -325,51 +325,119 @@ class SubscriptionAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         """
         Save the subscription and automatically update bookings if schedule changed.
+        ENHANCED: Comprehensive error logging and automatic booking generation.
         """
+        # Import logging utilities
+        from log_utils import log_subscription_info, log_subscription_error
+        
         # Track if this is an update with schedule changes
         schedule_changed = False
+        original_data = {}
+        
         if change:
             # Get the original object to compare
             try:
                 original = Subscription.objects.get(pk=obj.pk)
                 schedule_fields = [
                     'schedule_days', 'schedule_start_time', 'schedule_end_time',
-                    'schedule_location', 'schedule_dogs', 'schedule_notes', 'service_code'
+                    'schedule_location', 'schedule_dogs', 'schedule_notes', 'service_code', 'status'
                 ]
                 
                 for field in schedule_fields:
-                    if getattr(original, field) != getattr(obj, field):
+                    original_value = getattr(original, field)
+                    new_value = getattr(obj, field)
+                    original_data[field] = original_value
+                    
+                    if original_value != new_value:
                         schedule_changed = True
-                        break
+                        logger.info(f"Admin: Schedule field '{field}' changed from '{original_value}' to '{new_value}' for {obj.stripe_subscription_id}")
                         
             except Subscription.DoesNotExist:
-                pass
+                logger.warning(f"Admin: Could not find original subscription for comparison: {obj.stripe_subscription_id}")
+        else:
+            # This is a new subscription
+            logger.info(f"Admin: Creating new subscription {obj.stripe_subscription_id}")
+            log_subscription_info(f"New subscription created via admin: {obj.stripe_subscription_id}", obj.stripe_subscription_id)
         
         # Save the object first
         super().save_model(request, obj, form, change)
         
-        # If schedule changed, automatically generate bookings
-        if schedule_changed:
+        # Log the save operation
+        action = "updated" if change else "created"
+        logger.info(f"Admin: Subscription {obj.stripe_subscription_id} {action} successfully")
+        log_subscription_info(f"Subscription {action} via admin, schedule_changed={schedule_changed}", obj.stripe_subscription_id)
+        
+        # Automatically generate bookings if:
+        # 1. This is a new subscription (not change) OR
+        # 2. This is an update with schedule changes
+        # AND the subscription is active with valid schedule
+        should_generate = (not change) or schedule_changed
+        
+        if should_generate and obj.status == 'active' and self._has_valid_schedule_admin(obj):
             try:
-                from core.services.stripe_sync import stripe_sync_service
-                result = stripe_sync_service.sync_all_stripe_data()
-                if result.get('success'):
-                    bookings_created = result['stats'].get('bookings_created', 0)
-                    if bookings_created > 0:
-                        messages.success(request, 
-                            f'Schedule updated and {bookings_created} new bookings were created automatically.')
+                logger.info(f"Admin: AUTO-GENERATING bookings for {obj.stripe_subscription_id} (action={action}, schedule_changed={schedule_changed})")
+                
+                # Try to use the new sync function first
+                try:
+                    from core.tasks import generate_subscription_bookings_sync
+                    result = generate_subscription_bookings_sync(obj.stripe_subscription_id)
+                    
+                    if result.get('success'):
+                        bookings_created = result.get('bookings_created', 0)
+                        if bookings_created > 0:
+                            success_msg = f'Schedule {action} and {bookings_created} new bookings were created automatically.'
+                            messages.success(request, success_msg)
+                            log_subscription_info(f"Admin auto-booking SUCCESS: {bookings_created} bookings created", obj.stripe_subscription_id)
+                        else:
+                            info_msg = f'Schedule {action}. No new bookings were needed.'
+                            messages.info(request, info_msg)
+                            log_subscription_info(f"Admin auto-booking: No new bookings needed", obj.stripe_subscription_id)
                     else:
-                        messages.info(request, 
-                            'Schedule updated. No new bookings were needed.')
-                else:
-                    messages.warning(request, 
-                        f'Schedule updated but booking generation failed: {result.get("error", "Unknown error")}. '
-                        f'You can manually generate bookings using the "Generate bookings" action.')
+                        error_msg = result.get('error', 'Unknown error')
+                        warning_msg = f'Schedule {action} but booking generation failed: {error_msg}. You can manually generate bookings using the "Generate bookings" action.'
+                        messages.warning(request, warning_msg)
+                        log_subscription_error(f"Admin auto-booking FAILED: {error_msg}", obj.stripe_subscription_id)
+                        
+                except ImportError:
+                    # Fallback to legacy sync service
+                    logger.info(f"Admin: Using fallback sync service for {obj.stripe_subscription_id}")
+                    from core.services.stripe_sync import stripe_sync_service
+                    result = stripe_sync_service.sync_all_stripe_data()
+                    if result.get('success'):
+                        bookings_created = result['stats'].get('bookings_created', 0)
+                        if bookings_created > 0:
+                            success_msg = f'Schedule {action} and {bookings_created} new bookings were created automatically.'
+                            messages.success(request, success_msg)
+                            log_subscription_info(f"Admin fallback auto-booking SUCCESS: {bookings_created} bookings created", obj.stripe_subscription_id)
+                        else:
+                            info_msg = f'Schedule {action}. No new bookings were needed.'
+                            messages.info(request, info_msg)
+                            log_subscription_info(f"Admin fallback auto-booking: No new bookings needed", obj.stripe_subscription_id)
+                    else:
+                        error_msg = result.get("error", "Unknown error")
+                        warning_msg = f'Schedule {action} but booking generation failed: {error_msg}. You can manually generate bookings using the "Generate bookings" action.'
+                        messages.warning(request, warning_msg)
+                        log_subscription_error(f"Admin fallback auto-booking FAILED: {error_msg}", obj.stripe_subscription_id)
                         
             except Exception as e:
-                messages.error(request, 
-                    f'Schedule updated but booking generation failed: {str(e)}. '
-                    f'You can manually generate bookings using the "Generate bookings" action.')
+                error_msg = f'Schedule {action} but booking generation failed: {str(e)}. You can manually generate bookings using the "Generate bookings" action.'
+                messages.error(request, error_msg)
+                log_subscription_error(f"Admin auto-booking EXCEPTION: {str(e)}", obj.stripe_subscription_id, e)
+                
+        elif should_generate and obj.status != 'active':
+            logger.info(f"Admin: Skipping booking generation for {obj.stripe_subscription_id} - status is {obj.status}")
+            log_subscription_info(f"Booking generation skipped - subscription not active (status: {obj.status})", obj.stripe_subscription_id)
+            
+        elif should_generate and not self._has_valid_schedule_admin(obj):
+            logger.info(f"Admin: Skipping booking generation for {obj.stripe_subscription_id} - invalid schedule metadata")
+            log_subscription_error(f"Booking generation skipped - invalid schedule metadata: days={obj.schedule_days}, start={obj.schedule_start_time}, end={obj.schedule_end_time}, service={obj.service_code}", obj.stripe_subscription_id)
+
+    def _has_valid_schedule_admin(self, subscription):
+        """Check if subscription has valid schedule metadata for booking generation"""
+        return (subscription.schedule_days and 
+                subscription.schedule_start_time and 
+                subscription.schedule_end_time and
+                subscription.service_code)
 
 
 @admin.register(Booking)
