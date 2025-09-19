@@ -1,0 +1,42 @@
+# Python junk
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Subscription log files (runtime data)
+subscription_logs.txt
+subscription_error_log.txt
+
+# Demo and test files 
+demo_subscription_improvements.py
+
+# Virtual envs
+.venv/
+venv/
+
+# Editors/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Builds & archives
+dist/
+build/
+*.zip
+
+# Optional (recommended) – don’t track local DBs
+*.db
+*.sqlite
+
+# Secrets (we’ll commit a template instead)
+secrets_config.py
+
+# Legacy cleanup - exclude temporary files
+*_backup.py
+*_fix.py
+*cleanup*
+*.sql.bak
+patches/
+temp_*
