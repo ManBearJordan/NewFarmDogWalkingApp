@@ -607,195 +607,155 @@ def list_products():
             out.append({"id": getattr(p, "id", None), "name": getattr(p, "name", None)})
     return out
 
-def list_subscriptions(limit=100):
+# Robust helper: list_active_subscriptions_from_stripe
+import logging
+from typing import List
+
+def list_active_subscriptions_from_stripe(status: str = "active", limit: int = 100, expand=None) -> List:
+    """Return list of Stripe subscription objects (or dict-like) using safe iteration.
+
+    Example: list_active_subscriptions_from_stripe(limit=100, expand=['data.customer', 'data.items.data.price'])
     """
-    List subscriptions with robust customer display logic.
-    
-    This function ensures every subscription object ALWAYS stores the Stripe customer ID
-    and implements proper fallback when displaying customer information as per requirements:
-    1. If customer_id exists, always fetch from Stripe API when needed
-    2. Never display 'Unknown Customer' if customer_id exists and API is accessible  
-    3. Use fallback: Customer {id} (Stripe API error) for API failures
-    4. Robust error logging for all failures
-    """
-    from customer_display_helpers import get_robust_customer_display_info
+    import stripe
     from log_utils import get_subscription_logger, log_subscription_error
-    
-    s = _api()
-    logger = get_subscription_logger()
-    
     try:
-        subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.latest_invoice'])
-        out = []
-        
-        for sub in subs.auto_paging_iter():
-            subscription_id = "unknown"  # Initialize subscription_id for error handling
+        from secrets_config import get_stripe_key
+    except Exception:
+        get_stripe_key = None
+
+    logger = get_subscription_logger() if 'get_subscription_logger' in globals() else logging.getLogger(__name__)
+
+    # Configure API key if helper available
+    if get_stripe_key:
+        try:
+            stripe.api_key = get_stripe_key()
+        except Exception:
+            pass
+
+    try:
+        params = {"limit": limit}
+        if expand:
+            params["expand"] = expand
+        resp = stripe.Subscription.list(**params)
+    except Exception as e:
+        logger.error(f"Error calling stripe.Subscription.list: {e}")
+        try:
+            log_subscription_error("Error listing subscriptions", "all", e)
+        except Exception:
+            pass
+        return []
+
+    subs = []
+    try:
+        api_iter = getattr(resp, "auto_paging_iter", None)
+        if callable(api_iter):
+            for item in resp.auto_paging_iter():
+                subs.append(item)
+        elif hasattr(resp, "data"):
+            subs = list(resp.data or [])
+        else:
             try:
-                # Handle both dict and Stripe object formats safely
-                # First, try to get the basic id for error logging
-                if hasattr(sub, 'get') and callable(sub.get):
-                    # It's a dict-like object
-                    sub_dict = sub
-                    subscription_id = sub_dict.get("id", "unknown")
-                elif hasattr(sub, 'id'):
-                    # It has an id attribute
-                    subscription_id = getattr(sub, 'id', 'unknown')
-                    # Convert Stripe object to dict for easier access
-                    if hasattr(sub, '__dict__') and not hasattr(sub, 'get'):
-                        # Real Stripe object - be careful with mocks that don't have __dict__ properly
-                        try:
-                            sub_dict = {k: getattr(sub, k, None) for k in dir(sub) if not k.startswith('_') and not callable(getattr(sub, k, None))}
-                        except AttributeError:
-                            # Mock object causing issues, use fallback
-                            sub_dict = {}
-                            for attr in ['id', 'status', 'customer', 'items', 'current_period_end', 'latest_invoice']:
-                                try:
-                                    sub_dict[attr] = getattr(sub, attr, None)
-                                except AttributeError:
-                                    sub_dict[attr] = None
-                    else:
-                        # Mock object or dict-like, handle carefully  
-                        sub_dict = {}
-                        for attr in ['id', 'status', 'customer', 'items', 'current_period_end', 'latest_invoice']:
-                            try:
-                                sub_dict[attr] = getattr(sub, attr, None)
-                            except AttributeError:
-                                sub_dict[attr] = None
-                else:
-                    # Fallback: create basic dict with essential fields
-                    sub_dict = {}
-                    for attr in ['id', 'status', 'customer', 'items', 'current_period_end', 'latest_invoice']:
-                        try:
-                            sub_dict[attr] = getattr(sub, attr, None)
-                        except AttributeError:
-                            sub_dict[attr] = None
-                    subscription_id = sub_dict.get("id", "unknown")
-                
-                subscription_id = sub_dict.get("id") or getattr(sub, "id", "unknown")
-                
-                # Extract customer information with robust fallback
-                customer_data = sub_dict.get("customer") or getattr(sub, "customer", None)
-                
-                # Ensure customer_id is always captured and stored
-                customer_id = None
+                subs = list(resp)
+            except Exception:
+                logger.warning("Unexpected Stripe response shape when listing subscriptions")
+                subs = []
+    except Exception as e:
+        logger.error(f"Error iterating stripe subscriptions response: {e}")
+        try:
+            subs = list(resp.data) if hasattr(resp, "data") else []
+        except Exception:
+            subs = []
+
+    return subs
+
+def list_subscriptions(limit: int = 100):
+    """Return simplified subscription dicts for UI consumption using the robust helper."""
+    from log_utils import get_subscription_logger, log_subscription_error
+    logger = get_subscription_logger() if 'get_subscription_logger' in globals() else logging.getLogger(__name__)
+
+    subs = list_active_subscriptions_from_stripe(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
+    out = []
+    for sub in subs:
+        subscription_id = 'unknown'
+        try:
+            # Support both dict-like and Stripe object shapes
+            if hasattr(sub, 'get') and callable(getattr(sub, 'get')):
+                sub_obj = sub
+                subscription_id = sub_obj.get('id', 'unknown')
+                status = sub_obj.get('status')
+                customer_obj = sub_obj.get('customer', {}) or {}
+            else:
+                subscription_id = getattr(sub, 'id', 'unknown')
+                status = getattr(sub, 'status', None)
+                customer_obj = getattr(sub, 'customer', None) or {}
+
+            c_email = customer_obj.get('email') if hasattr(customer_obj, 'get') else getattr(customer_obj, 'email', None)
+            c_name = customer_obj.get('name') if hasattr(customer_obj, 'get') else getattr(customer_obj, 'name', None)
+            customer_id = customer_obj.get('id') if hasattr(customer_obj, 'get') else getattr(customer_obj, 'id', None)
+
+            # Extract product names safely
+            products = []
+            items_block = sub_obj.get('items') if isinstance(sub_obj, dict) else getattr(sub, 'items', None)
+            data_list = []
+            if hasattr(items_block, 'get') and callable(getattr(items_block, 'get')):
+                data_list = items_block.get('data', []) or []
+            elif hasattr(items_block, 'data'):
+                data_list = getattr(items_block, 'data') or []
+            else:
                 try:
-                    if hasattr(customer_data, 'get') and callable(customer_data.get):
-                        customer_id = customer_data.get("id")
-                    elif hasattr(customer_data, 'id'):
-                        customer_id = getattr(customer_data, "id", None)
-                    elif customer_data:
-                        # Try to access as string (customer ID directly)
-                        customer_id = str(customer_data) if customer_data else None
-                except Exception:
-                    customer_id = None
-                    
-                if not customer_id:
-                    log_subscription_error("Missing customer_id in subscription", subscription_id)
-                
-                # Get robust customer display info using dedicated helper
-                customer_display_name = get_robust_customer_display_info({
-                    'id': subscription_id,
-                    'customer': customer_data
-                })
-                
-                # Extract customer email for consistency
-                c_email = ""
-                try:
-                    if hasattr(customer_data, 'get') and callable(customer_data.get):
-                        c_email = customer_data.get("email", "")
-                    elif hasattr(customer_data, 'email'):
-                        c_email = getattr(customer_data, "email", "")
-                except Exception:
-                    c_email = ""
-                
-                # Extract products
-                items_block = sub_dict.get("items") or getattr(sub, "items", None)
-                data_list = []
-                try:
-                    if hasattr(items_block, 'get') and callable(items_block.get):
-                        data_list = items_block.get("data", []) or []
-                    elif hasattr(items_block, 'data'):
-                        data_list = getattr(items_block, "data", []) or []
+                    data_list = list(items_block or [])
                 except Exception:
                     data_list = []
-                
-                products = []
-                for it in data_list:
-                    try:
-                        # Handle both dict and object formats safely
-                        if hasattr(it, 'get') and callable(it.get):
-                            it_dict = it
-                        elif hasattr(it, '__dict__'):
-                            it_dict = {k: getattr(it, k, None) for k in dir(it) if not k.startswith('_')}
-                        else:
-                            it_dict = {'price': getattr(it, 'price', None)}
-                            
-                        price = it_dict.get("price") or getattr(it, "price", None)
-                        
-                        # Handle price object safely
-                        prod = None
-                        if hasattr(price, 'get') and callable(price.get):
-                            prod = price.get("product")
-                        elif hasattr(price, 'product'):
-                            prod = getattr(price, "product", None)
-                            
-                        pname = None
-                        try:
-                            # Handle string product ID
-                            if hasattr(prod, 'startswith') and callable(prod.startswith) and prod.startswith('prod_'):
-                                pname = s.Product.retrieve(prod).name
-                            # Handle dict-like product object
-                            elif hasattr(prod, 'get') and callable(prod.get):
-                                pname = prod.get("name")
-                            # Handle object with name attribute
-                            elif hasattr(prod, 'name'):
-                                pname = getattr(prod, "name", None)
-                        except Exception as e:
-                            logger.warning(f"Failed to get product name: {e}")
-                            pname = None
-                            
-                        if pname:
-                            products.append(pname)
-                    except Exception as e:
-                        logger.warning(f"Error processing subscription item: {e}")
-                
-                # Extract latest invoice URL
-                latest_inv = sub_dict.get("latest_invoice") or getattr(sub, "latest_invoice", None)
-                latest_url = None
+
+            for it in data_list:
+                price_obj = it.get('price') if hasattr(it, 'get') else getattr(it, 'price', None)
+                prod = price_obj.get('product') if hasattr(price_obj, 'get') else getattr(price_obj, 'product', None)
+                pname = None
                 try:
-                    if hasattr(latest_inv, 'get') and callable(latest_inv.get):
-                        latest_url = latest_inv.get("hosted_invoice_url")
-                    elif hasattr(latest_inv, 'hosted_invoice_url'):
-                        latest_url = getattr(latest_inv, "hosted_invoice_url", None)
+                    if isinstance(prod, str) and prod.startswith('prod_'):
+                        s = _api()
+                        p = s.Product.retrieve(prod)
+                        pname = getattr(p, 'name', None)
+                    elif hasattr(prod, 'get') and callable(getattr(prod, 'get')):
+                        pname = prod.get('name')
+                    elif hasattr(prod, 'name'):
+                        pname = getattr(prod, 'name', None)
                 except Exception:
-                    latest_url = None
-                
-                # Build subscription result with customer_id always included
-                subscription_result = {
-                    "id": subscription_id,
-                    "customer_id": customer_id,  # ALWAYS store customer_id as per requirements
-                    "status": sub_dict.get("status") or getattr(sub, "status", None),
-                    "customer_email": c_email,
-                    "customer_name": customer_display_name,
-                    "products": ", ".join(products) if products else "",
-                    "current_period_end": sub_dict.get("current_period_end") or getattr(sub, "current_period_end", None),
-                    "latest_invoice_url": latest_url,
-                }
-                
-                out.append(subscription_result)
-                
-                if isinstance(limit, int) and limit > 0 and len(out) >= limit:
-                    break
-                    
-            except Exception as e:
-                log_subscription_error("Error processing individual subscription", subscription_id, e)
-                continue
-                
-        return out
-        
-    except Exception as e:
-        log_subscription_error("Error listing subscriptions", "all", e)
-        return []
+                    pname = None
+                if pname:
+                    products.append(pname)
+
+            latest_inv = sub_obj.get('latest_invoice') if isinstance(sub_obj, dict) else getattr(sub, 'latest_invoice', None)
+            latest_url = None
+            try:
+                if hasattr(latest_inv, 'get') and callable(getattr(latest_inv, 'get')):
+                    latest_url = latest_inv.get('hosted_invoice_url')
+                elif hasattr(latest_inv, 'hosted_invoice_url'):
+                    latest_url = getattr(latest_inv, 'hosted_invoice_url', None)
+            except Exception:
+                latest_url = None
+
+            subscription_result = {
+                'id': subscription_id,
+                'status': status,
+                'customer_id': customer_id,
+                'customer_email': c_email,
+                'customer_name': c_name,
+                'products': ', '.join(products) if products else '',
+                'current_period_end': (sub_obj.get('current_period_end') if isinstance(sub_obj, dict) else getattr(sub, 'current_period_end', None)),
+                'latest_invoice_url': latest_url,
+            }
+            out.append(subscription_result)
+            if isinstance(limit, int) and limit > 0 and len(out) >= limit:
+                break
+        except Exception as e:
+            try:
+                log_subscription_error('Error processing individual subscription', subscription_id, e)
+            except Exception:
+                logger.exception(e)
+            continue
+
+    return out
 
 def list_all_customers(limit=None):
     s = _api()
@@ -945,20 +905,47 @@ def list_active_subscriptions(limit=200):
     out = []
     
     try:
-        subs = s.Subscription.list(
+        subs = list_active_subscriptions_from_stripe(
             limit=limit, 
             expand=['data.customer', 'data.items.data.price', 'data.latest_invoice']
         )
         
-        for sub in subs.auto_paging_iter():
-            if sub.status in ("active", "trialing", "past_due"):
+        for sub in subs:
+            # Support both dict-like and Stripe object shapes
+            if hasattr(sub, 'get') and callable(getattr(sub, 'get')):
+                sub_status = sub.get('status')
+                sub_id = sub.get('id')
+                sub_customer = sub.get('customer')
+                sub_items = sub.get('items')
+                sub_latest_invoice = sub.get('latest_invoice')
+                sub_metadata = sub.get('metadata', {})
+            else:
+                sub_status = getattr(sub, 'status', None)
+                sub_id = getattr(sub, 'id', None)
+                sub_customer = getattr(sub, 'customer', None)
+                sub_items = getattr(sub, 'items', None)
+                sub_latest_invoice = getattr(sub, 'latest_invoice', None)
+                sub_metadata = getattr(sub, 'metadata', {})
+                
+            if sub_status in ("active", "trialing", "past_due"):
                 # Extract basic subscription data
+                customer_id = customer_email = customer_name = None
+                if sub_customer:
+                    if hasattr(sub_customer, 'get') and callable(getattr(sub_customer, 'get')):
+                        customer_id = sub_customer.get('id')
+                        customer_email = sub_customer.get('email')
+                        customer_name = sub_customer.get('name')
+                    else:
+                        customer_id = getattr(sub_customer, 'id', None)
+                        customer_email = getattr(sub_customer, 'email', None)
+                        customer_name = getattr(sub_customer, 'name', None)
+                        
                 subscription_result = {
-                    "id": sub.id,
-                    "status": sub.status,
-                    "customer_id": sub.customer.id if sub.customer else None,
-                    "customer_email": sub.customer.email if sub.customer else None,
-                    "customer_name": sub.customer.name if sub.customer else None,
+                    "id": sub_id,
+                    "status": sub_status,
+                    "customer_id": customer_id,
+                    "customer_email": customer_email,
+                    "customer_name": customer_name,
                 }
                 
                 # Add customer display name for UI compatibility
@@ -976,43 +963,79 @@ def list_active_subscriptions(limit=200):
                 # Calculate weekly quantity for UI
                 weekly_qty = 0
                 item_rows = []
-                if sub.items and sub.items.data:
-                    for item in sub.items.data:
-                        qty = int(item.quantity or 0)
-                        price = item.price
+                items_data = []
+                if sub_items:
+                    if hasattr(sub_items, 'get') and callable(getattr(sub_items, 'get')):
+                        items_data = sub_items.get('data', []) or []
+                    elif hasattr(sub_items, 'data'):
+                        items_data = getattr(sub_items, 'data', []) or []
+                    
+                if items_data:
+                    for item in items_data:
+                        if hasattr(item, 'get') and callable(getattr(item, 'get')):
+                            qty = int(item.get('quantity', 0) or 0)
+                            price = item.get('price')
+                        else:
+                            qty = int(getattr(item, 'quantity', 0) or 0)
+                            price = getattr(item, 'price', None)
                         
                         # Calculate weekly quantity using existing helper
                         weekly_qty += calculate_weekly_quantity(price, qty)
                         
                         # Extract item details for UI
                         product_name = None
-                        if price.product:
-                            if isinstance(price.product, str):
-                                try:
-                                    product_name = s.Product.retrieve(price.product).name
-                                except Exception:
-                                    product_name = price.product
+                        if price:
+                            price_product = None
+                            if hasattr(price, 'get') and callable(getattr(price, 'get')):
+                                price_product = price.get('product')
                             else:
-                                product_name = getattr(price.product, 'name', None)
+                                price_product = getattr(price, 'product', None)
+                                
+                            if price_product:
+                                if isinstance(price_product, str):
+                                    try:
+                                        product_name = s.Product.retrieve(price_product).name
+                                    except Exception:
+                                        product_name = price_product
+                                else:
+                                    product_name = getattr(price_product, 'name', None)
+                        
+                        price_id = price.get('id') if hasattr(price, 'get') else getattr(price, 'id', None)
+                        price_nickname = price.get('nickname') if hasattr(price, 'get') else getattr(price, 'nickname', None)
+                        price_unit_amount = price.get('unit_amount') if hasattr(price, 'get') else getattr(price, 'unit_amount', None)
+                        
+                        price_recurring = price.get('recurring') if hasattr(price, 'get') else getattr(price, 'recurring', None)
+                        price_interval = None
+                        if price_recurring:
+                            if hasattr(price_recurring, 'get') and callable(getattr(price_recurring, 'get')):
+                                price_interval = price_recurring.get('interval')
+                            else:
+                                price_interval = getattr(price_recurring, 'interval', None)
                         
                         item_rows.append({
-                            "price_id": price.id if price else None,
+                            "price_id": price_id,
                             "product_name": product_name,
-                            "nickname": getattr(price, 'nickname', None) if price else None,
+                            "nickname": price_nickname,
                             "quantity": qty,
-                            "unit_amount": getattr(price, 'unit_amount', None) if price else None,
-                            "interval": getattr(price.recurring, 'interval', None) if price and price.recurring else None,
+                            "unit_amount": price_unit_amount,
+                            "interval": price_interval,
                         })
                 
                 subscription_result["weekly_quantity"] = weekly_qty
                 subscription_result["items"] = item_rows
                 
                 # Extract latest invoice URL
-                subscription_result["latest_invoice_url"] = getattr(sub.latest_invoice, 'hosted_invoice_url', None) if sub.latest_invoice else None
+                latest_url = None
+                if sub_latest_invoice:
+                    if hasattr(sub_latest_invoice, 'get') and callable(getattr(sub_latest_invoice, 'get')):
+                        latest_url = sub_latest_invoice.get('hosted_invoice_url')
+                    else:
+                        latest_url = getattr(sub_latest_invoice, 'hosted_invoice_url', None)
+                subscription_result["latest_invoice_url"] = latest_url
                 
                 # Include metadata and customer data for downstream processing
-                subscription_result["metadata"] = getattr(sub, 'metadata', {}) or {}
-                subscription_result["customer"] = sub.customer if sub.customer else {}
+                subscription_result["metadata"] = sub_metadata or {}
+                subscription_result["customer"] = sub_customer if sub_customer else {}
                 
                 out.append(subscription_result)
         
