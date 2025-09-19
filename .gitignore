@@ -9,6 +9,9 @@ __pycache__/
 subscription_logs.txt
 subscription_error_log.txt
 
+# Demo and test files 
+demo_subscription_improvements.py
+
 # Virtual envs
 .venv/
 venv/
