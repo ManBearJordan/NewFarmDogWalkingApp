@@ -1825,23 +1825,6 @@ class SubscriptionsTab(QWidget):
         layout = QVBoxLayout(self)
 
         top = QHBoxLayout()
-<<<<<<< HEAD
-        self.refresh_btn = QPushButton("Refresh from Stripe")
-        self.refresh_btn.clicked.connect(self.refresh_from_stripe)
-        self.delete_btn = QPushButton("Delete Subscription")
-        self.delete_btn.clicked.connect(self.delete_subscription)
-        self.delete_btn.setStyleSheet("QPushButton { background-color: #dc3545; color: white; font-weight: bold; }")
-        top.addWidget(self.refresh_btn); top.addWidget(self.delete_btn)
-        layout.addLayout(top)
-
-        # Information about the automatic workflow
-        info_label = QLabel("Subscriptions are now fully automatic! Schedule information is collected through popup dialogs when needed, "
-                           "and bookings are generated automatically. No manual buttons required.")
-        info_label.setStyleSheet("QLabel { color: #4DA3FF; font-style: italic; padding: 10px; background: #191C21; border: 1px solid #2A3038; border-radius: 8px; }")
-=======
-        # REMOVED: Manual sync buttons - subscriptions now sync automatically
-        # self.refresh_btn = QPushButton("Refresh from Stripe") 
-        # self.rebuild_btn = QPushButton("Rebuild next 3 months")
         
         # Keep essential button: subscription deletion only
         self.delete_btn = QPushButton("Delete Subscription")
@@ -1853,9 +1836,8 @@ class SubscriptionsTab(QWidget):
         # Information about the automatic workflow  
         info_label = QLabel("Subscriptions sync automatically on app startup and via webhooks. "
                            "Bookings and calendar entries are generated automatically when subscriptions are created/updated. "
-                           "All operations are logged to subscription_logs.txt for monitoring.")
+                           "All operations are logged to subscription_error_log.txt for monitoring.")
         info_label.setStyleSheet("QLabel { color: #666; font-style: italic; padding: 10px; }")
->>>>>>> b94fa8aba4414bf0b4dc8f15bb3cb4d21a3f77a1
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
 
@@ -1865,14 +1847,13 @@ class SubscriptionsTab(QWidget):
         self.table.itemSelectionChanged.connect(self.on_row_select)
         layout.addWidget(self.table)
 
+        # Load subscription data for display on startup
         self.refresh_from_stripe()
 
     def on_row_select(self):
         # Row selection handling - no longer needed with popup-based workflow
         pass
 
-<<<<<<< HEAD
-=======
     def _mask_to_days_label(self, mask: int) -> str:
         names = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
         return ",".join(n for i,n in enumerate(names) if mask & (1<<i))
@@ -1935,6 +1916,7 @@ class SubscriptionsTab(QWidget):
     def _generate_subscription_bookings(self, sub_id: str, days_mask: int, start_str: str, end_str: str, dogs: int, location: str, notes: str) -> int:
         """Generate actual bookings from subscription schedule for the next 3 months"""
         from datetime import date, datetime, timedelta, time
+        from subscription_utils import resolve_client_for_subscription, service_type_from_label
         
         try:
             from zoneinfo import ZoneInfo
@@ -1945,11 +1927,7 @@ class SubscriptionsTab(QWidget):
         conn = get_conn()
         c = conn.cursor()
         
-        # FIXED: Get subscription details from Stripe to find the client AND service info
-        client_id = None
-        service_label = "Dog Walking Service"  # Default fallback
-        service_type = "WALK_GENERAL"  # Default fallback
-        
+        # Get subscription details from Stripe to find the client AND service info
         try:
             import stripe
             from secrets_config import get_stripe_key
@@ -1958,70 +1936,34 @@ class SubscriptionsTab(QWidget):
             # Get subscription with expanded data
             subscription = stripe.Subscription.retrieve(sub_id, expand=['customer', 'items.data.price.product'])
             
-            # Get customer info
-            customer = subscription.customer
-            customer_email = getattr(customer, 'email', None)
-            customer_name = getattr(customer, 'name', None) or customer_email or "Unknown Customer"
-            
-            # Find or create client
-            if customer_email:
-                client_row = c.execute("""
-                    SELECT id FROM clients 
-                    WHERE LOWER(email) = LOWER(?) 
-                    LIMIT 1
-                """, (customer_email,)).fetchone()
-                
-                if client_row:
-                    client_id = client_row["id"]
-                else:
-                    # Create new client
-                    c.execute("""
-                        INSERT INTO clients (name, email, stripe_customer_id) 
-                        VALUES (?, ?, ?)
-                    """, (customer_name, customer_email, customer.id))
-                    client_id = c.lastrowid
-            
-            # FIXED: Extract service information from subscription items
-            items = getattr(subscription, "items", None)
-            if items and hasattr(items, "data") and items.data:
-                item = items.data[0]  # Use first item
-                price = getattr(item, "price", None)
-                
-                # Try to get service info from price metadata
-                if price and hasattr(price, 'metadata') and price.metadata:
-                    price_metadata = dict(price.metadata)
-                    # Check both service_code and service_type (interchangeable)
-                    service_type = (price_metadata.get('service_code') or 
-                                  price_metadata.get('service_type') or 
-                                  service_type)
-                    service_label = (price_metadata.get('service_name') or 
-                                   price.nickname or 
-                                   service_label)
-                elif price and hasattr(price, "nickname") and price.nickname:
-                    service_label = price.nickname
-                    service_type = self._derive_service_type_from_label(service_label)
-                
-                # Try product metadata as fallback
-                if price and hasattr(price, 'product') and hasattr(price.product, 'metadata'):
-                    product_metadata = dict(price.product.metadata or {})
-                    if not service_type or service_type == "WALK_GENERAL":
-                        # Check both service_code and service_type (interchangeable)
-                        service_type = (product_metadata.get('service_code') or 
-                                      product_metadata.get('service_type') or 
-                                      service_type)
-                    if not service_label or service_label == "Dog Walking Service":
-                        service_label = (product_metadata.get('service_name') or 
-                                       price.product.name or 
-                                       service_label)
+            # Use new unified client resolution
+            client_id = resolve_client_for_subscription(conn, dict(subscription) if not isinstance(subscription, dict) else subscription)
+            if not client_id:
+                print(f"Could not resolve or create client for subscription {sub_id}")
+                return 0
+
+            # derive service_type and label from price/product metadata if available, else use fallback
+            service_type = "WALK_GENERAL"
+            service_label = "Dog Walking Service"
+            try:
+                items = getattr(subscription, 'items', None)
+                if items and hasattr(items, 'data') and items.data:
+                    item = items.data[0]
+                    price = getattr(item, 'price', None)
+                    nickname = getattr(price, 'nickname', None) if price else None
+                    # prefer price/product metadata
+                    if price and getattr(price, 'metadata', None):
+                        md = dict(price.metadata or {})
+                        service_type = md.get('service_code') or md.get('service_type') or service_type
+                        service_label = md.get('service_name') or nickname or service_label
+                    elif nickname:
+                        service_label = nickname
+                        service_type = service_type_from_label(service_label)
+            except Exception as e:
+                print(f"Warning: failed to extract service info for {sub_id}: {e}")
                         
         except Exception as e:
             print(f"Error getting subscription details: {e}")
-            # FIXED: No longer create placeholder clients - require real client resolution
-            print(f"Could not resolve real client for subscription {sub_id} - skipping booking generation")
-            return 0
-
-        if not client_id:
-            print(f"Could not resolve client for subscription {sub_id}")
             return 0
 
         # Time window - next 3 months
@@ -2140,7 +2082,6 @@ class SubscriptionsTab(QWidget):
         else:
             # Convert label to a reasonable service type code
             return label.upper().replace(" ", "_").replace("-", "_").replace("(", "").replace(")", "")
->>>>>>> b94fa8aba4414bf0b4dc8f15bb3cb4d21a3f77a1
 
     def _get_main_window(self):
         """Helper method to get the main window for UI refresh"""
