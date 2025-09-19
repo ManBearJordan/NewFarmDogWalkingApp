@@ -908,3 +908,23 @@ Traceback (most recent call last):
   File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/test_simple_validation.py", line 82, in test_error_logging
     raise ValueError("Test validation error - missing schedule data")
 ValueError: Test validation error - missing schedule data
+2025-09-19 04:44:16,374 INFO [SUB:sub_test123456789] Test info message
+2025-09-19 04:44:16,374 WARNING [SUB:sub_test123456789] Test warning message
+2025-09-19 04:44:16,374 ERROR [SUB:sub_test123456789] Test error message
+2025-09-19 04:44:16,374 ERROR [SUB:sub_test123456789] Test error with exception - Exception: Test exception for logging
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/test_error_logging.py", line 42, in test_log_utils
+    raise ValueError("Test exception for logging")
+ValueError: Test exception for logging
+2025-09-19 04:44:16,380 ERROR [SUB:sub_test_missing] Unknown Customer: No name, email, or customer_id found in subscription_data
+2025-09-19 04:54:56,037 INFO [SUB:sub_test123456789] Test info message
+2025-09-19 04:54:56,037 WARNING [SUB:sub_test123456789] Test warning message
+2025-09-19 04:54:56,037 ERROR [SUB:sub_test123456789] Test error message
+2025-09-19 04:54:56,037 ERROR [SUB:sub_test123456789] Test error with exception - Exception: Test exception for logging
+Traceback (most recent call last):
+  File "/home/runner/work/NewFarmDogWalkingApp/NewFarmDogWalkingApp/test_error_logging.py", line 42, in test_log_utils
+    raise ValueError("Test exception for logging")
+ValueError: Test exception for logging
+2025-09-19 04:54:56,042 ERROR [SUB:sub_test_missing] Unknown Customer: No name, email, or customer_id found in subscription_data
+2025-09-19 04:55:03,635 ERROR [SUB:sub_test_error_logging_999] Test error logging functionality - Exception: Test exception
+NoneType: None

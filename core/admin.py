@@ -39,25 +39,71 @@ class SyncLogAdmin:
         return JsonResponse({'error': 'POST method required'})
     
     def sync_logs_view(self, request):
-        """View recent sync logs"""
+        """View recent sync logs with download option"""
+        import os
+        from django.http import HttpResponse
+        from django.conf import settings
+        
+        # Check if this is a download request
+        download = request.GET.get('download', False)
+        
         try:
-            import os
-            from django.conf import settings
+            # Primary log file: our dedicated subscription error log
+            primary_log_file = "subscription_error_log.txt"
+            secondary_log_file = os.path.join(settings.BASE_DIR, 'django.log')
             
-            log_file = os.path.join(settings.BASE_DIR, 'django.log')
-            if os.path.exists(log_file):
-                with open(log_file, 'r') as f:
-                    # Get last 100 lines
-                    lines = f.readlines()[-100:]
-                    # Filter for sync-related logs
-                    sync_lines = [line for line in lines if 'stripe' in line.lower() or 'sync' in line.lower()]
-                    logs = ''.join(sync_lines)
+            logs_content = ""
+            
+            # Try to read the primary subscription log first
+            if os.path.exists(primary_log_file):
+                with open(primary_log_file, 'r', encoding='utf-8') as f:
+                    logs_content += "=== SUBSCRIPTION ERROR LOG (subscription_error_log.txt) ===\n"
+                    if download:
+                        # Return full log for download
+                        logs_content += f.read()
+                    else:
+                        # Get last 200 lines for viewing
+                        lines = f.readlines()
+                        logs_content += ''.join(lines[-200:])
+                    logs_content += "\n\n"
+            
+            # Also include django.log if it exists and has subscription-related entries
+            if os.path.exists(secondary_log_file):
+                with open(secondary_log_file, 'r') as f:
+                    lines = f.readlines()
+                    # Filter for subscription/sync-related logs
+                    sync_lines = [line for line in lines if any(keyword in line.lower() for keyword in ['subscription', 'stripe', 'sync', 'webhook', 'booking'])]
+                    
+                    if sync_lines:
+                        logs_content += "=== DJANGO LOG (django.log) - Subscription/Sync Related ===\n"
+                        if download:
+                            logs_content += ''.join(sync_lines)
+                        else:
+                            logs_content += ''.join(sync_lines[-100:])  # Last 100 sync-related lines
+            
+            if not logs_content:
+                logs_content = "No subscription/sync logs found."
+            
+            if download:
+                # Return as downloadable file
+                response = HttpResponse(logs_content, content_type='text/plain')
+                response['Content-Disposition'] = 'attachment; filename="subscription_logs.txt"'
+                return response
             else:
-                logs = 'Log file not found'
+                # Return as JSON for web viewing
+                return JsonResponse({
+                    'success': True,
+                    'logs': logs_content,
+                    'log_files_checked': [primary_log_file, secondary_log_file],
+                    'download_url': request.build_absolute_uri() + '?download=1'
+                })
                 
-            return JsonResponse({'logs': logs})
         except Exception as e:
-            return JsonResponse({'error': str(e)})
+            error_msg = f"Error reading log files: {str(e)}"
+            if download:
+                return HttpResponse(error_msg, content_type='text/plain', status=500)
+            else:
+                return JsonResponse({'success': False, 'error': error_msg})
 
 
 @admin.register(Client)
@@ -668,25 +714,71 @@ class StripeSyncAdminSite(admin.AdminSite):
         return JsonResponse({'error': 'POST method required'})
     
     def sync_logs_view(self, request):
-        """View recent sync logs"""
+        """View recent sync logs with download option"""
+        import os
+        from django.http import HttpResponse
+        from django.conf import settings
+        
+        # Check if this is a download request
+        download = request.GET.get('download', False)
+        
         try:
-            import os
-            from django.conf import settings
+            # Primary log file: our dedicated subscription error log
+            primary_log_file = "subscription_error_log.txt"
+            secondary_log_file = os.path.join(settings.BASE_DIR, 'django.log')
             
-            log_file = os.path.join(settings.BASE_DIR, 'django.log')
-            if os.path.exists(log_file):
-                with open(log_file, 'r') as f:
-                    # Get last 100 lines
-                    lines = f.readlines()[-100:]
-                    # Filter for sync-related logs
-                    sync_lines = [line for line in lines if 'stripe' in line.lower() or 'sync' in line.lower()]
-                    logs = ''.join(sync_lines)
+            logs_content = ""
+            
+            # Try to read the primary subscription log first
+            if os.path.exists(primary_log_file):
+                with open(primary_log_file, 'r', encoding='utf-8') as f:
+                    logs_content += "=== SUBSCRIPTION ERROR LOG (subscription_error_log.txt) ===\n"
+                    if download:
+                        # Return full log for download
+                        logs_content += f.read()
+                    else:
+                        # Get last 200 lines for viewing
+                        lines = f.readlines()
+                        logs_content += ''.join(lines[-200:])
+                    logs_content += "\n\n"
+            
+            # Also include django.log if it exists and has subscription-related entries
+            if os.path.exists(secondary_log_file):
+                with open(secondary_log_file, 'r') as f:
+                    lines = f.readlines()
+                    # Filter for subscription/sync-related logs
+                    sync_lines = [line for line in lines if any(keyword in line.lower() for keyword in ['subscription', 'stripe', 'sync', 'webhook', 'booking'])]
+                    
+                    if sync_lines:
+                        logs_content += "=== DJANGO LOG (django.log) - Subscription/Sync Related ===\n"
+                        if download:
+                            logs_content += ''.join(sync_lines)
+                        else:
+                            logs_content += ''.join(sync_lines[-100:])  # Last 100 sync-related lines
+            
+            if not logs_content:
+                logs_content = "No subscription/sync logs found."
+            
+            if download:
+                # Return as downloadable file
+                response = HttpResponse(logs_content, content_type='text/plain')
+                response['Content-Disposition'] = 'attachment; filename="subscription_logs.txt"'
+                return response
             else:
-                logs = 'Log file not found'
+                # Return as JSON for web viewing
+                return JsonResponse({
+                    'success': True,
+                    'logs': logs_content,
+                    'log_files_checked': [primary_log_file, secondary_log_file],
+                    'download_url': request.build_absolute_uri() + '?download=1'
+                })
                 
-            return JsonResponse({'logs': logs})
         except Exception as e:
-            return JsonResponse({'error': str(e)})
+            error_msg = f"Error reading log files: {str(e)}"
+            if download:
+                return HttpResponse(error_msg, content_type='text/plain', status=500)
+            else:
+                return JsonResponse({'success': False, 'error': error_msg})
 
 
 # Use custom admin site

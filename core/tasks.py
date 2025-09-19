@@ -168,6 +168,7 @@ def update_subscription_from_stripe(self, stripe_subscription_id):
     
     This is typically called in response to Stripe webhooks.
     AUTOMATICALLY GENERATES BOOKINGS if subscription has valid schedule metadata.
+    ENHANCED: Comprehensive step-by-step logging per problem statement.
     """
     try:
         # Import here to avoid circular imports
@@ -175,40 +176,52 @@ def update_subscription_from_stripe(self, stripe_subscription_id):
         from django.conf import settings
         from log_utils import log_subscription_info, log_subscription_error
         
+        # WEBHOOK STEP 1: Configure and retrieve subscription
+        log_subscription_info(f"WEBHOOK STEP 1: Starting webhook processing", stripe_subscription_id)
+        
         # Configure Stripe API key
         stripe.api_key = settings.STRIPE_LIVE_SECRET_KEY or settings.STRIPE_TEST_SECRET_KEY
         
         logger.info(f"Webhook triggered: Processing subscription {stripe_subscription_id}")
-        log_subscription_info(f"Webhook processing started for subscription {stripe_subscription_id}")
+        log_subscription_info(f"WEBHOOK STEP 1: Fetching subscription from Stripe", stripe_subscription_id)
         
         # Fetch subscription from Stripe
         stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
+        log_subscription_info(f"WEBHOOK STEP 1 SUCCESS: Retrieved subscription data", stripe_subscription_id)
         
-        # Extract schedule information
+        # WEBHOOK STEP 2: Extract and validate metadata
+        log_subscription_info(f"WEBHOOK STEP 2: Extracting schedule and service metadata", stripe_subscription_id)
         from subscription_sync import extract_schedule_from_subscription, extract_service_code_from_metadata
         
         schedule_data = extract_schedule_from_subscription(stripe_sub)
         service_code = extract_service_code_from_metadata(stripe_sub)
         
         if not service_code:
-            error_msg = f"No valid service code found for subscription {stripe_subscription_id}"
+            error_msg = f"WEBHOOK STEP 2 FAILED: No valid service code found"
             logger.warning(error_msg)
             log_subscription_error(error_msg, stripe_subscription_id)
             return {'success': False, 'error': 'No valid service code'}
         
+        log_subscription_info(f"WEBHOOK STEP 2: Found service_code='{service_code}'", stripe_subscription_id)
+        
         # Validate schedule metadata
         if not schedule_data.get('days') or not schedule_data.get('start_time') or not schedule_data.get('end_time'):
-            error_msg = f"Missing required schedule metadata for subscription {stripe_subscription_id}: days={schedule_data.get('days')}, start_time={schedule_data.get('start_time')}, end_time={schedule_data.get('end_time')}"
+            error_msg = f"WEBHOOK STEP 2 FAILED: Missing required schedule metadata - days={schedule_data.get('days')}, start_time={schedule_data.get('start_time')}, end_time={schedule_data.get('end_time')}"
             logger.warning(error_msg)
             log_subscription_error(error_msg, stripe_subscription_id)
             return {'success': False, 'error': 'Missing schedule metadata', 'schedule_data': schedule_data}
         
-        # Update or create Django model
+        log_subscription_info(f"WEBHOOK STEP 2 SUCCESS: Valid schedule metadata found", stripe_subscription_id)
+        
+        # WEBHOOK STEP 3: Client lookup/creation
+        log_subscription_info(f"WEBHOOK STEP 3: Processing client data", stripe_subscription_id)
         from core.models import Client
         
         # Get or create client
         try:
             stripe_customer = stripe.Customer.retrieve(stripe_sub.customer)
+            log_subscription_info(f"WEBHOOK STEP 3: Retrieved Stripe customer data", stripe_subscription_id)
+            
             client, client_created = Client.objects.get_or_create(
                 stripe_customer_id=stripe_sub.customer,
                 defaults={
@@ -217,12 +230,19 @@ def update_subscription_from_stripe(self, stripe_subscription_id):
                 }
             )
             if client_created:
-                log_subscription_info(f"New client created from webhook: {client.name}", stripe_subscription_id)
-        except Exception as e:
-            error_msg = f"Failed to create/lookup client for subscription {stripe_subscription_id}: {e}"
+                log_subscription_info(f"WEBHOOK STEP 3: New client created - {client.name}", stripe_subscription_id)
+            else:
+                log_subscription_info(f"WEBHOOK STEP 3: Existing client found - {client.name}", stripe_subscription_id)
+            log_subscription_info(f"WEBHOOK STEP 3 SUCCESS: Client processed - ID={client.id}", stripe_subscription_id)
+            
+        except Exception as client_error:
+            error_msg = f"WEBHOOK STEP 3 FAILED: Error processing client: {client_error}"
             logger.error(error_msg)
-            log_subscription_error(error_msg, stripe_subscription_id, e)
+            log_subscription_error(error_msg, stripe_subscription_id, client_error)
             return {'success': False, 'error': 'Client lookup/creation failed'}
+        
+        # WEBHOOK STEP 4: Create/update subscription in database
+        log_subscription_info(f"WEBHOOK STEP 4: Creating/updating subscription in database", stripe_subscription_id)
         
         # Update or create subscription
         subscription, created = Subscription.objects.update_or_create(
@@ -245,19 +265,21 @@ def update_subscription_from_stripe(self, stripe_subscription_id):
         
         action = 'created' if created else 'updated'
         logger.info(f"Subscription {stripe_subscription_id} {action} successfully")
-        log_subscription_info(f"Subscription {action}: {stripe_subscription_id} - Service: {service_code}, Schedule: {schedule_data.get('days')} {schedule_data.get('start_time')}-{schedule_data.get('end_time')}", stripe_subscription_id)
+        log_subscription_info(f"WEBHOOK STEP 4 SUCCESS: Subscription {action} - Service: {service_code}, Schedule: {schedule_data.get('days')} {schedule_data.get('start_time')}-{schedule_data.get('end_time')}", stripe_subscription_id)
         
-        # AUTOMATICALLY trigger booking generation if subscription is active AND has valid schedule
+        # WEBHOOK STEP 5: AUTOMATICALLY trigger booking generation if subscription is active AND has valid schedule
         if stripe_sub.status == 'active':
             try:
+                log_subscription_info(f"WEBHOOK STEP 5: AUTO-GENERATING bookings for active subscription", stripe_subscription_id)
                 logger.info(f"AUTO-GENERATING bookings for active subscription {stripe_subscription_id}")
+                
                 # Call booking generation immediately (synchronous for webhook reliability)
                 booking_result = generate_subscription_bookings_sync(stripe_subscription_id)
                 
                 if booking_result.get('success'):
-                    log_subscription_info(f"Webhook auto-booking SUCCESS: {booking_result.get('bookings_created', 0)} bookings created for {stripe_subscription_id}", stripe_subscription_id)
+                    log_subscription_info(f"WEBHOOK STEP 5 SUCCESS: Auto-booking completed - {booking_result.get('bookings_created', 0)} bookings created", stripe_subscription_id)
                 else:
-                    log_subscription_error(f"Webhook auto-booking FAILED: {booking_result.get('error', 'Unknown error')}", stripe_subscription_id)
+                    log_subscription_error(f"WEBHOOK STEP 5 FAILED: Auto-booking failed - {booking_result.get('error', 'Unknown error')}", stripe_subscription_id)
                     
                 return {
                     'success': True, 
@@ -265,7 +287,7 @@ def update_subscription_from_stripe(self, stripe_subscription_id):
                     'booking_generation': booking_result
                 }
             except Exception as booking_error:
-                error_msg = f"Booking generation failed after webhook subscription update {stripe_subscription_id}: {booking_error}"
+                error_msg = f"WEBHOOK STEP 5 FAILED: Booking generation failed after subscription update: {booking_error}"
                 logger.error(error_msg)
                 log_subscription_error(error_msg, stripe_subscription_id, booking_error)
                 # Still return success for subscription update, but note booking failure

@@ -62,25 +62,28 @@ class SubscriptionAutoSync(QObject):
             
             logger.info("Starting automatic subscription sync on startup")
             log_subscription_info("Startup sync initiated")
+            log_subscription_info("STARTUP SYNC: Beginning automatic subscription sync")
             
             if show_progress:
                 self.sync_started.emit()
             
-            # Step 1: Get all active subscriptions from Stripe
+            # STARTUP STEP 1: Get all active subscriptions from Stripe
+            log_subscription_info("STARTUP STEP 1: Fetching active subscriptions from Stripe")
             try:
                 from stripe_integration import list_active_subscriptions
                 
                 logger.info("Fetching active subscriptions from Stripe")
                 subscriptions = list_active_subscriptions()
+                log_subscription_info(f"STARTUP STEP 1 SUCCESS: Retrieved {len(subscriptions)} active subscriptions")
             except Exception as e:
-                error_msg = f"Failed to fetch active subscriptions from Stripe: {e}"
+                error_msg = f"STARTUP STEP 1 FAILED: Failed to fetch active subscriptions from Stripe: {e}"
                 logger.error(error_msg)
                 log_subscription_error(error_msg, "startup_sync", e)
                 raise
             
             if not subscriptions:
                 logger.info("No active subscriptions found")
-                log_subscription_info("Startup sync: No active subscriptions found")
+                log_subscription_info("STARTUP SYNC COMPLETE: No active subscriptions found")
                 results = {
                     "total_subscriptions": 0,
                     "missing_schedule_count": 0,
@@ -91,33 +94,36 @@ class SubscriptionAutoSync(QObject):
                     self.sync_completed.emit(results)
                 return results
             
-            # Step 2: Identify subscriptions missing schedule data
+            # STARTUP STEP 2: Identify subscriptions missing schedule data
+            log_subscription_info(f"STARTUP STEP 2: Analyzing {len(subscriptions)} subscriptions for missing schedule data")
             logger.info(f"Analyzing {len(subscriptions)} subscriptions for missing schedule data")
             
             try:
                 missing_data_subscriptions = get_subscriptions_missing_schedule_data(subscriptions)
+                log_subscription_info(f"STARTUP STEP 2 SUCCESS: Found {len(missing_data_subscriptions)} subscriptions missing schedule data")
                 logger.info(f"Found {len(missing_data_subscriptions)} subscriptions missing schedule data")
-                log_subscription_info(f"Schedule analysis: {len(subscriptions)} total, {len(missing_data_subscriptions)} missing data")
             except Exception as e:
-                error_msg = f"Failed to analyze subscription schedule data: {e}"
+                error_msg = f"STARTUP STEP 2 FAILED: Failed to analyze subscription schedule data: {e}"
                 logger.error(error_msg)
                 log_subscription_error(error_msg, "startup_sync", e)
                 # Continue with sync even if schedule analysis fails
                 missing_data_subscriptions = []
             
-            # Step 3: Show modal dialogs for missing data (if any)
+            # STARTUP STEP 3: Show modal dialogs for missing data (if any)
             completed_schedules = []
             if missing_data_subscriptions:
+                log_subscription_info(f"STARTUP STEP 3: Showing schedule completion dialogs for {len(missing_data_subscriptions)} subscriptions")
                 logger.info("Showing schedule completion dialogs")
-                log_subscription_info(f"Schedule dialogs needed for {len(missing_data_subscriptions)} subscriptions")
                 self.schedule_dialogs_needed.emit(missing_data_subscriptions)
                 
                 # This will be handled by the UI thread showing dialogs
                 # For now, we'll continue with the sync
+            else:
+                log_subscription_info("STARTUP STEP 3: No schedule dialogs needed - all subscriptions have complete data")
             
-            # Step 4: Perform the main subscription sync
+            # STARTUP STEP 4: Perform the main subscription sync
+            log_subscription_info("STARTUP STEP 4: Performing subscription sync to generate bookings and calendar")
             logger.info("Performing subscription sync to generate bookings and calendar")
-            log_subscription_info("Starting main sync to generate bookings")
             
             try:
                 sync_stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
