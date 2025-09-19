@@ -1265,16 +1265,17 @@ class SubscriptionsTab(QWidget):
             self.table.setRowCount(0)
             for s in subs:
                 row = self.table.rowCount(); self.table.insertRow(row)
-                self.table.setItem(row,0,QTableWidgetItem(s.get("id","")))
-                self.table.setItem(row,1,QTableWidgetItem(s.get("customer_name","")))
-                self.table.setItem(row,2,QTableWidgetItem(s.get("status","")))
-                self.table.setItem(row,3,QTableWidgetItem(s.get("products","")))
+                sub_id = s.get('id', '')
+                self.table.setItem(row,0,QTableWidgetItem(sub_id))
+                self.table.setItem(row,1,QTableWidgetItem(s.get('customer_name','')))
+                self.table.setItem(row,2,QTableWidgetItem(s.get('status','')))
+                self.table.setItem(row,3,QTableWidgetItem(s.get('products','')))
                 self.table.setItem(row,4,QTableWidgetItem(""))  # Days - filled from schedule
                 self.table.setItem(row,5,QTableWidgetItem(""))  # Time - filled from schedule
                 self.table.setItem(row,6,QTableWidgetItem(""))  # Dogs - filled from schedule
                 self.table.setItem(row,7,QTableWidgetItem(""))  # Location - filled from schedule
         except Exception as e:
-            QMessageBox.critical(self,"Stripe Error",str(e))
+            QMessageBox.critical(self,'Stripe Error',str(e))
 
 # ---------------- Admin Tab ----------------
 class AdminTab(QWidget):

@@ -2176,21 +2176,18 @@ class SubscriptionsTab(QWidget):
             self.table.setRowCount(0)
             for s in subs:
                 row = self.table.rowCount(); self.table.insertRow(row)
-                sub_id = s.get("id", "")
-                
+                sub_id = s.get('id', '')
                 self.table.setItem(row,0,QTableWidgetItem(sub_id))
-                self.table.setItem(row,1,QTableWidgetItem(s.get("customer_name","")))
-                self.table.setItem(row,2,QTableWidgetItem(s.get("status","")))
-                self.table.setItem(row,3,QTableWidgetItem(s.get("products","")))
-                
-                # Load schedule data from local database
+                self.table.setItem(row,1,QTableWidgetItem(s.get('customer_name','')))
+                self.table.setItem(row,2,QTableWidgetItem(s.get('status','')))
+                self.table.setItem(row,3,QTableWidgetItem(s.get('products','')))
                 schedule_data = self._load_schedule_for_subscription(sub_id)
-                self.table.setItem(row,4,QTableWidgetItem(schedule_data.get("days_display", "")))
-                self.table.setItem(row,5,QTableWidgetItem(schedule_data.get("time_display", "")))
-                self.table.setItem(row,6,QTableWidgetItem(str(schedule_data.get("dogs", ""))))
-                self.table.setItem(row,7,QTableWidgetItem(schedule_data.get("location", "")))
+                self.table.setItem(row,4,QTableWidgetItem(schedule_data.get('days_display', '')))
+                self.table.setItem(row,5,QTableWidgetItem(schedule_data.get('time_display', '')))
+                self.table.setItem(row,6,QTableWidgetItem(str(schedule_data.get('dogs', ''))))
+                self.table.setItem(row,7,QTableWidgetItem(schedule_data.get('location', '')))
         except Exception as e:
-            QMessageBox.critical(self,"Stripe Error",str(e))
+            QMessageBox.critical(self,'Stripe Error',str(e))
     
     def _load_schedule_for_subscription(self, subscription_id: str) -> dict:
         """Load schedule data from local database for a subscription."""
