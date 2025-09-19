@@ -888,3 +888,157 @@ network is not intercepting certificates.  If this problem persists,
 let us know at support@stripe.com.
 
 (Network error: SSLError: HTTPSConnectionPool(host='api.stripe.com', port=443): Max retries exceeded with url: /v1/subscriptions?limit=200&expand%5B0%5D=data.customer&expand%5B1%5D=data.items.data.price&expand%5B2%5D=data.latest_invoice (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))))
+2025-09-18 14:41:22,829 ERROR [SUB:all] Error listing subscriptions - Exception: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+Traceback (most recent call last):
+  File "C:\NewFarmDogWalkingApp\stripe_integration.py", line 570, in list_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 197, in request
+    resp = requestor._interpret_response(rbody, rcode, rheaders, api_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 853, in _interpret_response
+    self.handle_error_response(
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 336, in handle_error_response
+    raise err
+stripe._error.AuthenticationError: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+2025-09-18 14:41:25,785 ERROR [SUB:all] Error listing active subscriptions - Exception: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+Traceback (most recent call last):
+  File "C:\NewFarmDogWalkingApp\stripe_integration.py", line 896, in list_active_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 197, in request
+    resp = requestor._interpret_response(rbody, rcode, rheaders, api_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 853, in _interpret_response
+    self.handle_error_response(
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 336, in handle_error_response
+    raise err
+stripe._error.AuthenticationError: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+2025-09-18 15:18:58,780 ERROR [SUB:all] Error listing subscriptions - Exception: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+Traceback (most recent call last):
+  File "C:\NewFarmDogWalkingApp\stripe_integration.py", line 584, in list_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 197, in request
+    resp = requestor._interpret_response(rbody, rcode, rheaders, api_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 853, in _interpret_response
+    self.handle_error_response(
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 336, in handle_error_response
+    raise err
+stripe._error.AuthenticationError: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+2025-09-18 15:19:01,731 ERROR [SUB:all] Error listing active subscriptions - Exception: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+Traceback (most recent call last):
+  File "C:\NewFarmDogWalkingApp\stripe_integration.py", line 910, in list_active_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 197, in request
+    resp = requestor._interpret_response(rbody, rcode, rheaders, api_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 853, in _interpret_response
+    self.handle_error_response(
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 336, in handle_error_response
+    raise err
+stripe._error.AuthenticationError: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+2025-09-18 15:20:55,745 ERROR [SUB:all] Error listing subscriptions - Exception: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+Traceback (most recent call last):
+  File "C:\NewFarmDogWalkingApp\stripe_integration.py", line 584, in list_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 197, in request
+    resp = requestor._interpret_response(rbody, rcode, rheaders, api_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 853, in _interpret_response
+    self.handle_error_response(
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 336, in handle_error_response
+    raise err
+stripe._error.AuthenticationError: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+2025-09-18 15:20:58,235 ERROR [SUB:all] Error listing active subscriptions - Exception: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+Traceback (most recent call last):
+  File "C:\NewFarmDogWalkingApp\stripe_integration.py", line 910, in list_active_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 197, in request
+    resp = requestor._interpret_response(rbody, rcode, rheaders, api_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 853, in _interpret_response
+    self.handle_error_response(
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 336, in handle_error_response
+    raise err
+stripe._error.AuthenticationError: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+2025-09-19 11:47:39,380 ERROR [SUB:sub_1S7GUEE7gFi2VO5ksFygygiC] Unknown Customer: No name, email, or customer_id found in subscription_data
+2025-09-19 11:48:10,433 INFO [SUB:sub_1S7GUEE7gFi2VO5ksFygygiC] Schedule persisted for subscription sub_1S7GUEE7gFi2VO5ksFygygiC: {'days': 'WED', 'start_time': '10:30', 'end_time': '18:30', 'location': 'Home', 'dogs': 1, 'notes': '', 'service_code': 'DAYCARE_FORTNIGHTLY_PER_VISIT'}
+2025-09-19 11:48:12,098 ERROR [SUB:all] Error listing active subscriptions - Exception: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+Traceback (most recent call last):
+  File "C:\NewFarmDogWalkingApp\stripe_integration.py", line 949, in list_active_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.items.data.price', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 197, in request
+    resp = requestor._interpret_response(rbody, rcode, rheaders, api_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 853, in _interpret_response
+    self.handle_error_response(
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 336, in handle_error_response
+    raise err
+stripe._error.AuthenticationError: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+2025-09-19 11:48:12,495 ERROR [SUB:all] Error listing subscriptions - Exception: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b
+Traceback (most recent call last):
+  File "C:\NewFarmDogWalkingApp\stripe_integration.py", line 623, in list_subscriptions
+    subs = s.Subscription.list(limit=limit, expand=['data.customer', 'data.latest_invoice'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_subscription.py", line 2694, in list
+    result = cls._static_request(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_resource.py", line 172, in _static_request
+    return _APIRequestor._global_instance().request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 197, in request
+    resp = requestor._interpret_response(rbody, rcode, rheaders, api_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 853, in _interpret_response
+    self.handle_error_response(
+  File "C:\NewFarmDogWalkingApp\.venv\Lib\site-packages\stripe\_api_requestor.py", line 336, in handle_error_response
+    raise err
+stripe._error.AuthenticationError: Expired API Key provided: sk_live_*********************************************************************************************wsrA9b

@@ -169,63 +169,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=True, methods=['post'])
-    def generate_bookings(self, request, pk=None):
-        """Generate bookings for this subscription"""
-        subscription = self.get_object()
-        serializer = BookingGenerationSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            try:
-                # Integration point with existing booking generation logic
-                # This would use the existing booking_utils.py functions
-                
-                # Default date range if not provided
-                start_date = serializer.validated_data.get('start_date', date.today())
-                end_date = serializer.validated_data.get('end_date', start_date + timedelta(days=90))
-                
-                # This would integrate with existing booking generation
-                bookings_created = 0  # Placeholder
-                
-                return Response({
-                    'message': f'Generated {bookings_created} bookings',
-                    'start_date': start_date,
-                    'end_date': end_date
-                })
-            except Exception as e:
-                logger.error(f"Failed to generate bookings for {subscription.stripe_subscription_id}: {e}")
-                return Response(
-                    {'error': f'Booking generation failed: {str(e)}'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    @action(detail=False, methods=['post'])
-    def sync_all(self, request):
-        """Sync all subscriptions or specific ones with Stripe"""
-        serializer = SubscriptionSyncSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            try:
-                # Integration point with existing sync logic
-                from subscription_sync import sync_subscriptions_to_bookings_and_calendar
-                
-                horizon_days = serializer.validated_data.get('horizon_days', 90)
-                result = sync_subscriptions_to_bookings_and_calendar(horizon_days=horizon_days)
-                
-                return Response({
-                    'message': 'Sync completed successfully',
-                    'result': result
-                })
-            except Exception as e:
-                logger.error(f"Failed to sync subscriptions: {e}")
-                return Response(
-                    {'error': f'Sync failed: {str(e)}'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    # Removed manual booking generation and sync endpoints - now handled automatically
 
 
 class BookingViewSet(viewsets.ModelViewSet):

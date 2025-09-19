@@ -67,15 +67,13 @@ When you save changes to a subscription's schedule:
 3. **Confirmation**: You'll see a message confirming the update
 4. **Check Results**: Visit the Bookings section to see new appointments
 
-### Manual Actions
+### Automatic Processing
 
-You can perform bulk actions on subscriptions:
+The system now handles subscription management automatically:
 
-1. **Select subscriptions** using the checkboxes
-2. **Choose an action** from the dropdown:
-   - **Sync with Stripe**: Update subscription data from Stripe
-   - **Generate Bookings**: Create new bookings from schedule
-3. **Click "Go"** to execute the action
+1. **Automatic Sync**: Subscription data is synchronized with Stripe automatically when the app starts
+2. **Automatic Booking Generation**: When you save schedule changes, bookings are created automatically
+3. **No Manual Actions Required**: The manual sync and booking generation buttons have been removed as they are no longer needed
 
 ## Managing Clients
 
@@ -155,8 +153,10 @@ Select bookings and use actions to:
 
 If bookings aren't created after saving:
 1. Check that schedule fields are properly formatted
-2. Use the **"Generate bookings"** action manually
-3. Verify the subscription status is "Active"
+2. Verify the subscription status is "Active"
+3. Wait a few moments as booking generation happens automatically in the background
+4. Refresh the Bookings page to see new appointments
+5. Contact technical support if bookings still don't appear
 
 ### Schedule Validation Errors
 
@@ -168,9 +168,9 @@ Common errors and fixes:
 ### Sync Issues
 
 If data seems out of date:
-1. Use **"Sync with Stripe"** action to refresh from Stripe
+1. Restart the application to trigger automatic sync
 2. Check the **Last Sync** column for timing
-3. Contact technical support if issues persist
+3. Contact technical support if issues persist - manual sync actions have been removed as they are no longer needed
 
 ## Tips for Staff
 
