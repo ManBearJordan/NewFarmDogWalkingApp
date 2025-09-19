@@ -688,14 +688,9 @@ class BookingsTab(QWidget):
         top_layout.addWidget(QLabel("Range:"))
         top_layout.addWidget(self.rangeCombo)
 
-        self.refresh_btn = QPushButton("Refresh")
-        top_layout.addWidget(self.refresh_btn)
-        self.refresh_btn.clicked.connect(self.refresh_two_weeks)
-
-        self.import_btn = QPushButton("Import from invoices")
-        top_layout.addWidget(self.import_btn)
-        self.import_btn.setToolTip('Create/refresh bookings from Stripe invoice metadata')
-        self.import_btn.clicked.connect(self.import_from_invoices)
+        # REMOVED: Manual refresh/import buttons - bookings now auto-generated from subscriptions
+        # self.refresh_btn = QPushButton("Refresh")
+        # self.import_btn = QPushButton("Import from invoices")
         
         top_layout.addStretch()
         layout.addLayout(top_layout)
@@ -1630,39 +1625,55 @@ class CalendarTab(QWidget):
         
         This replaces the removed legacy sync buttons and should only be used
         when there are sync issues that need to be resolved manually.
+        ENHANCED: Comprehensive error logging and status reporting.
         """
         try:
             from subscription_sync import sync_subscriptions_to_bookings_and_calendar
+            from log_utils import log_subscription_info, log_subscription_error
+            
+            log_subscription_info("User initiated troubleshoot sync from calendar tab")
             
             # Show progress message
             progress_msg = QMessageBox(self)
             progress_msg.setWindowTitle("Troubleshoot Sync")
-            progress_msg.setText("Performing troubleshooting sync...\nThis may take a moment.")
+            progress_msg.setText("Performing troubleshooting sync...\nThis may take a moment.\n\nAll errors will be logged for debugging.")
             progress_msg.setStandardButtons(QMessageBox.NoButton)
             progress_msg.show()
             QApplication.processEvents()
             
             # Perform sync
+            logger.info("Calendar: Starting troubleshoot sync")
             stats = sync_subscriptions_to_bookings_and_calendar(self.conn)
             
             # Close progress and refresh view
             progress_msg.close()
             self.refresh_day()
             
-            # Show results
-            msg = f"""Troubleshooting sync completed successfully!
+            # Enhanced results with error count
+            success_msg = f"""Troubleshooting sync completed!
 
-Subscriptions processed: {stats['subscriptions_processed']}
-Bookings created: {stats['bookings_created']}
-Bookings cleaned up: {stats['bookings_cleaned']}
+Subscriptions processed: {stats.get('subscriptions_processed', 0)}
+Bookings created: {stats.get('bookings_created', 0)}
+Bookings cleaned up: {stats.get('bookings_cleaned', 0)}
+Errors encountered: {stats.get('errors_count', 0)}
 
 Note: Subscriptions are now automatically synced when the app starts.
-This troubleshooting sync should only be needed in case of sync issues."""
+This troubleshooting sync should only be needed in case of sync issues.
+
+Check the subscription error log for detailed error information."""
             
-            QMessageBox.information(self, "Troubleshoot Sync Complete", msg)
+            log_subscription_info(f"Troubleshoot sync completed: {stats.get('bookings_created', 0)} bookings created, {stats.get('errors_count', 0)} errors")
+            
+            if stats.get('errors_count', 0) > 0:
+                QMessageBox.warning(self, "Troubleshoot Sync Complete with Errors", success_msg)
+            else:
+                QMessageBox.information(self, "Troubleshoot Sync Complete", success_msg)
             
         except Exception as e:
-            QMessageBox.critical(self, "Troubleshoot Sync Error", f"Failed to perform troubleshooting sync: {str(e)}")
+            error_msg = f"Failed to perform troubleshooting sync: {str(e)}"
+            logger.error(f"Calendar: {error_msg}")
+            log_subscription_error("Calendar troubleshoot sync failed", "manual_sync", e)
+            QMessageBox.critical(self, "Troubleshoot Sync Error", error_msg)
 
     def manual_subscription_sync(self):
         """
@@ -1814,6 +1825,7 @@ class SubscriptionsTab(QWidget):
         layout = QVBoxLayout(self)
 
         top = QHBoxLayout()
+<<<<<<< HEAD
         self.refresh_btn = QPushButton("Refresh from Stripe")
         self.refresh_btn.clicked.connect(self.refresh_from_stripe)
         self.delete_btn = QPushButton("Delete Subscription")
@@ -1826,6 +1838,24 @@ class SubscriptionsTab(QWidget):
         info_label = QLabel("Subscriptions are now fully automatic! Schedule information is collected through popup dialogs when needed, "
                            "and bookings are generated automatically. No manual buttons required.")
         info_label.setStyleSheet("QLabel { color: #4DA3FF; font-style: italic; padding: 10px; background: #191C21; border: 1px solid #2A3038; border-radius: 8px; }")
+=======
+        # REMOVED: Manual sync buttons - subscriptions now sync automatically
+        # self.refresh_btn = QPushButton("Refresh from Stripe") 
+        # self.rebuild_btn = QPushButton("Rebuild next 3 months")
+        
+        # Keep essential button: subscription deletion only
+        self.delete_btn = QPushButton("Delete Subscription")
+        self.delete_btn.clicked.connect(self.delete_subscription)
+        self.delete_btn.setStyleSheet("QPushButton { background-color: #dc3545; color: white; font-weight: bold; }")
+        top.addWidget(self.delete_btn)
+        layout.addLayout(top)
+
+        # Information about the automatic workflow  
+        info_label = QLabel("Subscriptions sync automatically on app startup and via webhooks. "
+                           "Bookings and calendar entries are generated automatically when subscriptions are created/updated. "
+                           "All operations are logged to subscription_logs.txt for monitoring.")
+        info_label.setStyleSheet("QLabel { color: #666; font-style: italic; padding: 10px; }")
+>>>>>>> b94fa8aba4414bf0b4dc8f15bb3cb4d21a3f77a1
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
 
@@ -1841,6 +1871,276 @@ class SubscriptionsTab(QWidget):
         # Row selection handling - no longer needed with popup-based workflow
         pass
 
+<<<<<<< HEAD
+=======
+    def _mask_to_days_label(self, mask: int) -> str:
+        names = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+        return ",".join(n for i,n in enumerate(names) if mask & (1<<i))
+
+    def _clear_future_subscription_bookings(self, sub_id: str):
+        """Clear future bookings for a specific subscription to avoid duplicates"""
+        conn = get_conn()
+        c = conn.cursor()
+        
+        # Clear future sub_occurrences for this subscription
+        c.execute("""
+            DELETE FROM sub_occurrences 
+            WHERE stripe_subscription_id = ? 
+            AND date(start_dt) >= date('now')
+        """, (sub_id,))
+        
+        conn.commit()
+
+    def _generate_bookings_for_sub(self, sub_id, client_id, service_code,
+                                   days_mask, start_time_str, end_time_str,
+                                   dogs, location, months_ahead=3):
+        """Auto-generate bookings for subscriptions as specified in the task requirements"""
+        conn = get_conn()
+        cur = conn.cursor()
+        # Remove future auto bookings for this sub
+        cur.execute("""
+            DELETE FROM bookings
+            WHERE created_from_sub_id = ? AND date(start_dt) >= date('now')
+              AND source = 'subscription'
+        """, (sub_id,))
+        conn.commit()
+        
+        # Build the next 3 months of dates
+        def parse_hhmm(s):
+            h, m = map(int, s.split(':')); return h, m
+        sh, sm = parse_hhmm(start_time_str)
+        eh, em = parse_hhmm(end_time_str)
+        today = date.today()
+        end_date = today + timedelta(days=90)
+        created = 0
+        for d in (today + timedelta(days=i) for i in range((end_date - today).days + 1)):
+            if days_mask & (1 << d.weekday()):
+                start_dt = datetime(d.year, d.month, d.day, sh, sm, tzinfo=BRISBANE)
+                end_dt = datetime(d.year, d.month, d.day, eh, em, tzinfo=BRISBANE)
+                if "overnight" in service_code.lower():
+                    end_dt += timedelta(days=1)
+                cur.execute("""
+                    INSERT OR IGNORE INTO bookings
+                    (client_id, service_type, start_dt, end_dt, location, dogs, status,
+                     price_cents, notes, created_from_sub_id, source)
+                    VALUES (?, ?, ?, ?, ?, ?, 'scheduled',
+                            (SELECT amount_cents FROM services WHERE code=?), 
+                            'Auto-generated from subscription', ?, 'subscription')
+                """, (client_id, service_code, start_dt.isoformat(), end_dt.isoformat(),
+                      location, dogs, service_code, sub_id))
+                created += cur.rowcount or 0
+        conn.commit()
+        return created
+
+    def _generate_subscription_bookings(self, sub_id: str, days_mask: int, start_str: str, end_str: str, dogs: int, location: str, notes: str) -> int:
+        """Generate actual bookings from subscription schedule for the next 3 months"""
+        from datetime import date, datetime, timedelta, time
+        
+        try:
+            from zoneinfo import ZoneInfo
+            tz = ZoneInfo("Australia/Brisbane")
+        except Exception:
+            tz = None  # fall back to naive
+
+        conn = get_conn()
+        c = conn.cursor()
+        
+        # FIXED: Get subscription details from Stripe to find the client AND service info
+        client_id = None
+        service_label = "Dog Walking Service"  # Default fallback
+        service_type = "WALK_GENERAL"  # Default fallback
+        
+        try:
+            import stripe
+            from secrets_config import get_stripe_key
+            stripe.api_key = get_stripe_key()
+            
+            # Get subscription with expanded data
+            subscription = stripe.Subscription.retrieve(sub_id, expand=['customer', 'items.data.price.product'])
+            
+            # Get customer info
+            customer = subscription.customer
+            customer_email = getattr(customer, 'email', None)
+            customer_name = getattr(customer, 'name', None) or customer_email or "Unknown Customer"
+            
+            # Find or create client
+            if customer_email:
+                client_row = c.execute("""
+                    SELECT id FROM clients 
+                    WHERE LOWER(email) = LOWER(?) 
+                    LIMIT 1
+                """, (customer_email,)).fetchone()
+                
+                if client_row:
+                    client_id = client_row["id"]
+                else:
+                    # Create new client
+                    c.execute("""
+                        INSERT INTO clients (name, email, stripe_customer_id) 
+                        VALUES (?, ?, ?)
+                    """, (customer_name, customer_email, customer.id))
+                    client_id = c.lastrowid
+            
+            # FIXED: Extract service information from subscription items
+            items = getattr(subscription, "items", None)
+            if items and hasattr(items, "data") and items.data:
+                item = items.data[0]  # Use first item
+                price = getattr(item, "price", None)
+                
+                # Try to get service info from price metadata
+                if price and hasattr(price, 'metadata') and price.metadata:
+                    price_metadata = dict(price.metadata)
+                    # Check both service_code and service_type (interchangeable)
+                    service_type = (price_metadata.get('service_code') or 
+                                  price_metadata.get('service_type') or 
+                                  service_type)
+                    service_label = (price_metadata.get('service_name') or 
+                                   price.nickname or 
+                                   service_label)
+                elif price and hasattr(price, "nickname") and price.nickname:
+                    service_label = price.nickname
+                    service_type = self._derive_service_type_from_label(service_label)
+                
+                # Try product metadata as fallback
+                if price and hasattr(price, 'product') and hasattr(price.product, 'metadata'):
+                    product_metadata = dict(price.product.metadata or {})
+                    if not service_type or service_type == "WALK_GENERAL":
+                        # Check both service_code and service_type (interchangeable)
+                        service_type = (product_metadata.get('service_code') or 
+                                      product_metadata.get('service_type') or 
+                                      service_type)
+                    if not service_label or service_label == "Dog Walking Service":
+                        service_label = (product_metadata.get('service_name') or 
+                                       price.product.name or 
+                                       service_label)
+                        
+        except Exception as e:
+            print(f"Error getting subscription details: {e}")
+            # FIXED: No longer create placeholder clients - require real client resolution
+            print(f"Could not resolve real client for subscription {sub_id} - skipping booking generation")
+            return 0
+
+        if not client_id:
+            print(f"Could not resolve client for subscription {sub_id}")
+            return 0
+
+        # Time window - next 3 months
+        today = date.today()
+        end_date = today + timedelta(days=90)  # 3 months
+        
+        def parse_hhmm(s: str) -> time:
+            hh, mm = map(int, s.split(":"))
+            return time(hh, mm)
+
+        st = parse_hhmm(start_str)
+        et = parse_hhmm(end_str)
+        
+        bookings_created = 0
+        d = today
+        
+        print(f"DEBUG: Generating bookings for subscription {sub_id}")
+        print(f"DEBUG: days_mask = {days_mask} (binary: {bin(days_mask)})")
+        print(f"DEBUG: Date range: {today} to {end_date}")
+        print(f"DEBUG: client_id = {client_id}, service_type = {service_type}")
+        
+        while d <= end_date:
+            weekday = d.weekday()  # Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
+            day_matches = bool(days_mask & (1 << weekday))
+            
+            if day_matches:
+                print(f"DEBUG: Day {d} (weekday {weekday}) matches schedule")
+                
+                if tz:
+                    start_dt = datetime(d.year, d.month, d.day, st.hour, st.minute, tzinfo=tz)
+                    end_dt = datetime(d.year, d.month, d.day, et.hour, et.minute, tzinfo=tz)
+                else:
+                    start_dt = datetime(d.year, d.month, d.day, st.hour, st.minute)
+                    end_dt = datetime(d.year, d.month, d.day, et.hour, et.minute)
+
+                start_dt_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+                end_dt_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+                # Check for existing booking to avoid duplicates
+                existing = c.execute("""
+                    SELECT id FROM bookings 
+                    WHERE client_id = ? 
+                    AND start_dt = ? 
+                    AND COALESCE(deleted, 0) = 0
+                """, (client_id, start_dt_str)).fetchone()
+                
+                if not existing:
+                    print(f"DEBUG: Creating booking for {start_dt_str}")
+                    # FIXED: Create the booking with proper service info (not "SUBSCRIPTION")
+                    price_cents = 0  # Subscription bookings are typically pre-paid
+                    
+                    booking_id = add_or_upsert_booking(
+                        conn, client_id, service_label, service_type,
+                        start_dt_str, end_dt_str, location, dogs, price_cents, 
+                        f"Auto-generated from subscription {sub_id}. {notes}".strip()
+                    )
+                    bookings_created += 1
+                    print(f"DEBUG: Created booking {booking_id}")
+                else:
+                    print(f"DEBUG: Booking already exists for {start_dt_str}")
+            else:
+                # Only print for first few days to avoid spam
+                if (d - today).days < 7:
+                    print(f"DEBUG: Day {d} (weekday {weekday}) does NOT match schedule (mask bit {weekday} = {bool(days_mask & (1 << weekday))})")
+
+            d += timedelta(days=1)
+        
+        print(f"DEBUG: Total bookings created: {bookings_created}")
+
+        conn.commit()
+        return bookings_created
+
+    def _derive_service_type_from_label(self, label):
+        """Derive a proper service_type code from a service label"""
+        if not label:
+            return "WALK_GENERAL"
+        
+        label_lower = label.lower()
+        
+        # Map common service labels to proper service types
+        if "daycare" in label_lower:
+            if "single" in label_lower or "day" in label_lower:
+                return "DAYCARE_SINGLE"
+            elif "pack" in label_lower:
+                return "DAYCARE_PACKS"
+            elif "weekly" in label_lower:
+                return "DAYCARE_WEEKLY_PER_VISIT"
+            elif "fortnightly" in label_lower:
+                return "DAYCARE_FORTNIGHTLY_PER_VISIT"
+            else:
+                return "DAYCARE_SINGLE"
+        elif "short" in label_lower and "walk" in label_lower:
+            if "pack" in label_lower:
+                return "WALK_SHORT_PACKS"
+            else:
+                return "WALK_SHORT_SINGLE"
+        elif "long" in label_lower and "walk" in label_lower:
+            if "pack" in label_lower:
+                return "WALK_LONG_PACKS"
+            else:
+                return "WALK_LONG_SINGLE"
+        elif "home visit" in label_lower or "home-visit" in label_lower:
+            if "30m" in label_lower and "2" in label_lower:
+                return "HOME_VISIT_30M_2X_SINGLE"
+            else:
+                return "HOME_VISIT_30M_SINGLE"
+        elif "pickup" in label_lower or "drop" in label_lower:
+            return "PICKUP_DROPOFF_SINGLE"
+        elif "scoop" in label_lower or "poop" in label_lower:
+            if "weekly" in label_lower or "monthly" in label_lower:
+                return "SCOOP_WEEKLY_MONTHLY"
+            else:
+                return "SCOOP_SINGLE"
+        elif "walk" in label_lower:
+            return "WALK_GENERAL"
+        else:
+            # Convert label to a reasonable service type code
+            return label.upper().replace(" ", "_").replace("-", "_").replace("(", "").replace(")", "")
+>>>>>>> b94fa8aba4414bf0b4dc8f15bb3cb4d21a3f77a1
 
     def _get_main_window(self):
         """Helper method to get the main window for UI refresh"""

@@ -15,14 +15,14 @@ def get_subscription_logger():
     Get or create the subscription logger with file handler.
     
     Returns:
-        Logger instance configured to write to subscription_error_log.txt
+        Logger instance configured to write to subscription_logs.txt
     """
     logger = logging.getLogger("subscription_logger")
     
     # Only add handler if it doesn't exist (prevents duplicate handlers)
     if not logger.handlers:
         # Create file handler
-        handler = logging.FileHandler("subscription_error_log.txt", encoding='utf-8')
+        handler = logging.FileHandler("subscription_logs.txt", encoding='utf-8')
         
         # Create formatter with timestamp, level, and message
         formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
@@ -104,7 +104,7 @@ def initialize_error_log():
     Initialize the error log file with a header.
     Called at application startup to ensure log file exists.
     """
-    log_file = "subscription_error_log.txt"
+    log_file = "subscription_logs.txt"
     
     # Check if log file exists and is recent (today)
     if os.path.exists(log_file):
@@ -118,8 +118,8 @@ def initialize_error_log():
     
     # Create or reinitialize log file with header
     with open(log_file, 'w', encoding='utf-8') as f:
-        f.write(f"# Subscription Error Log - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write("# This file captures all subscription-related errors for diagnostics\n")
+        f.write(f"# Subscription Operations Log - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write("# This file captures all subscription-related operations for diagnostics\n")
         f.write("# Format: TIMESTAMP LEVEL MESSAGE\n")
         f.write("#" + "="*70 + "\n\n")
     

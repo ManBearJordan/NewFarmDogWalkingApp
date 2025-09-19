@@ -39,25 +39,71 @@ class SyncLogAdmin:
         return JsonResponse({'error': 'POST method required'})
     
     def sync_logs_view(self, request):
-        """View recent sync logs"""
+        """View recent sync logs with download option"""
+        import os
+        from django.http import HttpResponse
+        from django.conf import settings
+        
+        # Check if this is a download request
+        download = request.GET.get('download', False)
+        
         try:
-            import os
-            from django.conf import settings
+            # Primary log file: our dedicated subscription error log
+            primary_log_file = "subscription_error_log.txt"
+            secondary_log_file = os.path.join(settings.BASE_DIR, 'django.log')
             
-            log_file = os.path.join(settings.BASE_DIR, 'django.log')
-            if os.path.exists(log_file):
-                with open(log_file, 'r') as f:
-                    # Get last 100 lines
-                    lines = f.readlines()[-100:]
-                    # Filter for sync-related logs
-                    sync_lines = [line for line in lines if 'stripe' in line.lower() or 'sync' in line.lower()]
-                    logs = ''.join(sync_lines)
+            logs_content = ""
+            
+            # Try to read the primary subscription log first
+            if os.path.exists(primary_log_file):
+                with open(primary_log_file, 'r', encoding='utf-8') as f:
+                    logs_content += "=== SUBSCRIPTION ERROR LOG (subscription_error_log.txt) ===\n"
+                    if download:
+                        # Return full log for download
+                        logs_content += f.read()
+                    else:
+                        # Get last 200 lines for viewing
+                        lines = f.readlines()
+                        logs_content += ''.join(lines[-200:])
+                    logs_content += "\n\n"
+            
+            # Also include django.log if it exists and has subscription-related entries
+            if os.path.exists(secondary_log_file):
+                with open(secondary_log_file, 'r') as f:
+                    lines = f.readlines()
+                    # Filter for subscription/sync-related logs
+                    sync_lines = [line for line in lines if any(keyword in line.lower() for keyword in ['subscription', 'stripe', 'sync', 'webhook', 'booking'])]
+                    
+                    if sync_lines:
+                        logs_content += "=== DJANGO LOG (django.log) - Subscription/Sync Related ===\n"
+                        if download:
+                            logs_content += ''.join(sync_lines)
+                        else:
+                            logs_content += ''.join(sync_lines[-100:])  # Last 100 sync-related lines
+            
+            if not logs_content:
+                logs_content = "No subscription/sync logs found."
+            
+            if download:
+                # Return as downloadable file
+                response = HttpResponse(logs_content, content_type='text/plain')
+                response['Content-Disposition'] = 'attachment; filename="subscription_logs.txt"'
+                return response
             else:
-                logs = 'Log file not found'
+                # Return as JSON for web viewing
+                return JsonResponse({
+                    'success': True,
+                    'logs': logs_content,
+                    'log_files_checked': [primary_log_file, secondary_log_file],
+                    'download_url': request.build_absolute_uri() + '?download=1'
+                })
                 
-            return JsonResponse({'logs': logs})
         except Exception as e:
-            return JsonResponse({'error': str(e)})
+            error_msg = f"Error reading log files: {str(e)}"
+            if download:
+                return HttpResponse(error_msg, content_type='text/plain', status=500)
+            else:
+                return JsonResponse({'success': False, 'error': error_msg})
 
 
 @admin.register(Client)
@@ -183,51 +229,119 @@ class SubscriptionAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         """
         Save the subscription and automatically update bookings if schedule changed.
+        ENHANCED: Comprehensive error logging and automatic booking generation.
         """
+        # Import logging utilities
+        from log_utils import log_subscription_info, log_subscription_error
+        
         # Track if this is an update with schedule changes
         schedule_changed = False
+        original_data = {}
+        
         if change:
             # Get the original object to compare
             try:
                 original = Subscription.objects.get(pk=obj.pk)
                 schedule_fields = [
                     'schedule_days', 'schedule_start_time', 'schedule_end_time',
-                    'schedule_location', 'schedule_dogs', 'schedule_notes', 'service_code'
+                    'schedule_location', 'schedule_dogs', 'schedule_notes', 'service_code', 'status'
                 ]
                 
                 for field in schedule_fields:
-                    if getattr(original, field) != getattr(obj, field):
+                    original_value = getattr(original, field)
+                    new_value = getattr(obj, field)
+                    original_data[field] = original_value
+                    
+                    if original_value != new_value:
                         schedule_changed = True
-                        break
+                        logger.info(f"Admin: Schedule field '{field}' changed from '{original_value}' to '{new_value}' for {obj.stripe_subscription_id}")
                         
             except Subscription.DoesNotExist:
-                pass
+                logger.warning(f"Admin: Could not find original subscription for comparison: {obj.stripe_subscription_id}")
+        else:
+            # This is a new subscription
+            logger.info(f"Admin: Creating new subscription {obj.stripe_subscription_id}")
+            log_subscription_info(f"New subscription created via admin: {obj.stripe_subscription_id}", obj.stripe_subscription_id)
         
         # Save the object first
         super().save_model(request, obj, form, change)
         
-        # If schedule changed, automatically generate bookings
-        if schedule_changed:
+        # Log the save operation
+        action = "updated" if change else "created"
+        logger.info(f"Admin: Subscription {obj.stripe_subscription_id} {action} successfully")
+        log_subscription_info(f"Subscription {action} via admin, schedule_changed={schedule_changed}", obj.stripe_subscription_id)
+        
+        # Automatically generate bookings if:
+        # 1. This is a new subscription (not change) OR
+        # 2. This is an update with schedule changes
+        # AND the subscription is active with valid schedule
+        should_generate = (not change) or schedule_changed
+        
+        if should_generate and obj.status == 'active' and self._has_valid_schedule_admin(obj):
             try:
-                from core.services.stripe_sync import stripe_sync_service
-                result = stripe_sync_service.sync_all_stripe_data()
-                if result.get('success'):
-                    bookings_created = result['stats'].get('bookings_created', 0)
-                    if bookings_created > 0:
-                        messages.success(request, 
-                            f'Schedule updated and {bookings_created} new bookings were created automatically.')
+                logger.info(f"Admin: AUTO-GENERATING bookings for {obj.stripe_subscription_id} (action={action}, schedule_changed={schedule_changed})")
+                
+                # Try to use the new sync function first
+                try:
+                    from core.tasks import generate_subscription_bookings_sync
+                    result = generate_subscription_bookings_sync(obj.stripe_subscription_id)
+                    
+                    if result.get('success'):
+                        bookings_created = result.get('bookings_created', 0)
+                        if bookings_created > 0:
+                            success_msg = f'Schedule {action} and {bookings_created} new bookings were created automatically.'
+                            messages.success(request, success_msg)
+                            log_subscription_info(f"Admin auto-booking SUCCESS: {bookings_created} bookings created", obj.stripe_subscription_id)
+                        else:
+                            info_msg = f'Schedule {action}. No new bookings were needed.'
+                            messages.info(request, info_msg)
+                            log_subscription_info(f"Admin auto-booking: No new bookings needed", obj.stripe_subscription_id)
                     else:
-                        messages.info(request, 
-                            'Schedule updated. No new bookings were needed.')
-                else:
-                    messages.warning(request, 
-                        f'Schedule updated but booking generation failed: {result.get("error", "Unknown error")}. '
-                        f'You can manually generate bookings using the "Generate bookings" action.')
+                        error_msg = result.get('error', 'Unknown error')
+                        warning_msg = f'Schedule {action} but booking generation failed: {error_msg}. You can manually generate bookings using the "Generate bookings" action.'
+                        messages.warning(request, warning_msg)
+                        log_subscription_error(f"Admin auto-booking FAILED: {error_msg}", obj.stripe_subscription_id)
+                        
+                except ImportError:
+                    # Fallback to legacy sync service
+                    logger.info(f"Admin: Using fallback sync service for {obj.stripe_subscription_id}")
+                    from core.services.stripe_sync import stripe_sync_service
+                    result = stripe_sync_service.sync_all_stripe_data()
+                    if result.get('success'):
+                        bookings_created = result['stats'].get('bookings_created', 0)
+                        if bookings_created > 0:
+                            success_msg = f'Schedule {action} and {bookings_created} new bookings were created automatically.'
+                            messages.success(request, success_msg)
+                            log_subscription_info(f"Admin fallback auto-booking SUCCESS: {bookings_created} bookings created", obj.stripe_subscription_id)
+                        else:
+                            info_msg = f'Schedule {action}. No new bookings were needed.'
+                            messages.info(request, info_msg)
+                            log_subscription_info(f"Admin fallback auto-booking: No new bookings needed", obj.stripe_subscription_id)
+                    else:
+                        error_msg = result.get("error", "Unknown error")
+                        warning_msg = f'Schedule {action} but booking generation failed: {error_msg}. You can manually generate bookings using the "Generate bookings" action.'
+                        messages.warning(request, warning_msg)
+                        log_subscription_error(f"Admin fallback auto-booking FAILED: {error_msg}", obj.stripe_subscription_id)
                         
             except Exception as e:
-                messages.error(request, 
-                    f'Schedule updated but booking generation failed: {str(e)}. '
-                    f'You can manually generate bookings using the "Generate bookings" action.')
+                error_msg = f'Schedule {action} but booking generation failed: {str(e)}. You can manually generate bookings using the "Generate bookings" action.'
+                messages.error(request, error_msg)
+                log_subscription_error(f"Admin auto-booking EXCEPTION: {str(e)}", obj.stripe_subscription_id, e)
+                
+        elif should_generate and obj.status != 'active':
+            logger.info(f"Admin: Skipping booking generation for {obj.stripe_subscription_id} - status is {obj.status}")
+            log_subscription_info(f"Booking generation skipped - subscription not active (status: {obj.status})", obj.stripe_subscription_id)
+            
+        elif should_generate and not self._has_valid_schedule_admin(obj):
+            logger.info(f"Admin: Skipping booking generation for {obj.stripe_subscription_id} - invalid schedule metadata")
+            log_subscription_error(f"Booking generation skipped - invalid schedule metadata: days={obj.schedule_days}, start={obj.schedule_start_time}, end={obj.schedule_end_time}, service={obj.service_code}", obj.stripe_subscription_id)
+
+    def _has_valid_schedule_admin(self, subscription):
+        """Check if subscription has valid schedule metadata for booking generation"""
+        return (subscription.schedule_days and 
+                subscription.schedule_start_time and 
+                subscription.schedule_end_time and
+                subscription.service_code)
 
 
 @admin.register(Booking)
@@ -458,25 +572,71 @@ class StripeSyncAdminSite(admin.AdminSite):
         return JsonResponse({'error': 'POST method required'})
     
     def sync_logs_view(self, request):
-        """View recent sync logs"""
+        """View recent sync logs with download option"""
+        import os
+        from django.http import HttpResponse
+        from django.conf import settings
+        
+        # Check if this is a download request
+        download = request.GET.get('download', False)
+        
         try:
-            import os
-            from django.conf import settings
+            # Primary log file: our dedicated subscription error log
+            primary_log_file = "subscription_error_log.txt"
+            secondary_log_file = os.path.join(settings.BASE_DIR, 'django.log')
             
-            log_file = os.path.join(settings.BASE_DIR, 'django.log')
-            if os.path.exists(log_file):
-                with open(log_file, 'r') as f:
-                    # Get last 100 lines
-                    lines = f.readlines()[-100:]
-                    # Filter for sync-related logs
-                    sync_lines = [line for line in lines if 'stripe' in line.lower() or 'sync' in line.lower()]
-                    logs = ''.join(sync_lines)
+            logs_content = ""
+            
+            # Try to read the primary subscription log first
+            if os.path.exists(primary_log_file):
+                with open(primary_log_file, 'r', encoding='utf-8') as f:
+                    logs_content += "=== SUBSCRIPTION ERROR LOG (subscription_error_log.txt) ===\n"
+                    if download:
+                        # Return full log for download
+                        logs_content += f.read()
+                    else:
+                        # Get last 200 lines for viewing
+                        lines = f.readlines()
+                        logs_content += ''.join(lines[-200:])
+                    logs_content += "\n\n"
+            
+            # Also include django.log if it exists and has subscription-related entries
+            if os.path.exists(secondary_log_file):
+                with open(secondary_log_file, 'r') as f:
+                    lines = f.readlines()
+                    # Filter for subscription/sync-related logs
+                    sync_lines = [line for line in lines if any(keyword in line.lower() for keyword in ['subscription', 'stripe', 'sync', 'webhook', 'booking'])]
+                    
+                    if sync_lines:
+                        logs_content += "=== DJANGO LOG (django.log) - Subscription/Sync Related ===\n"
+                        if download:
+                            logs_content += ''.join(sync_lines)
+                        else:
+                            logs_content += ''.join(sync_lines[-100:])  # Last 100 sync-related lines
+            
+            if not logs_content:
+                logs_content = "No subscription/sync logs found."
+            
+            if download:
+                # Return as downloadable file
+                response = HttpResponse(logs_content, content_type='text/plain')
+                response['Content-Disposition'] = 'attachment; filename="subscription_logs.txt"'
+                return response
             else:
-                logs = 'Log file not found'
+                # Return as JSON for web viewing
+                return JsonResponse({
+                    'success': True,
+                    'logs': logs_content,
+                    'log_files_checked': [primary_log_file, secondary_log_file],
+                    'download_url': request.build_absolute_uri() + '?download=1'
+                })
                 
-            return JsonResponse({'logs': logs})
         except Exception as e:
-            return JsonResponse({'error': str(e)})
+            error_msg = f"Error reading log files: {str(e)}"
+            if download:
+                return HttpResponse(error_msg, content_type='text/plain', status=500)
+            else:
+                return JsonResponse({'success': False, 'error': error_msg})
 
 
 # Use custom admin site
