@@ -1,4 +1,0 @@
-product_name,nickname,aud_amount_cents,interval,interval_count,visits_per_week,pack_qty,price_code
-Short Walk,Short Walk (Weekly),3000,week,1,1,1,WALK_SHORT_WEEKLY
-Long Walk,Long Walk (Weekly),4000,week,1,1,1,WALK_LONG_WEEKLY
-Doggy Daycare (per day),Daycare (Weekly),5500,week,1,1,1,DAYCARE_WEEKLY

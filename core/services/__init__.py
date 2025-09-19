@@ -1,1 +1,0 @@
-# Core services for the Django dog walking app
