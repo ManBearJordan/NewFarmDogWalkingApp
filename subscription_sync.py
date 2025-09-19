@@ -469,6 +469,7 @@ def sync_subscriptions_to_bookings_and_calendar(conn: Optional[sqlite3.Connectio
     Central function to sync all active subscriptions to bookings and calendar.
     
     This is the main entry point for subscription-driven booking generation.
+    ENHANCED: Zero silent failures - all errors are tracked and logged.
     
     Process:
     1. Fetch all active subscriptions from Stripe
@@ -484,7 +485,7 @@ def sync_subscriptions_to_bookings_and_calendar(conn: Optional[sqlite3.Connectio
         horizon_days: Number of days ahead to generate bookings
         
     Returns:
-        Dictionary with sync statistics
+        Dictionary with sync statistics including error count
     """
     if conn is None:
         conn = get_conn()
@@ -493,57 +494,102 @@ def sync_subscriptions_to_bookings_and_calendar(conn: Optional[sqlite3.Connectio
         close_conn = False
     
     try:
+        from log_utils import log_subscription_info, log_subscription_error
+        
         logger.info("Starting subscription sync to bookings and calendar")
+        log_subscription_info("Main sync started - generating bookings from subscriptions")
         
         # Import Stripe integration
         from stripe_integration import list_active_subscriptions
         
         # Fetch active subscriptions from Stripe
         logger.info("Fetching active subscriptions from Stripe")
-        subscriptions = list_active_subscriptions()
+        try:
+            subscriptions = list_active_subscriptions()
+        except Exception as e:
+            error_msg = f"Failed to fetch subscriptions from Stripe: {e}"
+            logger.error(error_msg)
+            log_subscription_error(error_msg, "sync_main", e)
+            return {"subscriptions_processed": 0, "bookings_created": 0, "bookings_cleaned": 0, "errors_count": 1}
         
         if not subscriptions:
             logger.info("No active subscriptions found")
-            return {"subscriptions_processed": 0, "bookings_created": 0, "bookings_cleaned": 0}
+            log_subscription_info("Sync completed: No active subscriptions found")
+            return {"subscriptions_processed": 0, "bookings_created": 0, "bookings_cleaned": 0, "errors_count": 0}
         
-        # Process each subscription
+        # Process each subscription with comprehensive error tracking
         total_bookings_created = 0
         subscriptions_processed = 0
+        errors_count = 0
         active_subscription_ids = []
         
+        logger.info(f"Processing {len(subscriptions)} active subscriptions")
+        log_subscription_info(f"Processing {len(subscriptions)} active subscriptions for booking generation")
+        
         for subscription in subscriptions:
+            subscription_id = "unknown"
             try:
                 subscription_id = subscription["id"]
                 active_subscription_ids.append(subscription_id)
+                
+                logger.debug(f"Processing subscription {subscription_id}")
                 
                 # Sync subscription to bookings
                 bookings_created = sync_subscription_to_bookings(conn, subscription, parent_widget=None)
                 total_bookings_created += bookings_created
                 subscriptions_processed += 1
                 
+                if bookings_created > 0:
+                    log_subscription_info(f"Generated {bookings_created} bookings", subscription_id)
+                
                 logger.debug(f"Processed subscription {subscription_id}: {bookings_created} bookings")
                 
             except Exception as e:
-                logger.error(f"Error processing subscription {subscription.get('id', 'unknown')}: {e}")
+                errors_count += 1
+                error_msg = f"Error processing subscription {subscription_id}: {e}"
+                logger.error(error_msg)
+                log_subscription_error(error_msg, subscription_id, e)
                 continue
         
         # Clean up cancelled subscriptions
-        bookings_cleaned = cleanup_cancelled_subscriptions(conn, active_subscription_ids)
+        try:
+            bookings_cleaned = cleanup_cancelled_subscriptions(conn, active_subscription_ids)
+        except Exception as e:
+            errors_count += 1
+            error_msg = f"Error cleaning up cancelled subscriptions: {e}"
+            logger.error(error_msg)
+            log_subscription_error(error_msg, "cleanup", e)
+            bookings_cleaned = 0
         
         # Update subscription schedule table for calendar holds
-        update_subscription_schedules(conn, subscriptions)
+        try:
+            update_subscription_schedules(conn, subscriptions)
+        except Exception as e:
+            errors_count += 1
+            error_msg = f"Error updating subscription schedules: {e}"
+            logger.error(error_msg)
+            log_subscription_error(error_msg, "schedule_update", e)
         
         # Materialize subscription occurrences for calendar display
-        from db import materialize_sub_occurrences
-        materialize_sub_occurrences(conn, horizon_days=horizon_days)
+        try:
+            from db import materialize_sub_occurrences
+            materialize_sub_occurrences(conn, horizon_days=horizon_days)
+        except Exception as e:
+            errors_count += 1
+            error_msg = f"Error materializing subscription occurrences: {e}"
+            logger.error(error_msg)
+            log_subscription_error(error_msg, "materialize", e)
         
         stats = {
             "subscriptions_processed": subscriptions_processed,
             "bookings_created": total_bookings_created,
-            "bookings_cleaned": bookings_cleaned
+            "bookings_cleaned": bookings_cleaned,
+            "errors_count": errors_count
         }
         
         logger.info(f"Subscription sync complete: {stats}")
+        log_subscription_info(f"Sync completed: {subscriptions_processed} processed, {total_bookings_created} bookings, {errors_count} errors")
+        
         return stats
         
     finally:
