@@ -5,6 +5,10 @@ __pycache__/
 *.pyd
 *.log
 
+# Subscription log files (runtime data)
+subscription_logs.txt
+subscription_error_log.txt
+
 # Virtual envs
 .venv/
 venv/

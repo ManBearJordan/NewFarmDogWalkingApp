@@ -66,14 +66,31 @@ class ReportsTab(QWidget):
         oi_lay.addLayout(oi_btns)
         oi_lay.addWidget(self.tbl_oi)
 
+        # ---------- Subscription Logs ----------
+        logs_box = QGroupBox("Subscription Operations Log")
+        logs_lay = QVBoxLayout(logs_box)
+
+        logs_btns = QHBoxLayout()
+        self.btn_download_log = QPushButton("Download Full Log")
+        self.btn_download_log.setStyleSheet("QPushButton { background-color: #007bff; color: white; font-weight: bold; }")
+        self.lbl_log_info = QLabel("Download the complete subscription operations log (subscription_logs.txt)")
+        self.lbl_log_info.setStyleSheet("QLabel { color: #666; font-style: italic; }")
+        logs_btns.addWidget(self.btn_download_log)
+        logs_btns.addStretch(1)
+        logs_btns.addWidget(self.lbl_log_info)
+
+        logs_lay.addLayout(logs_btns)
+
         lay.addWidget(rs_box)
         lay.addWidget(oi_box)
+        lay.addWidget(logs_box)
         lay.addStretch(1)
 
         # wiring
         self.btn_preview.clicked.connect(self._do_preview)
         self.btn_pdf.clicked.connect(self._save_pdf)
         self.btn_oi_refresh.clicked.connect(self._refresh_oi)
+        self.btn_download_log.clicked.connect(self._download_subscription_log)
 
     # ----------------- Run Sheet -----------------
     def _do_preview(self):
@@ -273,3 +290,57 @@ class ReportsTab(QWidget):
 
         self.tbl_oi.resizeColumnsToContents()
         self.lbl_oi_count.setText(f"{len(items)} shown")
+
+    # ----------------- Subscription Log Download -----------------
+    def _download_subscription_log(self):
+        """Download the complete subscription operations log file."""
+        import os
+        from datetime import datetime
+        
+        log_file_path = "subscription_logs.txt"
+        
+        # Check if log file exists
+        if not os.path.exists(log_file_path):
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, 
+                "Log File Not Found", 
+                f"The subscription log file '{log_file_path}' does not exist.\n\n"
+                "This may mean no subscription operations have been logged yet."
+            )
+            return
+        
+        # Generate default filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"subscription_logs_{timestamp}.txt"
+        
+        # Open file dialog to save the log
+        path, _ = QFileDialog.getSaveFileName(
+            self, 
+            "Save Subscription Log", 
+            default_filename, 
+            "Text Files (*.txt);;All Files (*)"
+        )
+        
+        if not path:
+            return  # User cancelled
+        
+        try:
+            # Copy the log file to the selected location
+            import shutil
+            shutil.copy2(log_file_path, path)
+            
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self,
+                "Log Downloaded",
+                f"✅ Subscription log downloaded successfully to:\n{path}"
+            )
+            
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self,
+                "Download Error", 
+                f"Failed to download log file: {e}"
+            )
