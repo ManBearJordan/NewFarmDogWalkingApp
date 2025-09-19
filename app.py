@@ -688,14 +688,9 @@ class BookingsTab(QWidget):
         top_layout.addWidget(QLabel("Range:"))
         top_layout.addWidget(self.rangeCombo)
 
-        self.refresh_btn = QPushButton("Refresh")
-        top_layout.addWidget(self.refresh_btn)
-        self.refresh_btn.clicked.connect(self.refresh_two_weeks)
-
-        self.import_btn = QPushButton("Import from invoices")
-        top_layout.addWidget(self.import_btn)
-        self.import_btn.setToolTip('Create/refresh bookings from Stripe invoice metadata')
-        self.import_btn.clicked.connect(self.import_from_invoices)
+        # REMOVED: Manual refresh/import buttons - bookings now auto-generated from subscriptions
+        # self.refresh_btn = QPushButton("Refresh")
+        # self.import_btn = QPushButton("Import from invoices")
         
         top_layout.addStretch()
         layout.addLayout(top_layout)
@@ -1830,21 +1825,23 @@ class SubscriptionsTab(QWidget):
         layout = QVBoxLayout(self)
 
         top = QHBoxLayout()
-        self.refresh_btn = QPushButton("Refresh from Stripe")
-        self.refresh_btn.clicked.connect(self.refresh_from_stripe)
+        # REMOVED: Manual sync buttons - subscriptions now sync automatically
+        # self.refresh_btn = QPushButton("Refresh from Stripe") 
+        # self.rebuild_btn = QPushButton("Rebuild next 3 months")
+        
+        # Keep essential buttons: schedule completion and subscription deletion
         self.save_btn = QPushButton("Complete Schedule for Selected")
         self.save_btn.clicked.connect(self.save_schedule)
-        self.rebuild_btn = QPushButton("Rebuild next 3 months")
-        self.rebuild_btn.clicked.connect(self.rebuild_occurrences)
         self.delete_btn = QPushButton("Delete Subscription")
         self.delete_btn.clicked.connect(self.delete_subscription)
         self.delete_btn.setStyleSheet("QPushButton { background-color: #dc3545; color: white; font-weight: bold; }")
-        top.addWidget(self.refresh_btn); top.addWidget(self.save_btn); top.addWidget(self.rebuild_btn); top.addWidget(self.delete_btn)
+        top.addWidget(self.save_btn); top.addWidget(self.delete_btn)
         layout.addLayout(top)
 
-        # Information about the new popup-based workflow
-        info_label = QLabel("Schedule information is now managed through popup dialogs. "
-                           "Use 'Complete Schedule for Selected' to open the schedule dialog for incomplete subscriptions.")
+        # Information about the automatic workflow  
+        info_label = QLabel("Subscriptions now sync automatically on app startup and via webhooks. "
+                           "Bookings and calendar entries are generated automatically when subscriptions are created/updated. "
+                           "Use 'Complete Schedule for Selected' to add missing schedule information.")
         info_label.setStyleSheet("QLabel { color: #666; font-style: italic; padding: 10px; }")
         info_label.setWordWrap(True)
         layout.addWidget(info_label)

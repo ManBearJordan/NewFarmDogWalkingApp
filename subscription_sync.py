@@ -223,6 +223,7 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
     Sync a single subscription to generate/update bookings.
     
     Ensures every subscription ALWAYS stores the Stripe customer ID as per requirements.
+    ENHANCED: Comprehensive logging of every step per problem statement.
     
     Args:
         conn: Database connection
@@ -231,11 +232,13 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
     Returns:
         Number of bookings created/updated
     """
-    from log_utils import log_subscription_error, log_subscription_warning
+    from log_utils import log_subscription_error, log_subscription_warning, log_subscription_info
     
     subscription_id = subscription_data["id"]
+    log_subscription_info(f"STEP 1: Starting subscription processing", subscription_id)
     
-    # Extract customer_id with robust fallback - REQUIREMENT: Always store customer_id
+    # STEP 1: Extract customer_id with robust fallback - REQUIREMENT: Always store customer_id
+    log_subscription_info(f"STEP 2: Extracting customer_id from subscription metadata", subscription_id)
     customer_id = subscription_data.get("customer_id")
     if not customer_id:
         # Try to extract from customer object
@@ -246,22 +249,28 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
             customer_id = getattr(customer, "id", None)
     
     if not customer_id:
-        log_subscription_error("Missing customer_id in subscription data", subscription_id)
+        log_subscription_error("STEP 2 FAILED: Missing customer_id in subscription data", subscription_id)
         return 0
+    
+    log_subscription_info(f"STEP 2 SUCCESS: Found customer_id={customer_id}", subscription_id)
     
     # Ensure subscription_data includes customer_id for all downstream operations
     if "customer_id" not in subscription_data:
         subscription_data["customer_id"] = customer_id
     
+    # STEP 3: Client lookup
+    log_subscription_info(f"STEP 3: Looking up client_id for customer_id={customer_id}", subscription_id)
     client_id = resolve_client_id(conn, customer_id)
     if not client_id:
-        log_subscription_warning(f"Could not resolve client for customer {customer_id}", subscription_id)
+        log_subscription_warning(f"STEP 3 FAILED: Could not resolve client for customer {customer_id}", subscription_id)
         return 0
+    log_subscription_info(f"STEP 3 SUCCESS: Found client_id={client_id}", subscription_id)
     
-    # Enhanced service code extraction with better fallback handling
+    # STEP 4: Service code extraction with enhanced logging
+    log_subscription_info(f"STEP 4: Extracting service code from metadata", subscription_id)
     service_code = extract_service_code_from_metadata(subscription_data)
     if not service_code:
-        logger.info(f"Primary service code extraction failed for subscription {subscription_id}, trying fallback methods...")
+        log_subscription_info(f"STEP 4: Primary service code extraction failed, trying fallback methods", subscription_id)
         
         # Fallback 1: Try to derive from product information
         try:
@@ -281,7 +290,7 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
                         mapped_code = get_service_code(price_nickname.strip())
                         if mapped_code and is_valid_service_code(mapped_code):
                             service_code = mapped_code
-                            logger.info(f"Derived service code '{service_code}' from price nickname for subscription {subscription_id}")
+                            log_subscription_info(f"STEP 4: Derived service code '{service_code}' from price nickname", subscription_id)
                             break
                     
                     # Try product name mapping
@@ -292,23 +301,24 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
                             mapped_code = get_service_code(product_name.strip())
                             if mapped_code and is_valid_service_code(mapped_code):
                                 service_code = mapped_code
-                                logger.info(f"Derived service code '{service_code}' from product name for subscription {subscription_id}")
+                                log_subscription_info(f"STEP 4: Derived service code '{service_code}' from product name", subscription_id)
                                 break
         except Exception as fallback_error:
-            logger.warning(f"Service code fallback mapping failed for subscription {subscription_id}: {fallback_error}")
+            log_subscription_warning(f"STEP 4: Service code fallback mapping failed: {fallback_error}", subscription_id)
     
     # If still no service code, use interactive dialog or default
     if not service_code:
-        logger.warning(f"No valid service code found for subscription {subscription_id}")
+        log_subscription_warning(f"STEP 4: No valid service code found", subscription_id)
         
         # If we have a parent widget, show service selection dialog
         if parent_widget is not None:
             try:
+                log_subscription_info(f"STEP 4: Showing interactive service selection dialog", subscription_id)
                 from subscription_schedule_dialog import show_service_selection_dialog
                 service_code = show_service_selection_dialog(subscription_id, parent_widget)
                 
                 if service_code:
-                    logger.info(f"User selected service code '{service_code}' for subscription {subscription_id}")
+                    log_subscription_info(f"STEP 4: User selected service code '{service_code}'", subscription_id)
                     
                     # Update the subscription metadata with the selected service code
                     try:
@@ -318,47 +328,56 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
                             subscription_id,
                             metadata={'service_code': service_code}
                         )
-                        logger.info(f"Updated Stripe subscription {subscription_id} with service_code: {service_code}")
+                        log_subscription_info(f"STEP 4: Updated Stripe subscription metadata with service_code: {service_code}", subscription_id)
                     except Exception as e:
-                        logger.error(f"Failed to update Stripe subscription metadata: {e}")
+                        log_subscription_error(f"STEP 4: Failed to update Stripe subscription metadata: {e}", subscription_id, e)
                         # Continue anyway - we can still use the service code locally
                 else:
-                    logger.info(f"User did not select service code for subscription {subscription_id}")
+                    log_subscription_info(f"STEP 4: User did not select service code, using default", subscription_id)
                     # Use default service code rather than failing completely
                     service_code = "DOG_WALK"  # Safe default
-                    logger.warning(f"Using default service code '{service_code}' for subscription {subscription_id}")
+                    log_subscription_warning(f"STEP 4: Using default service code '{service_code}'", subscription_id)
                     
             except Exception as e:
-                logger.error(f"Error showing service selection dialog: {e}")
+                log_subscription_error(f"STEP 4: Error showing service selection dialog: {e}", subscription_id, e)
                 # Use default service code rather than failing completely
                 service_code = "DOG_WALK"  # Safe default
-                logger.warning(f"Falling back to default service code '{service_code}' for subscription {subscription_id}")
+                log_subscription_warning(f"STEP 4: Falling back to default service code '{service_code}'", subscription_id)
         else:
             # No UI available - use default service code
             service_code = "DOG_WALK"  # Safe default
-            logger.warning(f"No UI available, using default service code '{service_code}' for subscription {subscription_id}")
+            log_subscription_warning(f"STEP 4: No UI available, using default service code '{service_code}'", subscription_id)
+    else:
+        log_subscription_info(f"STEP 4 SUCCESS: Using service code '{service_code}'", subscription_id)
     
-    # Extract schedule
+    # STEP 5: Extract schedule
+    log_subscription_info(f"STEP 5: Extracting schedule from subscription metadata", subscription_id)
     schedule = extract_schedule_from_subscription(subscription_data)
     if not schedule["day_list"]:
-        logger.info(f"No schedule days specified for subscription {subscription_id}")
+        log_subscription_info(f"STEP 5: No schedule days specified - ending processing", subscription_id)
         return 0
+    log_subscription_info(f"STEP 5 SUCCESS: Found schedule with {len(schedule['day_list'])} days", subscription_id)
     
-    # Generate booking occurrences
+    # STEP 6: Generate booking occurrences
+    log_subscription_info(f"STEP 6: Generating booking occurrences", subscription_id)
     occurrences = generate_booking_occurrences(
         subscription_data, client_id, service_code, schedule
     )
     
     if not occurrences:
-        logger.info(f"No occurrences generated for subscription {subscription_id}")
+        log_subscription_info(f"STEP 6: No occurrences generated - ending processing", subscription_id)
         return 0
+    log_subscription_info(f"STEP 6 SUCCESS: Generated {len(occurrences)} booking occurrences", subscription_id)
     
-    # Create/update bookings
+    # STEP 7: Create/update bookings
+    log_subscription_info(f"STEP 7: Creating/updating bookings in database", subscription_id)
     bookings_created = 0
     cur = conn.cursor()
     
-    for occurrence in occurrences:
+    for i, occurrence in enumerate(occurrences):
         try:
+            log_subscription_info(f"STEP 7.{i+1}: Processing booking for {occurrence.get('start_dt', 'unknown time')}", subscription_id)
+            
             # Check if booking already exists for this subscription and time
             existing = cur.execute("""
                 SELECT id FROM bookings 
@@ -368,6 +387,7 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
             
             if existing:
                 # Update existing booking
+                log_subscription_info(f"STEP 7.{i+1}: Updating existing booking ID={existing['id']}", subscription_id)
                 cur.execute("""
                     UPDATE bookings SET
                         service_type = ?,
@@ -388,9 +408,10 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
                     occurrence["source"],
                     existing["id"]
                 ))
-                logger.debug(f"Updated booking {existing['id']} for subscription {subscription_id}")
+                log_subscription_info(f"STEP 7.{i+1} SUCCESS: Updated booking {existing['id']}", subscription_id)
             else:
                 # Create new booking using add_or_upsert_booking
+                log_subscription_info(f"STEP 7.{i+1}: Creating new booking", subscription_id)
                 booking_id = add_or_upsert_booking(
                     conn,
                     client_id=occurrence["client_id"],
@@ -406,13 +427,14 @@ def sync_subscription_to_bookings(conn: sqlite3.Connection, subscription_data: D
                     source=occurrence["source"]
                 )
                 bookings_created += 1
-                logger.debug(f"Created booking {booking_id} for subscription {subscription_id}")
+                log_subscription_info(f"STEP 7.{i+1} SUCCESS: Created booking ID={booking_id}", subscription_id)
                 
         except Exception as e:
-            logger.error(f"Error creating/updating booking for subscription {subscription_id}: {e}")
+            log_subscription_error(f"STEP 7.{i+1} FAILED: Error creating/updating booking: {e}", subscription_id, e)
             continue
     
     conn.commit()
+    log_subscription_info(f"STEP 8 COMPLETE: Successfully processed {bookings_created} bookings for subscription", subscription_id)
     return bookings_created
 
 
