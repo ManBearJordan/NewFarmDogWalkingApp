@@ -5,7 +5,9 @@ import sqlite3
 import stripe
 
 # Import unified functions
-from unified_booking_helpers import resolve_client_id, service_type_from_label, get_canonical_service_info, create_booking_with_unified_fields
+from unified_booking_helpers import resolve_client_id, get_canonical_service_info, create_booking_with_unified_fields
+# Replace ad-hoc normalization with the central helper
+from subscription_utils import service_type_from_label
 
 def row_get(row, key, default=None):
     """Helper to safely get values from SQLite rows or dicts"""
