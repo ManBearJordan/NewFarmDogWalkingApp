@@ -423,3 +423,178 @@ class DomainRulesTest(TestCase):
         self.assertEqual(code, "walk_30min") 
         self.assertFalse(is_overnight(code))
         self.assertFalse(is_overnight(display))
+
+
+class StripeKeyManagerTest(TestCase):
+    """Test stripe key manager functionality."""
+    
+    def setUp(self):
+        # Clear any existing StripeSettings
+        from .models import StripeSettings
+        StripeSettings.objects.all().delete()
+    
+    def test_get_stripe_key_none_when_empty(self):
+        """Test get_stripe_key returns None when no key is configured."""
+        from .stripe_key_manager import get_stripe_key
+        
+        # Ensure no environment variable
+        import os
+        old_env = os.environ.get('STRIPE_SECRET_KEY')
+        if 'STRIPE_SECRET_KEY' in os.environ:
+            del os.environ['STRIPE_SECRET_KEY']
+        
+        try:
+            result = get_stripe_key()
+            self.assertIsNone(result)
+        finally:
+            # Restore environment
+            if old_env is not None:
+                os.environ['STRIPE_SECRET_KEY'] = old_env
+    
+    def test_get_stripe_key_from_env(self):
+        """Test get_stripe_key reads from environment variable first."""
+        import os
+        from .stripe_key_manager import get_stripe_key
+        
+        old_env = os.environ.get('STRIPE_SECRET_KEY')
+        os.environ['STRIPE_SECRET_KEY'] = 'sk_test_env_key'
+        
+        try:
+            result = get_stripe_key()
+            self.assertEqual(result, 'sk_test_env_key')
+        finally:
+            # Restore environment
+            if old_env is not None:
+                os.environ['STRIPE_SECRET_KEY'] = old_env
+            else:
+                if 'STRIPE_SECRET_KEY' in os.environ:
+                    del os.environ['STRIPE_SECRET_KEY']
+    
+    def test_get_stripe_key_from_db(self):
+        """Test get_stripe_key falls back to database when env is empty."""
+        import os
+        from .stripe_key_manager import get_stripe_key
+        from .models import StripeSettings
+        
+        # Ensure no environment variable
+        old_env = os.environ.get('STRIPE_SECRET_KEY')
+        if 'STRIPE_SECRET_KEY' in os.environ:
+            del os.environ['STRIPE_SECRET_KEY']
+        
+        try:
+            # Create DB entry
+            StripeSettings.objects.create(
+                stripe_secret_key='sk_test_db_key',
+                is_live_mode=False
+            )
+            
+            result = get_stripe_key()
+            self.assertEqual(result, 'sk_test_db_key')
+        finally:
+            # Restore environment
+            if old_env is not None:
+                os.environ['STRIPE_SECRET_KEY'] = old_env
+    
+    def test_get_key_status_not_configured(self):
+        """Test get_key_status returns configured=False when no key."""
+        from .stripe_key_manager import get_key_status
+        
+        # Ensure no key configured
+        import os
+        old_env = os.environ.get('STRIPE_SECRET_KEY')
+        if 'STRIPE_SECRET_KEY' in os.environ:
+            del os.environ['STRIPE_SECRET_KEY']
+        
+        try:
+            result = get_key_status()
+            self.assertEqual(result, {
+                'configured': False,
+                'mode': None
+            })
+        finally:
+            if old_env is not None:
+                os.environ['STRIPE_SECRET_KEY'] = old_env
+    
+    def test_get_key_status_test_mode(self):
+        """Test get_key_status returns mode='test' for test keys."""
+        from .stripe_key_manager import get_key_status
+        from .models import StripeSettings
+        
+        StripeSettings.objects.create(
+            stripe_secret_key='sk_test_123456789',
+            is_live_mode=False
+        )
+        
+        result = get_key_status()
+        self.assertEqual(result, {
+            'configured': True,
+            'mode': 'test'
+        })
+    
+    def test_get_key_status_live_mode(self):
+        """Test get_key_status returns mode='live' for live keys."""
+        from .stripe_key_manager import get_key_status
+        from .models import StripeSettings
+        
+        StripeSettings.objects.create(
+            stripe_secret_key='sk_live_987654321',
+            is_live_mode=True
+        )
+        
+        result = get_key_status()
+        self.assertEqual(result, {
+            'configured': True,
+            'mode': 'live'
+        })
+    
+    def test_update_stripe_key_creates_record(self):
+        """Test update_stripe_key creates a new record when none exists."""
+        from .stripe_key_manager import update_stripe_key, get_stripe_key
+        from .models import StripeSettings
+        
+        update_stripe_key('sk_test_new_key_123')
+        
+        # Verify it was saved
+        key = get_stripe_key()
+        self.assertEqual(key, 'sk_test_new_key_123')
+        
+        # Verify model fields
+        settings = StripeSettings.objects.first()
+        self.assertEqual(settings.stripe_secret_key, 'sk_test_new_key_123')
+        self.assertFalse(settings.is_live_mode)
+    
+    def test_update_stripe_key_updates_existing(self):
+        """Test update_stripe_key updates existing record."""
+        from .stripe_key_manager import update_stripe_key, get_stripe_key
+        from .models import StripeSettings
+        
+        # Create initial record
+        StripeSettings.objects.create(
+            stripe_secret_key='sk_test_old_key',
+            is_live_mode=False
+        )
+        
+        # Update it
+        update_stripe_key('sk_live_new_key_456')
+        
+        # Verify it was updated
+        key = get_stripe_key()
+        self.assertEqual(key, 'sk_live_new_key_456')
+        
+        # Verify only one record exists and it's updated
+        settings = StripeSettings.objects.get()  # Should not raise MultipleObjectsReturned
+        self.assertEqual(settings.stripe_secret_key, 'sk_live_new_key_456')
+        self.assertTrue(settings.is_live_mode)
+    
+    def test_update_stripe_key_validation(self):
+        """Test update_stripe_key validates input."""
+        from .stripe_key_manager import update_stripe_key
+        
+        with self.assertRaises(ValueError):
+            update_stripe_key("")
+        
+        with self.assertRaises(ValueError):
+            update_stripe_key("   ")
+        
+        with self.assertRaises(ValueError):
+            update_stripe_key(None)
