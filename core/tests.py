@@ -232,3 +232,194 @@ class SubOccurrenceModelTest(TestCase):
         retrieved_sub = SubOccurrence.objects.get(id=sub.id)
         self.assertEqual(retrieved_sub.stripe_subscription_id, 'sub_123456789')
         self.assertTrue(retrieved_sub.active)
+
+
+class ServiceMapTest(TestCase):
+    """Test service mapping functionality."""
+    
+    def test_get_service_code_direct_match(self):
+        """Test direct matching of service labels to codes."""
+        from .service_map import get_service_code
+        
+        # Test exact matches
+        self.assertEqual(get_service_code("walk"), "walk")
+        self.assertEqual(get_service_code("daycare"), "daycare")
+        self.assertEqual(get_service_code("home visit"), "home_visit")
+        self.assertEqual(get_service_code("poop scoop"), "poop_scoop")
+        self.assertEqual(get_service_code("overnight"), "overnight")
+        
+        # Test case insensitivity
+        self.assertEqual(get_service_code("WALK"), "walk")
+        self.assertEqual(get_service_code("DayCare"), "daycare")
+        self.assertEqual(get_service_code("HOME VISIT"), "home_visit")
+    
+    def test_get_service_code_fuzzy_match(self):
+        """Test fuzzy matching capabilities."""
+        from .service_map import get_service_code
+        
+        # Test partial matches
+        self.assertEqual(get_service_code("dog walking"), "walk")
+        self.assertEqual(get_service_code("30 min walk"), "walk_30min")
+        self.assertEqual(get_service_code("1 hour walking"), "walk_1hr")
+        self.assertEqual(get_service_code("quick walking"), "walk_30min")
+        
+        # Test whitespace handling
+        self.assertEqual(get_service_code("  home   visit  "), "home_visit")
+        self.assertEqual(get_service_code("day care"), "daycare")
+    
+    def test_get_service_code_no_match(self):
+        """Test behavior when no match is found."""
+        from .service_map import get_service_code
+        
+        self.assertIsNone(get_service_code("nonexistent service"))
+        self.assertIsNone(get_service_code(""))
+        self.assertIsNone(get_service_code(None))
+        self.assertIsNone(get_service_code(123))
+    
+    def test_get_service_display_name(self):
+        """Test reverse lookup of display names from service codes."""
+        from .service_map import get_service_display_name
+        
+        # Test existing mappings
+        self.assertEqual(get_service_display_name("walk"), "Walk")
+        self.assertEqual(get_service_display_name("daycare"), "Daycare")
+        self.assertEqual(get_service_display_name("home_visit"), "Home Visit")
+        self.assertEqual(get_service_display_name("poop_scoop"), "Poop Scoop")
+        
+        # Test case insensitivity
+        self.assertEqual(get_service_display_name("WALK"), "Walk")
+        self.assertEqual(get_service_display_name("HOME_VISIT"), "Home Visit")
+        
+        # Test unknown codes (should return formatted version)
+        self.assertEqual(get_service_display_name("custom_service"), "Custom Service")
+        self.assertEqual(get_service_display_name("unknown"), "Unknown")
+    
+    def test_get_service_display_name_edge_cases(self):
+        """Test edge cases for display name lookup."""
+        from .service_map import get_service_display_name
+        
+        self.assertEqual(get_service_display_name(""), "")
+        self.assertEqual(get_service_display_name(None), "")
+        self.assertEqual(get_service_display_name(123), "")
+    
+    def test_resolve_service_fields(self):
+        """Test resolving service fields from label or code."""
+        from .service_map import resolve_service_fields
+        
+        # Test with labels
+        code, display = resolve_service_fields("walk")
+        self.assertEqual(code, "walk")
+        self.assertEqual(display, "Walk")
+        
+        code, display = resolve_service_fields("30 minute walk")
+        self.assertEqual(code, "walk_30min")
+        self.assertEqual(display, "30 Minute Walk")
+        
+        code, display = resolve_service_fields("overnight care")
+        self.assertEqual(code, "overnight")
+        self.assertEqual(display, "Overnight")
+        
+        # Test with codes (these should be treated as unknown labels first, then as codes)
+        code, display = resolve_service_fields("custom_service_code")
+        self.assertEqual(code, "custom_service_code")
+        self.assertEqual(display, "Custom Service Code")
+        
+        # Test with existing service code that doesn't have a direct label mapping
+        code, display = resolve_service_fields("poop_scoop")
+        self.assertEqual(code, "poop_scoop")
+        self.assertEqual(display, "Poop Scoop")
+    
+    def test_resolve_service_fields_edge_cases(self):
+        """Test edge cases for resolve_service_fields."""
+        from .service_map import resolve_service_fields
+        
+        code, display = resolve_service_fields("")
+        self.assertEqual(code, "")
+        self.assertEqual(display, "")
+        
+        code, display = resolve_service_fields(None)
+        self.assertEqual(code, "")
+        self.assertEqual(display, "")
+
+
+class DomainRulesTest(TestCase):
+    """Test domain rules functionality."""
+    
+    def test_is_overnight_positive_cases(self):
+        """Test positive cases for overnight detection."""
+        from .domain_rules import is_overnight
+        
+        # Test the acceptance criteria
+        self.assertTrue(is_overnight("Overnight Walk"))
+        
+        # Test various overnight-related labels
+        self.assertTrue(is_overnight("overnight"))
+        self.assertTrue(is_overnight("Overnight"))
+        self.assertTrue(is_overnight("OVERNIGHT"))
+        self.assertTrue(is_overnight("overnight care"))
+        self.assertTrue(is_overnight("Overnight Care"))
+        self.assertTrue(is_overnight("overnight stay"))
+        self.assertTrue(is_overnight("overnight boarding"))
+        self.assertTrue(is_overnight("late night overnight walk"))
+        
+        # Test with service codes
+        self.assertTrue(is_overnight("overnight_walk"))
+        self.assertTrue(is_overnight("overnight_care"))
+        self.assertTrue(is_overnight("service_overnight"))
+        
+        # Test whitespace handling
+        self.assertTrue(is_overnight("  overnight  "))
+        self.assertTrue(is_overnight("overnight   walk"))
+    
+    def test_is_overnight_negative_cases(self):
+        """Test negative cases for overnight detection."""
+        from .domain_rules import is_overnight
+        
+        # Test regular services
+        self.assertFalse(is_overnight("walk"))
+        self.assertFalse(is_overnight("daycare"))
+        self.assertFalse(is_overnight("home visit"))
+        self.assertFalse(is_overnight("poop scoop"))
+        self.assertFalse(is_overnight("pickup"))
+        self.assertFalse(is_overnight("30 minute walk"))
+        self.assertFalse(is_overnight("1 hour walk"))
+        self.assertFalse(is_overnight("pack walk"))
+        self.assertFalse(is_overnight("weekly walk"))
+        
+        # Test partial matches that shouldn't match
+        self.assertFalse(is_overnight("over"))
+        self.assertFalse(is_overnight("night"))
+        self.assertFalse(is_overnight("day walk"))
+        self.assertFalse(is_overnight("morning walk"))
+    
+    def test_is_overnight_edge_cases(self):
+        """Test edge cases for overnight detection."""
+        from .domain_rules import is_overnight
+        
+        self.assertFalse(is_overnight(""))
+        self.assertFalse(is_overnight(None))
+        self.assertFalse(is_overnight(123))
+        self.assertFalse(is_overnight([]))
+    
+    def test_service_integration(self):
+        """Test integration between service mapping and domain rules."""
+        from .service_map import get_service_code, resolve_service_fields
+        from .domain_rules import is_overnight
+        
+        # Test overnight service mapping and detection
+        service_code = get_service_code("overnight walk")
+        self.assertEqual(service_code, "overnight_walk")
+        self.assertTrue(is_overnight("overnight walk"))
+        self.assertTrue(is_overnight(service_code))
+        
+        # Test resolve_service_fields with overnight services
+        code, display = resolve_service_fields("overnight care")
+        self.assertEqual(code, "overnight")
+        self.assertTrue(is_overnight(code))
+        self.assertTrue(is_overnight(display))
+        
+        # Test non-overnight services
+        code, display = resolve_service_fields("30 minute walk")
+        self.assertEqual(code, "walk_30min") 
+        self.assertFalse(is_overnight(code))
+        self.assertFalse(is_overnight(display))
