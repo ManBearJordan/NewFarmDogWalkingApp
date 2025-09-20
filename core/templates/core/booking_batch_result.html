@@ -1,0 +1,111 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Booking Results - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Booking Creation Results</h2>
+        
+        <div class="alert alert-success">
+            <h4>✅ Bookings Created Successfully</h4>
+            <p>Created <strong>{{ result.created_ids|length }}</strong> booking(s) for <strong>{{ client.name }}</strong></p>
+        </div>
+        
+        <!-- Credit Usage Summary -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Payment Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Total Credit Used:</strong> ${{ total_credit_used_aud|floatformat:2 }} AUD</p>
+                        <p><strong>Client:</strong> {{ client.name }}</p>
+                        <p><strong>Remaining Credit:</strong> ${{ client.credit_aud|floatformat:2 }} AUD</p>
+                    </div>
+                    <div class="col-md-6">
+                        {% if invoice_url %}
+                            <div class="alert alert-info">
+                                <h6>Invoice Created</h6>
+                                <p>Some charges require payment beyond available credit.</p>
+                                <a href="{{ invoice_url }}" target="_blank" class="btn btn-primary">
+                                    View Invoice
+                                </a>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-success">
+                                <h6>Fully Covered by Credit</h6>
+                                <p>All bookings were paid using existing client credit.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Created Bookings Details -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Created Bookings</h5>
+            </div>
+            <div class="card-body">
+                {% if created_bookings %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Service</th>
+                                    <th>Date/Time</th>
+                                    <th>Location</th>
+                                    <th>Dogs</th>
+                                    <th>Price</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for booking in created_bookings %}
+                                <tr>
+                                    <td>{{ booking.id }}</td>
+                                    <td>{{ booking.service_name }}</td>
+                                    <td>
+                                        {{ booking.start_dt|date:"M d, Y H:i" }} - 
+                                        {{ booking.end_dt|date:"H:i" }}
+                                    </td>
+                                    <td>{{ booking.location|default:"-" }}</td>
+                                    <td>{{ booking.dogs }}</td>
+                                    <td>${{ booking.price_aud|floatformat:2 }}</td>
+                                    <td>{{ booking.notes|default:"-" }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning">
+                        No booking details available.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="row">
+            <div class="col-12">
+                <a href="{% url 'booking_create_batch' %}" class="btn btn-primary">
+                    Create More Bookings
+                </a>
+                <a href="{% url 'client_list' %}" class="btn btn-outline-secondary">
+                    Back to Clients
+                </a>
+                {% if invoice_url %}
+                    <a href="{{ invoice_url }}" target="_blank" class="btn btn-outline-info">
+                        View Invoice Again
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
