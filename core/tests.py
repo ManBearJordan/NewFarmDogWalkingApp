@@ -1,5 +1,6 @@
 from django.test import TestCase
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 from datetime import datetime, timedelta
 from .models import StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence
 
@@ -935,3 +936,187 @@ class StripeIntegrationMockedTest(TestCase):
                     'source': 'NewFarmDogWalkingApp'
                 }
             )
+
+
+class ClientCreditTest(TestCase):
+    """Test client credit management functionality."""
+    
+    def setUp(self):
+        """Set up test data."""
+        self.client = Client.objects.create(
+            name='Credit Test Client',
+            email='credit@example.com',
+            phone='+1234567890',
+            address='123 Credit St, Test City, TS 12345',
+            credit_cents=1000,  # Start with $10.00 credit
+            status='active'
+        )
+    
+    def test_get_client_credit(self):
+        """Test get_client_credit returns correct credit amount."""
+        from .credit import get_client_credit
+        
+        credit = get_client_credit(self.client)
+        self.assertEqual(credit, 1000)
+        
+        # Test with zero credit client
+        zero_client = Client.objects.create(
+            name='Zero Credit Client',
+            email='zero@example.com',
+            phone='+1234567890',
+            address='123 Zero St, Test City, TS 12345',
+            status='active'
+        )
+        
+        credit = get_client_credit(zero_client)
+        self.assertEqual(credit, 0)
+    
+    def test_use_client_credit_exact_amount(self):
+        """Test using exact credit amount."""
+        from .credit import use_client_credit, get_client_credit
+        
+        # Use exact amount
+        use_client_credit(self.client, 1000)
+        
+        # Verify credit is now zero
+        self.client.refresh_from_db()
+        self.assertEqual(self.client.credit_cents, 0)
+        self.assertEqual(get_client_credit(self.client), 0)
+    
+    def test_use_client_credit_partial_amount(self):
+        """Test using partial credit amount."""
+        from .credit import use_client_credit, get_client_credit
+        
+        # Use partial amount
+        use_client_credit(self.client, 300)
+        
+        # Verify remaining credit
+        self.client.refresh_from_db()
+        self.assertEqual(self.client.credit_cents, 700)
+        self.assertEqual(get_client_credit(self.client), 700)
+        
+        # Use more partial amount
+        use_client_credit(self.client, 200)
+        
+        # Verify remaining credit
+        self.client.refresh_from_db()
+        self.assertEqual(self.client.credit_cents, 500)
+        self.assertEqual(get_client_credit(self.client), 500)
+    
+    def test_use_client_credit_zero_amount(self):
+        """Test using zero credit amount (no-op)."""
+        from .credit import use_client_credit, get_client_credit
+        
+        original_credit = self.client.credit_cents
+        
+        # Use zero amount - should be no-op
+        use_client_credit(self.client, 0)
+        
+        # Verify credit unchanged
+        self.client.refresh_from_db()
+        self.assertEqual(self.client.credit_cents, original_credit)
+        self.assertEqual(get_client_credit(self.client), original_credit)
+    
+    def test_use_client_credit_insufficient_funds(self):
+        """Test using more credit than available raises ValidationError."""
+        from .credit import use_client_credit
+        
+        with self.assertRaises(ValidationError) as context:
+            use_client_credit(self.client, 1500)  # More than 1000 available
+        
+        error_message = str(context.exception.message)
+        self.assertIn("Insufficient credit", error_message)
+        self.assertIn("Available: 1000 cents", error_message)
+        self.assertIn("Requested: 1500 cents", error_message)
+        
+        # Verify credit unchanged
+        self.client.refresh_from_db()
+        self.assertEqual(self.client.credit_cents, 1000)
+    
+    def test_use_client_credit_zero_balance(self):
+        """Test using credit when client has zero balance."""
+        from .credit import use_client_credit
+        
+        # Create client with zero balance
+        zero_client = Client.objects.create(
+            name='Zero Balance Client',
+            email='zerobal@example.com',
+            phone='+1234567890',
+            address='123 Zero Balance St, Test City, TS 12345',
+            credit_cents=0,
+            status='active'
+        )
+        
+        with self.assertRaises(ValidationError) as context:
+            use_client_credit(zero_client, 1)
+        
+        error_message = str(context.exception.message)
+        self.assertIn("Insufficient credit", error_message)
+        self.assertIn("Available: 0 cents", error_message)
+        self.assertIn("Requested: 1 cents", error_message)
+    
+    def test_use_client_credit_negative_amount_validation(self):
+        """Test using negative credit amount raises ValueError."""
+        from .credit import use_client_credit
+        
+        with self.assertRaises(ValueError) as context:
+            use_client_credit(self.client, -100)
+        
+        self.assertEqual(str(context.exception), "amount_cents must be non-negative")
+        
+        # Verify credit unchanged
+        self.client.refresh_from_db()
+        self.assertEqual(self.client.credit_cents, 1000)
+    
+    def test_use_client_credit_non_integer_validation(self):
+        """Test using non-integer credit amount raises ValueError."""
+        from .credit import use_client_credit
+        
+        with self.assertRaises(ValueError) as context:
+            use_client_credit(self.client, "100")
+        
+        self.assertEqual(str(context.exception), "amount_cents must be an integer")
+        
+        with self.assertRaises(ValueError) as context:
+            use_client_credit(self.client, 100.5)
+        
+        self.assertEqual(str(context.exception), "amount_cents must be an integer")
+        
+        # Verify credit unchanged
+        self.client.refresh_from_db()
+        self.assertEqual(self.client.credit_cents, 1000)
+    
+    def test_use_client_credit_atomicity(self):
+        """Test that credit operations are atomic and persistent."""
+        from .credit import use_client_credit, get_client_credit
+        
+        # Use credit in multiple operations
+        use_client_credit(self.client, 100)
+        self.client.refresh_from_db()
+        self.assertEqual(self.client.credit_cents, 900)
+        
+        use_client_credit(self.client, 200)
+        self.client.refresh_from_db()
+        self.assertEqual(self.client.credit_cents, 700)
+        
+        # Verify the changes persist
+        retrieved_client = Client.objects.get(id=self.client.id)
+        self.assertEqual(retrieved_client.credit_cents, 700)
+        self.assertEqual(get_client_credit(retrieved_client), 700)
+    
+    def test_use_client_credit_updates_instance(self):
+        """Test that the client instance is updated after credit use."""
+        from .credit import use_client_credit
+        
+        original_credit = self.client.credit_cents
+        self.assertEqual(original_credit, 1000)
+        
+        # Use credit
+        use_client_credit(self.client, 300)
+        
+        # The instance should be updated without refresh_from_db()
+        self.assertEqual(self.client.credit_cents, 700)
+        
+        # Verify database also updated
+        db_client = Client.objects.get(id=self.client.id)
+        self.assertEqual(db_client.credit_cents, 700)
