@@ -1,22 +1,13 @@
 # NewFarmDogWalkingApp — Clean Rewrite Skeleton
 
-This branch provides a minimal, clearer Django skeleton and a focused Stripe integration.
-
+This repo has been reset to a minimal, secure starting point for the desktop/web app.
 Key points:
-- Stripe secret is read from environment variables (STRIPE_SECRET_KEY). Optionally, a system keyring may be used as a fallback by the provided helper.
-- The repo contains a minimal Django project (newfarm/) and a core app with a simplified StripeSettings model for admin use.
-- No secrets or keys are committed.
+- Stripe secret is read from the STRIPE_SECRET_KEY environment variable.
+- Optional secure fallback: system keyring (Windows Credential Manager on Windows).
+- No secret keys are committed to the repo.
 
-Local quickstart (development):
-1. Create a virtualenv and install requirements:
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
-
-2. Set STRIPE_SECRET_KEY in your environment for testing.
-
-3. Run migrations and start the dev server (if you enable Django fully):
-   python manage.py migrate
-   python manage.py runserver
-
-For now this branch provides a clear starting point; follow-up PRs will add features and tests as needed.
+Local quickstart (user-ready):
+1) Install runtime and dependencies listed in requirements.txt.
+2) On first app launch the GUI admin will prompt the user to paste their Stripe secret key once.
+   The app stores it securely (keyring) and provides an Admin → Stripe Key action to replace it.
+3) Platform administrators can set STRIPE_SECRET_KEY in the environment for automated deployments.

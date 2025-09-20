@@ -1,9 +1,7 @@
 from django.db import models
 
 class StripeSettings(models.Model):
-    """Minimal model to surface a Stripe key in admin if desired.
-    This model is optional for runtime (the runtime prefers environment variables).
-    """
+    """Optional admin-surfaceable Stripe key; runtime prefers environment or keyring."""
     stripe_secret_key = models.CharField(max_length=200, blank=True, null=True)
     is_live_mode = models.BooleanField(default=False)
 

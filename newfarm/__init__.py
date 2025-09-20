@@ -1,1 +1,1 @@
-# package marker
+# package marker for the minimal Django project
