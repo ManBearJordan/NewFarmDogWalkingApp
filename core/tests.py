@@ -598,3 +598,340 @@ class StripeKeyManagerTest(TestCase):
         
         with self.assertRaises(ValueError):
             update_stripe_key(None)
+
+
+class StripeIntegrationTest(TestCase):
+    """Test Stripe integration functionality."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.client = Client.objects.create(
+            name='Test Client',
+            email='test@example.com',
+            phone='+1234567890',
+            address='123 Test St, Test City, TS 12345',
+            status='active'
+        )
+
+    def test_list_booking_services(self):
+        """Test list_booking_services returns static service catalog."""
+        from .stripe_integration import list_booking_services
+        
+        services = list_booking_services()
+        
+        # Should return 8 services
+        self.assertEqual(len(services), 8)
+        
+        # Check first service structure
+        service = services[0]
+        expected_keys = {'service_code', 'display_name', 'amount_cents', 'product_id', 'price_id'}
+        self.assertEqual(set(service.keys()), expected_keys)
+        
+        # Check specific values for first service
+        self.assertEqual(service['service_code'], 'WALK_30MIN')
+        self.assertEqual(service['display_name'], '30 Minute Dog Walk')
+        self.assertEqual(service['amount_cents'], 2000)
+        self.assertEqual(service['product_id'], 'prod_walk_30min')
+        self.assertEqual(service['price_id'], 'price_walk_30min')
+        
+        # Verify all services have valid data
+        for svc in services:
+            self.assertIsInstance(svc['service_code'], str)
+            self.assertIsInstance(svc['display_name'], str)
+            self.assertIsInstance(svc['amount_cents'], int)
+            self.assertIsInstance(svc['product_id'], str)
+            self.assertIsInstance(svc['price_id'], str)
+            self.assertGreater(svc['amount_cents'], 0)
+
+    def test_open_invoice_smart_test_mode(self):
+        """Test open_invoice_smart returns correct URL for test mode."""
+        from .stripe_integration import open_invoice_smart
+        from .models import StripeSettings
+        
+        # Set up test mode key
+        StripeSettings.objects.create(
+            stripe_secret_key='sk_test_123456789',
+            is_live_mode=False
+        )
+        
+        invoice_id = 'in_test123'
+        url = open_invoice_smart(invoice_id)
+        
+        expected_url = f"https://dashboard.stripe.com/test/invoices/{invoice_id}"
+        self.assertEqual(url, expected_url)
+
+    def test_open_invoice_smart_live_mode(self):
+        """Test open_invoice_smart returns correct URL for live mode."""
+        from .stripe_integration import open_invoice_smart
+        from .models import StripeSettings
+        
+        # Set up live mode key
+        StripeSettings.objects.create(
+            stripe_secret_key='sk_live_987654321',
+            is_live_mode=True
+        )
+        
+        invoice_id = 'in_live123'
+        url = open_invoice_smart(invoice_id)
+        
+        expected_url = f"https://dashboard.stripe.com/invoices/{invoice_id}"
+        self.assertEqual(url, expected_url)
+
+    def test_open_invoice_smart_no_key_configured(self):
+        """Test open_invoice_smart raises error when no key configured."""
+        from .stripe_integration import open_invoice_smart
+        
+        with self.assertRaises(RuntimeError) as context:
+            open_invoice_smart('in_test123')
+        
+        self.assertIn('Stripe API key not configured', str(context.exception))
+
+    def test_ensure_customer_no_key_configured(self):
+        """Test ensure_customer raises error when no key configured."""
+        from .stripe_integration import ensure_customer
+        
+        with self.assertRaises(RuntimeError) as context:
+            ensure_customer(self.client)
+        
+        self.assertIn('Stripe API key not configured', str(context.exception))
+
+    def test_create_or_reuse_draft_invoice_no_key_configured(self):
+        """Test create_or_reuse_draft_invoice raises error when no key configured."""
+        from .stripe_integration import create_or_reuse_draft_invoice
+        
+        with self.assertRaises(RuntimeError) as context:
+            create_or_reuse_draft_invoice(self.client)
+        
+        self.assertIn('Stripe API key not configured', str(context.exception))
+
+    def test_push_invoice_items_from_booking_no_key_configured(self):
+        """Test push_invoice_items_from_booking raises error when no key configured."""
+        from .stripe_integration import push_invoice_items_from_booking
+        from datetime import datetime
+        from django.utils import timezone
+        
+        booking = Booking.objects.create(
+            client=self.client,
+            service_code='WALK_1HR',
+            service_name='1 Hour Dog Walk',
+            service_label='Standard Walk',
+            start_dt=timezone.now(),
+            end_dt=timezone.now(),
+            location='Test Park',
+            price_cents=3500,
+            status='confirmed'
+        )
+        
+        with self.assertRaises(RuntimeError) as context:
+            push_invoice_items_from_booking(booking, 'in_test123')
+        
+        self.assertIn('Stripe API key not configured', str(context.exception))
+
+
+class StripeIntegrationMockedTest(TestCase):
+    """Test Stripe integration with mocked Stripe calls."""
+
+    def setUp(self):
+        """Set up test data."""
+        from .models import StripeSettings
+        
+        self.client = Client.objects.create(
+            name='Test Client',
+            email='test@example.com',
+            phone='+1234567890',
+            address='123 Test St, Test City, TS 12345',
+            status='active'
+        )
+        
+        # Set up test Stripe key
+        StripeSettings.objects.create(
+            stripe_secret_key='sk_test_123456789',
+            is_live_mode=False
+        )
+
+    def test_ensure_customer_creates_new_customer(self):
+        """Test ensure_customer creates new Stripe customer."""
+        from unittest.mock import patch, MagicMock
+        from .stripe_integration import ensure_customer
+        
+        # Mock Stripe customer creation
+        mock_customer = MagicMock()
+        mock_customer.id = 'cus_test123'
+        
+        with patch('stripe.Customer.list') as mock_list, \
+             patch('stripe.Customer.create') as mock_create:
+            
+            # No existing customers
+            mock_list.return_value.data = []
+            mock_create.return_value = mock_customer
+            
+            customer_id = ensure_customer(self.client)
+            
+            self.assertEqual(customer_id, 'cus_test123')
+            self.client.refresh_from_db()
+            self.assertEqual(self.client.stripe_customer_id, 'cus_test123')
+            
+            # Verify create was called with correct parameters
+            mock_create.assert_called_once_with(
+                email='test@example.com',
+                name='Test Client',
+                phone='+1234567890',
+                metadata={
+                    'client_id': str(self.client.id),
+                    'source': 'NewFarmDogWalkingApp'
+                }
+            )
+
+    def test_ensure_customer_finds_existing_customer(self):
+        """Test ensure_customer finds existing Stripe customer by email."""
+        from unittest.mock import patch, MagicMock
+        from .stripe_integration import ensure_customer
+        
+        # Mock existing customer
+        mock_customer = MagicMock()
+        mock_customer.id = 'cus_existing123'
+        
+        with patch('stripe.Customer.list') as mock_list:
+            mock_list.return_value.data = [mock_customer]
+            
+            customer_id = ensure_customer(self.client)
+            
+            self.assertEqual(customer_id, 'cus_existing123')
+            self.client.refresh_from_db()
+            self.assertEqual(self.client.stripe_customer_id, 'cus_existing123')
+
+    def test_ensure_customer_updates_from_existing_id(self):
+        """Test ensure_customer verifies and normalizes from existing stripe_customer_id."""
+        from unittest.mock import patch, MagicMock
+        from .stripe_integration import ensure_customer
+        
+        # Set existing customer ID
+        self.client.stripe_customer_id = 'cus_existing456'
+        self.client.save()
+        
+        # Mock Stripe customer with normalized data
+        mock_customer = MagicMock()
+        mock_customer.id = 'cus_existing456'
+        mock_customer.deleted = False
+        mock_customer.phone = '+9876543210'  # Different phone
+        mock_customer.address = MagicMock()
+        mock_customer.address.line1 = '456 Updated St'
+        mock_customer.address.line2 = 'Apt 2B'
+        mock_customer.address.city = 'Updated City'
+        mock_customer.address.state = 'UC'
+        mock_customer.address.postal_code = '54321'
+        mock_customer.address.country = 'US'
+        
+        with patch('stripe.Customer.retrieve') as mock_retrieve:
+            mock_retrieve.return_value = mock_customer
+            
+            customer_id = ensure_customer(self.client)
+            
+            self.assertEqual(customer_id, 'cus_existing456')
+            self.client.refresh_from_db()
+            
+            # Check that phone and address were normalized
+            self.assertEqual(self.client.phone, '+9876543210')
+            self.assertEqual(self.client.address, '456 Updated St, Apt 2B, Updated City, UC, 54321, US')
+
+    def test_create_or_reuse_draft_invoice_creates_new(self):
+        """Test create_or_reuse_draft_invoice creates new draft invoice."""
+        from unittest.mock import patch, MagicMock
+        from .stripe_integration import create_or_reuse_draft_invoice
+        
+        # Mock customer creation and invoice creation
+        mock_customer = MagicMock()
+        mock_customer.id = 'cus_test123'
+        mock_invoice = MagicMock()
+        mock_invoice.id = 'in_draft123'
+        
+        with patch('stripe.Customer.list') as mock_customer_list, \
+             patch('stripe.Customer.create') as mock_customer_create, \
+             patch('stripe.Invoice.list') as mock_invoice_list, \
+             patch('stripe.Invoice.create') as mock_invoice_create:
+            
+            mock_customer_list.return_value.data = []
+            mock_customer_create.return_value = mock_customer
+            mock_invoice_list.return_value.data = []  # No existing draft
+            mock_invoice_create.return_value = mock_invoice
+            
+            invoice_id = create_or_reuse_draft_invoice(self.client)
+            
+            self.assertEqual(invoice_id, 'in_draft123')
+            
+            # Verify invoice create was called
+            mock_invoice_create.assert_called_once_with(
+                customer='cus_test123',
+                auto_advance=False,
+                metadata={
+                    'client_id': str(self.client.id),
+                    'source': 'NewFarmDogWalkingApp'
+                }
+            )
+
+    def test_create_or_reuse_draft_invoice_reuses_existing(self):
+        """Test create_or_reuse_draft_invoice reuses existing draft."""
+        from unittest.mock import patch, MagicMock
+        from .stripe_integration import create_or_reuse_draft_invoice
+        
+        # Set existing customer ID
+        self.client.stripe_customer_id = 'cus_test123'
+        self.client.save()
+        
+        # Mock existing customer and draft invoice
+        mock_customer = MagicMock()
+        mock_customer.id = 'cus_test123'
+        mock_customer.deleted = False
+        mock_customer.phone = None
+        mock_customer.address = None
+        mock_invoice = MagicMock()
+        mock_invoice.id = 'in_existing_draft'
+        
+        with patch('stripe.Customer.retrieve') as mock_customer_retrieve, \
+             patch('stripe.Invoice.list') as mock_invoice_list:
+            
+            mock_customer_retrieve.return_value = mock_customer
+            mock_invoice_list.return_value.data = [mock_invoice]
+            
+            invoice_id = create_or_reuse_draft_invoice(self.client)
+            
+            self.assertEqual(invoice_id, 'in_existing_draft')
+
+    def test_push_invoice_items_from_booking(self):
+        """Test push_invoice_items_from_booking creates invoice item."""
+        from unittest.mock import patch, MagicMock
+        from .stripe_integration import push_invoice_items_from_booking
+        from django.utils import timezone
+        
+        # Set up booking and client with Stripe customer ID
+        self.client.stripe_customer_id = 'cus_test123'
+        self.client.save()
+        
+        booking = Booking.objects.create(
+            client=self.client,
+            service_code='WALK_1HR',
+            service_name='1 Hour Dog Walk',
+            service_label='Standard Walk',
+            start_dt=timezone.now(),
+            end_dt=timezone.now(),
+            location='Test Park',
+            price_cents=3500,
+            status='confirmed'
+        )
+        
+        with patch('stripe.InvoiceItem.create') as mock_create:
+            push_invoice_items_from_booking(booking, 'in_test123')
+            
+            # Verify invoice item was created with correct parameters
+            mock_create.assert_called_once_with(
+                customer='cus_test123',
+                invoice='in_test123',
+                amount=3500,
+                currency='usd',
+                description=f"1 Hour Dog Walk - {booking.start_dt.strftime('%Y-%m-%d %H:%M')}",
+                metadata={
+                    'booking_id': str(booking.id),
+                    'service_code': 'WALK_1HR',
+                    'source': 'NewFarmDogWalkingApp'
+                }
+            )
