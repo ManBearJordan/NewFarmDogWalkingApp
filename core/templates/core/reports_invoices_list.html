@@ -1,0 +1,94 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Reports: Recent Invoices - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Reports: Recent Invoices</h2>
+        <p class="text-muted">Recent invoices for clients in our database (limit: {{ limit }})</p>
+        
+        {% if invoices %}
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Invoice ID</th>
+                                    <th>Client</th>
+                                    <th>Amount (AUD)</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for invoice in invoices %}
+                                <tr>
+                                    <td>
+                                        <code>{{ invoice.id }}</code>
+                                    </td>
+                                    <td>
+                                        <strong>{{ invoice.client_name }}</strong>
+                                    </td>
+                                    <td>
+                                        ${{ invoice.amount_aud|floatformat:2 }} {{ invoice.currency }}
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if invoice.status == 'paid' %}bg-success
+                                            {% elif invoice.status == 'open' %}bg-warning
+                                            {% elif invoice.status == 'draft' %}bg-secondary
+                                            {% elif invoice.status == 'void' or invoice.status == 'uncollectible' %}bg-dark
+                                            {% else %}bg-info{% endif %}">
+                                            {{ invoice.status|title }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {{ invoice.created_datetime|date:"M d, Y H:i" }}
+                                    </td>
+                                    <td>
+                                        {% if invoice.stripe_url %}
+                                            <a href="{{ invoice.stripe_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                Open in Stripe
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <h5>No Invoices Found</h5>
+                <p class="mb-0">
+                    No recent invoices found for clients in our database. This could mean:
+                </p>
+                <ul class="mb-0 mt-2">
+                    <li>Stripe is not configured</li>
+                    <li>No invoices have been created yet</li>
+                    <li>No invoices exist for clients with Stripe customer IDs in our system</li>
+                </ul>
+            </div>
+        {% endif %}
+        
+        <!-- Action Buttons -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <a href="{% url 'client_list' %}" class="btn btn-secondary">
+                    Back to Clients
+                </a>
+                <a href="{% url 'booking_create_batch' %}" class="btn btn-primary">
+                    Create Bookings
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

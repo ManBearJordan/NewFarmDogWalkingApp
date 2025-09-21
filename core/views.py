@@ -17,7 +17,7 @@ import json
 
 from .models import Client, Booking, AdminEvent, SubOccurrence
 from .booking_create_service import create_bookings_with_billing
-from .stripe_integration import list_booking_services, open_invoice_smart
+from .stripe_integration import list_booking_services, open_invoice_smart, list_recent_invoices
 from .credit import use_client_credit
 
 
@@ -301,3 +301,30 @@ def calendar_view(request):
     }
     
     return render(request, 'core/calendar.html', context)
+
+
+def reports_invoices_list(request):
+    """List recent invoices for clients in our database."""
+    from datetime import datetime
+    
+    # Get limit from query parameter, default to 20
+    limit = min(int(request.GET.get('limit', 20)), 100)  # Cap at 100
+    
+    # Get recent invoices
+    invoices = list_recent_invoices(limit=limit)
+    
+    # Convert amounts to AUD and add Stripe URLs
+    for invoice in invoices:
+        invoice['amount_aud'] = invoice['amount_cents'] / 100.0
+        # Convert Unix timestamp to datetime object for template
+        invoice['created_datetime'] = datetime.fromtimestamp(invoice['created'])
+        try:
+            invoice['stripe_url'] = open_invoice_smart(invoice['id'])
+        except Exception:
+            # If we can't generate URL (e.g. no API key), don't include it
+            invoice['stripe_url'] = None
+    
+    return render(request, 'core/reports_invoices_list.html', {
+        'invoices': invoices,
+        'limit': limit
+    })
