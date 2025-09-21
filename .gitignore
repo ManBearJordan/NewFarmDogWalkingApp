@@ -12,6 +12,10 @@ venv/
 .venv/
 app.db
 
+# Application logs
+subscription_error_log.txt
+subscription_sync_log.txt
+
 # Editor / OS
 .DS_Store
 .vscode/
