@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, Client as TestClient
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from datetime import datetime, timedelta
@@ -1123,6 +1123,236 @@ class ClientCreditTest(TestCase):
         self.assertEqual(db_client.credit_cents, 700)
 
 
+class WebViewsTest(TestCase):
+    """Test web views for client management and booking creation."""
+    
+    def setUp(self):
+        """Set up test data."""
+        self.test_client = TestClient()
+        self.client_data = {
+            'name': 'Test Client',
+            'email': 'test@example.com',
+            'phone': '+1234567890',
+            'address': '123 Test St, Test City, TS 12345',
+            'notes': 'Test client notes',
+            'status': 'active',
+            'credit_cents': 5000
+        }
+        self.client_obj = Client.objects.create(**self.client_data)
+    
+    def test_client_list_get(self):
+        """Test client list GET request shows clients and form."""
+        response = self.test_client.get('/clients/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Test Client')
+        self.assertContains(response, 'test@example.com')
+        self.assertContains(response, '$50.00')  # Credit display
+        self.assertContains(response, 'Create New Client')
+    
+    def test_client_list_post_success(self):
+        """Test successful client creation via POST."""
+        new_client_data = {
+            'name': 'New Client',
+            'email': 'new@example.com',
+            'phone': '+0987654321',
+            'address': '456 New St, New City, NS 54321',
+            'notes': 'New client notes'
+        }
+        response = self.test_client.post('/clients/', new_client_data)
+        # Should redirect to client list
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, '/clients/')
+        # Verify client was created
+        new_client = Client.objects.get(email='new@example.com')
+        self.assertEqual(new_client.name, 'New Client')
+        self.assertEqual(new_client.status, 'active')
+        self.assertEqual(new_client.credit_cents, 0)  # Default
+    
+    def test_client_list_post_missing_required_fields(self):
+        """Test client creation fails with missing required fields."""
+        # Missing email
+        response = self.test_client.post('/clients/', {
+            'name': 'Test Name',
+            'phone': '+1234567890'
+        })
+        self.assertEqual(response.status_code, 200)  # Renders form with error
+        # Verify no client was created
+        self.assertFalse(Client.objects.filter(name='Test Name').exists())
+    
+    def test_client_add_credit_success(self):
+        """Test successful credit addition."""
+        response = self.test_client.post(f'/clients/{self.client_obj.id}/credit/', {
+            'credit_amount': '25.50'
+        })
+        self.assertEqual(response.status_code, 200)
+        response_data = response.json()
+        self.assertTrue(response_data['success'])
+        self.assertIn('Added $25.50 credit', response_data['message'])
+        self.assertEqual(response_data['new_balance_cents'], 7550)  # 5000 + 2550
+        self.assertEqual(response_data['new_balance_aud'], 75.50)
+        # Verify database was updated
+        self.client_obj.refresh_from_db()
+        self.assertEqual(self.client_obj.credit_cents, 7550)
+    
+    def test_client_add_credit_invalid_amount(self):
+        """Test credit addition with invalid amount."""
+        response = self.test_client.post(f'/clients/{self.client_obj.id}/credit/', {
+            'credit_amount': 'invalid'
+        })
+        self.assertEqual(response.status_code, 400)
+        response_data = response.json()
+        self.assertIn('error', response_data)
+        self.assertIn('Invalid credit amount', response_data['error'])
+    
+    def test_client_add_credit_negative_amount(self):
+        """Test credit addition with negative amount."""
+        response = self.test_client.post(f'/clients/{self.client_obj.id}/credit/', {
+            'credit_amount': '-10.00'
+        })
+        self.assertEqual(response.status_code, 400)
+        response_data = response.json()
+        self.assertIn('error', response_data)
+        self.assertIn('Credit amount must be positive', response_data['error'])
+    
+    def test_client_add_credit_nonexistent_client(self):
+        """Test credit addition for nonexistent client returns 404."""
+        response = self.test_client.post('/clients/999/credit/', {
+            'credit_amount': '10.00'
+        })
+        self.assertEqual(response.status_code, 404)
+    
+    def test_booking_create_batch_get(self):
+        """Test booking creation form GET request."""
+        response = self.test_client.get('/bookings/create-batch/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Create Batch Bookings')
+        self.assertContains(response, 'Test Client')
+        self.assertContains(response, 'Credit: $50.00')
+        self.assertContains(response, '30 Minute Dog Walk')
+        self.assertContains(response, 'Basic Dog Grooming')
+    
+    @patch('core.views.create_bookings_with_billing')
+    @patch('core.views.open_invoice_smart')
+    def test_booking_create_batch_post_success(self, mock_open_invoice, mock_create_bookings):
+        """Test successful booking batch creation."""
+        mock_create_bookings.return_value = {
+            'created_ids': [1, 2],
+            'invoice_id': 'in_test123',
+            'total_credit_used': 3500
+        }
+        mock_open_invoice.return_value = 'https://dashboard.stripe.com/test/invoices/in_test123'
+        booking_data = {
+            'client_id': str(self.client_obj.id),
+            'row_count': '1',
+            'service_label_0': '1 Hour Dog Walk',
+            'start_dt_0': '2025-09-20T10:00',
+            'end_dt_0': '2025-09-20T11:00',
+            'location_0': 'Central Park',
+            'dogs_0': '2',
+            'price_cents_0': '3500',
+            'notes_0': 'Regular walk'
+        }
+        response = self.test_client.post('/bookings/create-batch/', booking_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Booking Creation Results')
+        self.assertContains(response, 'Created <strong>2</strong> booking(s)')
+        self.assertContains(response, '$35.00 AUD')  # Credit used
+        self.assertContains(response, 'https://dashboard.stripe.com/test/invoices/in_test123')
+        mock_create_bookings.assert_called_once()
+        args, kwargs = mock_create_bookings.call_args
+        client_arg, rows_arg = args
+        self.assertEqual(client_arg.id, self.client_obj.id)
+        self.assertEqual(len(rows_arg), 1)
+        row = rows_arg[0]
+        self.assertEqual(row['service_label'], '1 Hour Dog Walk')
+        self.assertEqual(row['location'], 'Central Park')
+        self.assertEqual(row['dogs'], 2)
+        self.assertEqual(row['price_cents'], 3500)
+        self.assertEqual(row['notes'], 'Regular walk')
+    
+    @patch('core.views.create_bookings_with_billing')
+    def test_booking_create_batch_post_no_invoice(self, mock_create_bookings):
+        """Test booking batch creation with no invoice (fully covered by credit)."""
+        mock_create_bookings.return_value = {
+            'created_ids': [1],
+            'invoice_id': None,
+            'total_credit_used': 2000
+        }
+        booking_data = {
+            'client_id': str(self.client_obj.id),
+            'row_count': '1',
+            'service_label_0': '30 Minute Dog Walk',
+            'start_dt_0': '2025-09-20T10:00',
+            'end_dt_0': '2025-09-20T10:30',
+            'price_cents_0': '2000',
+        }
+        response = self.test_client.post('/bookings/create-batch/', booking_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Fully Covered by Credit')
+        self.assertNotContains(response, 'View Invoice')
+    
+    def test_booking_create_batch_post_missing_client(self):
+        """Test booking creation fails without client selection."""
+        booking_data = {
+            'row_count': '1',
+            'service_label_0': '1 Hour Dog Walk',
+            'start_dt_0': '2025-09-20T10:00',
+            'end_dt_0': '2025-09-20T11:00',
+            'price_cents_0': '3500',
+        }
+        response = self.test_client.post('/bookings/create-batch/', booking_data)
+        self.assertEqual(response.status_code, 302)  # Redirects back with error
+    
+    def test_booking_create_batch_post_invalid_datetime(self):
+        """Test booking creation fails with invalid datetime format."""
+        booking_data = {
+            'client_id': str(self.client_obj.id),
+            'row_count': '1',
+            'service_label_0': '1 Hour Dog Walk',
+            'start_dt_0': 'invalid-datetime',
+            'end_dt_0': '2025-09-20T11:00',
+            'price_cents_0': '3500',
+        }
+        response = self.test_client.post('/bookings/create-batch/', booking_data)
+        self.assertEqual(response.status_code, 302)  # Redirects back with error
+    
+    @patch('core.views.create_bookings_with_billing')
+    @patch('core.views.open_invoice_smart')
+    def test_booking_create_batch_post_empty_rows(self, mock_open_invoice, mock_create_bookings):
+        """Test booking creation handles empty rows gracefully."""
+        mock_create_bookings.return_value = {
+            'created_ids': [1],
+            'invoice_id': None,
+            'total_credit_used': 3500
+        }
+        booking_data = {
+            'client_id': str(self.client_obj.id),
+            'row_count': '2',
+            'service_label_0': '',
+            'start_dt_0': '',
+            'service_label_1': '1 Hour Dog Walk',
+            'start_dt_1': '2025-09-20T10:00',
+            'end_dt_1': '2025-09-20T11:00',
+            'price_cents_1': '3500',
+        }
+        response = self.test_client.post('/bookings/create-batch/', booking_data)
+        self.assertEqual(response.status_code, 200)  # Success - one valid row was processed
+        self.assertContains(response, 'Booking Creation Results')
+    
+    def test_booking_create_batch_post_all_empty_rows(self):
+        """Test booking creation fails when all rows are empty."""
+        booking_data = {
+            'client_id': str(self.client_obj.id),
+            'row_count': '2',
+            'service_label_0': '',
+            'start_dt_0': '',
+            'service_label_1': '',
+            'start_dt_1': '',
+        }
+        response = self.test_client.post('/bookings/create-batch/', booking_data)
+        self.assertEqual(response.status_code, 302)  # Redirects back - no valid rows
+
+
 class BookingCreateServiceTest(TestCase):
     """Test booking creation service with billing functionality."""
     
@@ -1138,7 +1368,6 @@ class BookingCreateServiceTest(TestCase):
             stripe_customer_id='cus_test123'  # Mock Stripe customer ID
         )
         
-        # Sample booking data
         self.base_booking_data = {
             'service_label': '1 hour walk',
             'start_dt': timezone.now(),
@@ -1152,293 +1381,194 @@ class BookingCreateServiceTest(TestCase):
     @patch('core.booking_create_service.create_or_reuse_draft_invoice')
     @patch('core.booking_create_service.push_invoice_items_from_booking')
     def test_fully_credit_covered_rows(self, mock_push_items, mock_create_invoice):
-        """Test bookings fully covered by credit - no invoice needed."""
+        """Bookings fully covered by credit -> no invoice."""
         from .booking_create_service import create_bookings_with_billing
-        
-        # Create 2 bookings, both covered by credit (2 * $25 = $50, client has $50 credit)
         rows = [
             self.base_booking_data.copy(),
             {**self.base_booking_data, 'location': 'Dog Park'}
         ]
-        
         result = create_bookings_with_billing(self.client, rows)
-        
-        # Verify result
         self.assertEqual(len(result['created_ids']), 2)
         self.assertIsNone(result['invoice_id'])
         self.assertEqual(result['total_credit_used'], 5000)
-        
-        # Verify bookings created
         bookings = Booking.objects.filter(id__in=result['created_ids'])
         self.assertEqual(bookings.count(), 2)
-        
         for booking in bookings:
             self.assertEqual(booking.client, self.client)
-            self.assertIsNone(booking.stripe_invoice_id)  # No invoice needed
+            self.assertIsNone(booking.stripe_invoice_id)
             self.assertEqual(booking.price_cents, 2500)
             self.assertEqual(booking.status, 'confirmed')
-        
-        # Verify credit used
         self.client.refresh_from_db()
         self.assertEqual(self.client.credit_cents, 0)
-        
-        # Verify no Stripe calls made
         mock_create_invoice.assert_not_called()
         mock_push_items.assert_not_called()
     
     @patch('core.booking_create_service.create_or_reuse_draft_invoice')
     @patch('core.booking_create_service.push_invoice_items_from_booking')
     def test_fully_invoiced_rows(self, mock_push_items, mock_create_invoice):
-        """Test bookings with no credit - fully invoiced."""
+        """No credit -> fully invoiced, single draft invoice reused."""
         from .booking_create_service import create_bookings_with_billing
-        
-        # Set client credit to zero
         self.client.credit_cents = 0
         self.client.save()
-        
         mock_create_invoice.return_value = 'in_test123'
-        
         rows = [
             self.base_booking_data.copy(),
             {**self.base_booking_data, 'location': 'Dog Park'}
         ]
-        
         result = create_bookings_with_billing(self.client, rows)
-        
-        # Verify result
         self.assertEqual(len(result['created_ids']), 2)
         self.assertEqual(result['invoice_id'], 'in_test123')
         self.assertEqual(result['total_credit_used'], 0)
-        
-        # Verify bookings created with invoice ID
         bookings = Booking.objects.filter(id__in=result['created_ids'])
         self.assertEqual(bookings.count(), 2)
-        
         for booking in bookings:
             self.assertEqual(booking.stripe_invoice_id, 'in_test123')
             self.assertEqual(booking.price_cents, 2500)
-        
-        # Verify one invoice created and two items pushed
         mock_create_invoice.assert_called_once_with(self.client)
         self.assertEqual(mock_push_items.call_count, 2)
     
     @patch('core.booking_create_service.create_or_reuse_draft_invoice')
     @patch('core.booking_create_service.push_invoice_items_from_booking')
     def test_mixed_rows_scenario(self, mock_push_items, mock_create_invoice):
-        """Test mixed scenario - some credit-covered, some invoiced."""
+        """Some credit-covered, some invoiced; total credit deducted once."""
         from .booking_create_service import create_bookings_with_billing
-        
-        # Client has $30 credit, bookings cost $25 each
-        self.client.credit_cents = 3000
+        self.client.credit_cents = 3000  # $30 credit
         self.client.save()
-        
         mock_create_invoice.return_value = 'in_mixed123'
-        
         rows = [
-            self.base_booking_data.copy(),  # $25 - fully covered by credit
-            {**self.base_booking_data, 'location': 'Dog Park', 'price_cents': 2000}  # $20 - $5 from credit, $15 invoiced
+            self.base_booking_data.copy(),  # $25 fully covered
+            {**self.base_booking_data, 'location': 'Dog Park', 'price_cents': 2000}  # $20 cost
         ]
-        
         result = create_bookings_with_billing(self.client, rows)
-        
-        # Verify result
         self.assertEqual(len(result['created_ids']), 2)
         self.assertEqual(result['invoice_id'], 'in_mixed123')
-        self.assertEqual(result['total_credit_used'], 3000)  # All $30 credit used
-        
-        # Verify bookings
+        self.assertEqual(result['total_credit_used'], 3000)
         bookings = Booking.objects.filter(id__in=result['created_ids']).order_by('id')
-        
-        # First booking - fully covered by credit
         first_booking = bookings[0]
         self.assertIsNone(first_booking.stripe_invoice_id)
         self.assertEqual(first_booking.price_cents, 2500)
-        
-        # Second booking - partially invoiced
-        second_booking = bookings[1] 
+        second_booking = bookings[1]
         self.assertEqual(second_booking.stripe_invoice_id, 'in_mixed123')
         self.assertEqual(second_booking.price_cents, 2000)
-        
-        # Verify credit depleted
         self.client.refresh_from_db()
         self.assertEqual(self.client.credit_cents, 0)
-        
-        # Verify one invoice created and one item pushed (only for second booking)
         mock_create_invoice.assert_called_once_with(self.client)
         mock_push_items.assert_called_once()
     
     @patch('core.booking_create_service.create_or_reuse_draft_invoice')
     @patch('core.booking_create_service.push_invoice_items_from_booking')
     def test_overnight_service_end_dt_increment(self, mock_push_items, mock_create_invoice):
-        """Test overnight service increments end_dt by +1 day."""
+        """Overnight service increments end_dt by +1 day; invoice when needed."""
         from .booking_create_service import create_bookings_with_billing
-        
         original_start = timezone.now()
         original_end = original_start + timedelta(hours=12)
         expected_end = original_end + timedelta(days=1)
-        
-        # Set up mock for invoice creation since price exceeds credit
         mock_create_invoice.return_value = 'in_overnight123'
-        
         rows = [{
             'service_label': 'Overnight Care',
             'start_dt': original_start,
             'end_dt': original_end,
             'location': 'Client Home',
             'dogs': 1,
-            'price_cents': 12000,  # $120 (exceeds $50 credit)
+            'price_cents': 12000,
             'notes': 'Overnight test'
         }]
-        
         result = create_bookings_with_billing(self.client, rows)
-        
-        # Verify booking created with adjusted end_dt
         booking = Booking.objects.get(id=result['created_ids'][0])
         self.assertEqual(booking.start_dt, original_start)
         self.assertEqual(booking.end_dt, expected_end)
         self.assertEqual(booking.service_label, 'Overnight Care')
-        
-        # Verify invoice created since amount exceeds credit
         self.assertEqual(result['invoice_id'], 'in_overnight123')
         mock_create_invoice.assert_called_once_with(self.client)
     
     def test_service_resolution(self):
-        """Test service code and display label resolution."""
+        """Service code/display resolution is applied and original label kept."""
         from .booking_create_service import create_bookings_with_billing
-        
         rows = [{
-            'service_label': '30 minute walk',  # Should resolve to walk_30min
+            'service_label': '30 minute walk',
             'start_dt': timezone.now(),
             'end_dt': timezone.now() + timedelta(minutes=30),
             'location': 'Neighborhood',
             'dogs': 1,
-            'price_cents': 1500,  # $15
+            'price_cents': 1500,
             'notes': 'Quick walk'
         }]
-        
         result = create_bookings_with_billing(self.client, rows)
-        
-        # Verify service resolution
         booking = Booking.objects.get(id=result['created_ids'][0])
         self.assertEqual(booking.service_code, 'walk_30min')
-        self.assertIn('30', booking.service_name)  # Display name should contain '30'
-        self.assertEqual(booking.service_label, '30 minute walk')  # Original label preserved
+        self.assertIn('30', booking.service_name)
+        self.assertEqual(booking.service_label, '30 minute walk')
     
     @patch('core.booking_create_service.create_or_reuse_draft_invoice')
     @patch('core.booking_create_service.push_invoice_items_from_booking') 
     def test_single_draft_invoice_reuse(self, mock_push_items, mock_create_invoice):
-        """Test that ONE draft invoice is reused across all billable rows."""
+        """ONE draft invoice reused across all billable rows."""
         from .booking_create_service import create_bookings_with_billing
-        
-        # Client has no credit, so all bookings will be invoiced
         self.client.credit_cents = 0
         self.client.save()
-        
         mock_create_invoice.return_value = 'in_reuse123'
-        
-        # Create 3 bookings, all need billing
         rows = [
             self.base_booking_data.copy(),
             {**self.base_booking_data, 'location': 'Park A'},
             {**self.base_booking_data, 'location': 'Park B'}
         ]
-        
         result = create_bookings_with_billing(self.client, rows)
-        
-        # Verify only ONE invoice created
         mock_create_invoice.assert_called_once_with(self.client)
-        
-        # Verify all bookings have same invoice_id
         bookings = Booking.objects.filter(id__in=result['created_ids'])
         for booking in bookings:
             self.assertEqual(booking.stripe_invoice_id, 'in_reuse123')
-        
-        # Verify 3 items pushed to same invoice
         self.assertEqual(mock_push_items.call_count, 3)
         for call in mock_push_items.call_args_list:
-            self.assertEqual(call[0][1], 'in_reuse123')  # invoice_id argument
+            self.assertEqual(call[0][1], 'in_reuse123')
     
     def test_empty_rows(self):
-        """Test handling of empty rows list."""
+        """Empty input rows -> no bookings, no invoice, no credit change."""
         from .booking_create_service import create_bookings_with_billing
-        
         result = create_bookings_with_billing(self.client, [])
-        
         self.assertEqual(result['created_ids'], [])
         self.assertIsNone(result['invoice_id'])
         self.assertEqual(result['total_credit_used'], 0)
-        
-        # Verify no bookings created
         self.assertEqual(Booking.objects.filter(client=self.client).count(), 0)
-        
-        # Verify client credit unchanged
         self.client.refresh_from_db()
         self.assertEqual(self.client.credit_cents, 5000)
     
     def test_default_booking_values(self):
-        """Test default values are applied correctly."""
+        """Defaults applied: location '', dogs 1, notes '', status confirmed, deleted False."""
         from .booking_create_service import create_bookings_with_billing
-        
-        # Minimal row data
         rows = [{
             'service_label': 'walk',
             'start_dt': timezone.now(),
             'end_dt': timezone.now() + timedelta(hours=1),
             'price_cents': 2000
         }]
-        
         result = create_bookings_with_billing(self.client, rows)
-        
         booking = Booking.objects.get(id=result['created_ids'][0])
-        self.assertEqual(booking.location, '')  # Default empty string
-        self.assertEqual(booking.dogs, 1)  # Default 1
-        self.assertEqual(booking.notes, '')  # Default empty string
-        self.assertEqual(booking.status, 'confirmed')  # Default status
-        self.assertFalse(booking.deleted)  # Default False
+        self.assertEqual(booking.location, '')
+        self.assertEqual(booking.dogs, 1)
+        self.assertEqual(booking.notes, '')
+        self.assertEqual(booking.status, 'confirmed')
+        self.assertFalse(booking.deleted)
     
     @patch('core.booking_create_service.create_or_reuse_draft_invoice')
     @patch('core.booking_create_service.push_invoice_items_from_booking')
     def test_acceptance_criteria_single_invoice_for_batch(self, mock_push_items, mock_create_invoice):
-        """Integration test verifying acceptance criteria: one draft invoice is used for the batch."""
+        """Acceptance: one draft invoice for the whole batch; credit applied first."""
         from .booking_create_service import create_bookings_with_billing
-        
-        # Client has partial credit
         self.client.credit_cents = 3000  # $30 credit
         self.client.save()
-        
         mock_create_invoice.return_value = 'in_batch_test'
-        
-        # Create bookings: some fully covered, some partially covered, some fully invoiced
         rows = [
-            # $15 - fully covered by credit, no invoice needed
             {**self.base_booking_data, 'price_cents': 1500, 'location': 'Park A'},
-            
-            # $25 - $15 from remaining credit, $10 invoiced
             {**self.base_booking_data, 'price_cents': 2500, 'location': 'Park B'},
-            
-            # $30 - no credit left, fully invoiced  
             {**self.base_booking_data, 'price_cents': 3000, 'location': 'Park C'},
         ]
-        
         result = create_bookings_with_billing(self.client, rows)
-        
-        # Verify acceptance criteria
         self.assertEqual(len(result['created_ids']), 3)
-        self.assertEqual(result['invoice_id'], 'in_batch_test')  # ONE invoice for batch
-        self.assertEqual(result['total_credit_used'], 3000)  # All credit used
-        
-        # Verify correct stripe_invoice_id assignment
+        self.assertEqual(result['invoice_id'], 'in_batch_test')
+        self.assertEqual(result['total_credit_used'], 3000)
         bookings = Booking.objects.filter(id__in=result['created_ids']).order_by('id')
-        
-        # First booking - fully credit covered
-        self.assertIsNone(bookings[0].stripe_invoice_id)
-        
-        # Second and third bookings - linked to invoice
+        self.assertIsNone(bookings[0].stripe_invoice_id)            # fully credit-covered
         self.assertEqual(bookings[1].stripe_invoice_id, 'in_batch_test')
         self.assertEqual(bookings[2].stripe_invoice_id, 'in_batch_test')
-        
-        # Verify only ONE draft invoice created for the entire batch
         mock_create_invoice.assert_called_once_with(self.client)
-        
-        # Verify two invoice items pushed (for bookings 2 and 3)
         self.assertEqual(mock_push_items.call_count, 2)

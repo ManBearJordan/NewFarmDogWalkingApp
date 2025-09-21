@@ -1,0 +1,154 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Create Bookings - {{ block.super }}{% endblock %}
+
+{% block content %}
+<h2>Create Batch Bookings</h2>
+
+<form method="post" id="batchBookingForm">
+    {% csrf_token %}
+    
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <label for="client_id" class="form-label">Select Client *</label>
+            <select class="form-select" id="client_id" name="client_id" required>
+                <option value="">Choose a client...</option>
+                {% for client in clients %}
+                    <option value="{{ client.id }}">{{ client.name }} ({{ client.email }}) - Credit: ${{ client.credit_aud|floatformat:2 }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    
+    <h3>Booking Details</h3>
+    <div id="bookingRows">
+        <!-- Initial row will be added by JavaScript -->
+    </div>
+    
+    <div class="row mt-3">
+        <div class="col-12">
+            <button type="button" class="btn btn-outline-secondary" onclick="addBookingRow()">
+                + Add Another Booking
+            </button>
+            <button type="button" class="btn btn-outline-danger" onclick="removeLastBookingRow()">
+                - Remove Last Row
+            </button>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-12">
+            <button type="submit" class="btn btn-primary btn-lg">Create Bookings</button>
+            <a href="{% url 'client_list' %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </div>
+    
+    <input type="hidden" id="row_count" name="row_count" value="0">
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const services = {{ services_json|safe }};
+let rowCount = 0;
+
+function addBookingRow() {
+    const container = document.getElementById('bookingRows');
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'card mb-3 booking-row';
+    rowDiv.innerHTML = `
+        <div class="card-body">
+            <h5 class="card-title">Booking ${rowCount + 1}</h5>
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label">Service *</label>
+                    <select class="form-select" name="service_label_${rowCount}" required onchange="updatePrice(${rowCount})">
+                        <option value="">Select service...</option>
+                        ${services.map(service => 
+                            `<option value="${service.display_name}" data-price="${service.amount_cents}">${service.display_name} - $${(service.amount_cents / 100).toFixed(2)}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Start Date/Time *</label>
+                    <input type="datetime-local" class="form-control" name="start_dt_${rowCount}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">End Date/Time *</label>
+                    <input type="datetime-local" class="form-control" name="end_dt_${rowCount}" required>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-4">
+                    <label class="form-label">Location</label>
+                    <input type="text" class="form-control" name="location_${rowCount}" placeholder="e.g., Central Park">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Dogs</label>
+                    <input type="number" class="form-control" name="dogs_${rowCount}" value="1" min="1" max="20">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Price (cents)</label>
+                    <input type="number" class="form-control" name="price_cents_${rowCount}" min="0" step="1" id="price_${rowCount}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Notes</label>
+                    <input type="text" class="form-control" name="notes_${rowCount}" placeholder="Optional notes">
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(rowDiv);
+    rowCount++;
+    document.getElementById('row_count').value = rowCount;
+}
+
+function removeLastBookingRow() {
+    const container = document.getElementById('bookingRows');
+    const rows = container.querySelectorAll('.booking-row');
+    if (rows.length > 0) {
+        container.removeChild(rows[rows.length - 1]);
+        rowCount--;
+        document.getElementById('row_count').value = rowCount;
+    }
+}
+
+function updatePrice(rowIndex) {
+    const select = document.querySelector(`select[name="service_label_${rowIndex}"]`);
+    const priceInput = document.getElementById(`price_${rowIndex}`);
+    const selectedOption = select.selectedOptions[0];
+    
+    if (selectedOption && selectedOption.dataset.price) {
+        priceInput.value = selectedOption.dataset.price;
+    }
+}
+
+// Add initial row when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    addBookingRow();
+    
+    // Set default datetime to now + 1 hour for start, now + 2 hours for end
+    const now = new Date();
+    const start = new Date(now.getTime() + 60 * 60 * 1000); // +1 hour
+    const end = new Date(now.getTime() + 2 * 60 * 60 * 1000); // +2 hours
+    
+    // Format for datetime-local input (YYYY-MM-DDTHH:MM)
+    const formatDateTime = (date) => {
+        return date.getFullYear() + '-' + 
+               String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+               String(date.getDate()).padStart(2, '0') + 'T' + 
+               String(date.getHours()).padStart(2, '0') + ':' + 
+               String(date.getMinutes()).padStart(2, '0');
+    };
+    
+    // Update the first row's datetime fields after a short delay to ensure they exist
+    setTimeout(() => {
+        const startInput = document.querySelector('input[name="start_dt_0"]');
+        const endInput = document.querySelector('input[name="end_dt_0"]');
+        if (startInput) startInput.value = formatDateTime(start);
+        if (endInput) endInput.value = formatDateTime(end);
+    }, 100);
+});
+</script>
+{% endblock %}
