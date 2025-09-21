@@ -2304,3 +2304,210 @@ class CalendarViewTest(TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '?year=2026&month=1')
+
+
+class BookingFiltersTest(TestCase):
+    """Test booking status filtering utilities."""
+
+    def setUp(self):
+        """Set up test client and bookings with various statuses."""
+        self.client_obj = Client.objects.create(
+            name='Test Client',
+            email='test@example.com',
+            phone='+1234567890',
+            status='active'
+        )
+        
+        # Create bookings with different statuses
+        base_dt = timezone.now().replace(minute=0, second=0, microsecond=0)
+        
+        # Active booking (should be included)
+        self.active_booking = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='30 Min Walk',
+            service_label='Walk',
+            start_dt=base_dt,
+            end_dt=base_dt + timedelta(minutes=30),
+            location='Park',
+            dogs=1,
+            status='confirmed',
+            price_cents=2000,
+            deleted=False
+        )
+        
+        # Deleted booking (should be excluded)
+        self.deleted_booking = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='Deleted Walk',
+            service_label='Walk',
+            start_dt=base_dt + timedelta(hours=1),
+            end_dt=base_dt + timedelta(hours=1, minutes=30),
+            location='Park',
+            dogs=1,
+            status='confirmed',
+            price_cents=2000,
+            deleted=True
+        )
+        
+        # Cancelled booking (should be excluded)
+        self.cancelled_booking = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='Cancelled Walk',
+            service_label='Walk',
+            start_dt=base_dt + timedelta(hours=2),
+            end_dt=base_dt + timedelta(hours=2, minutes=30),
+            location='Park',
+            dogs=1,
+            status='cancelled',
+            price_cents=2000,
+            deleted=False
+        )
+        
+        # Voided booking (should be excluded)
+        self.voided_booking = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='Voided Walk',
+            service_label='Walk',
+            start_dt=base_dt + timedelta(hours=3),
+            end_dt=base_dt + timedelta(hours=3, minutes=30),
+            location='Park',
+            dogs=1,
+            status='voided',
+            price_cents=2000,
+            deleted=False
+        )
+
+    def test_filter_active_bookings_excludes_deleted(self):
+        """Test that filter_active_bookings excludes deleted bookings."""
+        from .booking_filters import filter_active_bookings
+        
+        all_bookings = Booking.objects.all()
+        active_bookings = filter_active_bookings(all_bookings)
+        
+        self.assertIn(self.active_booking, active_bookings)
+        self.assertNotIn(self.deleted_booking, active_bookings)
+
+    def test_filter_active_bookings_excludes_cancelled(self):
+        """Test that filter_active_bookings excludes cancelled bookings."""
+        from .booking_filters import filter_active_bookings
+        
+        all_bookings = Booking.objects.all()
+        active_bookings = filter_active_bookings(all_bookings)
+        
+        self.assertIn(self.active_booking, active_bookings)
+        self.assertNotIn(self.cancelled_booking, active_bookings)
+
+    def test_filter_active_bookings_excludes_voided(self):
+        """Test that filter_active_bookings excludes voided bookings."""
+        from .booking_filters import filter_active_bookings
+        
+        all_bookings = Booking.objects.all()
+        active_bookings = filter_active_bookings(all_bookings)
+        
+        self.assertIn(self.active_booking, active_bookings)
+        self.assertNotIn(self.voided_booking, active_bookings)
+
+    def test_get_active_bookings_returns_only_active(self):
+        """Test that get_active_bookings returns only active bookings."""
+        from .booking_filters import get_active_bookings
+        
+        active_bookings = get_active_bookings()
+        
+        # Should only contain the active booking
+        self.assertEqual(active_bookings.count(), 1)
+        self.assertIn(self.active_booking, active_bookings)
+        self.assertNotIn(self.deleted_booking, active_bookings)
+        self.assertNotIn(self.cancelled_booking, active_bookings)
+        self.assertNotIn(self.voided_booking, active_bookings)
+
+    def test_filter_active_bookings_case_insensitive_cancel(self):
+        """Test that cancelled status matching is case insensitive."""
+        from .booking_filters import filter_active_bookings
+        
+        # Create booking with CANCELLED (uppercase)
+        cancelled_upper = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='Upper Cancelled Walk',
+            service_label='Walk',
+            start_dt=timezone.now(),
+            end_dt=timezone.now() + timedelta(minutes=30),
+            location='Park',
+            dogs=1,
+            status='CANCELLED',
+            price_cents=2000,
+            deleted=False
+        )
+        
+        active_bookings = filter_active_bookings(Booking.objects.all())
+        self.assertNotIn(cancelled_upper, active_bookings)
+
+    def test_filter_active_bookings_case_insensitive_void(self):
+        """Test that voided status matching is case insensitive."""
+        from .booking_filters import filter_active_bookings
+        
+        # Create booking with VOIDED (uppercase)
+        voided_upper = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='Upper Voided Walk',
+            service_label='Walk',
+            start_dt=timezone.now(),
+            end_dt=timezone.now() + timedelta(minutes=30),
+            location='Park',
+            dogs=1,
+            status='VOIDED',
+            price_cents=2000,
+            deleted=False
+        )
+        
+        active_bookings = filter_active_bookings(Booking.objects.all())
+        self.assertNotIn(voided_upper, active_bookings)
+
+
+class MoneyFiltersTest(TestCase):
+    """Test money formatting template filters."""
+
+    def test_money_format_basic(self):
+        """Test basic money formatting from cents."""
+        from core.templatetags.money_filters import money_format
+        
+        # Test various cent values
+        self.assertEqual(money_format(2000), "$20.00")
+        self.assertEqual(money_format(1050), "$10.50")
+        self.assertEqual(money_format(99), "$0.99")
+        self.assertEqual(money_format(0), "$0.00")
+
+    def test_money_format_large_amounts(self):
+        """Test money formatting with large amounts."""
+        from core.templatetags.money_filters import money_format
+        
+        self.assertEqual(money_format(120000), "$1200.00")
+        self.assertEqual(money_format(999999), "$9999.99")
+
+    def test_money_format_edge_cases(self):
+        """Test money formatting edge cases."""
+        from core.templatetags.money_filters import money_format
+        
+        # Test None input
+        self.assertEqual(money_format(None), "$0.00")
+        
+        # Test string input that can be converted
+        self.assertEqual(money_format("2000"), "$20.00")
+        
+        # Test invalid input
+        self.assertEqual(money_format("invalid"), "$0.00")
+        self.assertEqual(money_format([]), "$0.00")
+
+    def test_money_format_no_symbol(self):
+        """Test money formatting without dollar symbol."""
+        from core.templatetags.money_filters import money_format_no_symbol
+        
+        self.assertEqual(money_format_no_symbol(2000), "20.00")
+        self.assertEqual(money_format_no_symbol(1050), "10.50")
+        self.assertEqual(money_format_no_symbol(None), "0.00")
+        self.assertEqual(money_format_no_symbol("invalid"), "0.00")

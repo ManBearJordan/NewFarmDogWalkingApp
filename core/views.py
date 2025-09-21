@@ -19,6 +19,7 @@ from .models import Client, Booking, AdminEvent, SubOccurrence
 from .booking_create_service import create_bookings_with_billing
 from .stripe_integration import list_booking_services, open_invoice_smart, list_recent_invoices
 from .credit import use_client_credit
+from .booking_filters import filter_active_bookings
 
 
 def client_list(request):
@@ -46,9 +47,7 @@ def client_list(request):
             messages.error(request, 'Name and email are required.')
     
     clients = Client.objects.filter(status='active').order_by('name')
-    # Add credit_aud field for template use
-    for client in clients:
-        client.credit_aud = client.credit_cents / 100.0
+    # Pass cents values directly to template
     
     return render(request, 'core/client_list.html', {
         'clients': clients
@@ -130,20 +129,14 @@ def booking_create_batch(request):
                     # Don't fail the entire process if invoice URL fails
                     print(f"Warning: Could not get invoice URL: {e}")
             
-            # Convert cents to AUD for display
-            total_credit_used_aud = result['total_credit_used'] / 100.0
-            client.credit_aud = client.credit_cents / 100.0
-            
+            # Pass cents values directly to template - let money filter handle formatting
             created_bookings = Booking.objects.filter(id__in=result.get('created_ids', [])).order_by('start_dt')
-            # Add price_aud field for template use
-            for booking in created_bookings:
-                booking.price_aud = booking.price_cents / 100.0
             
             return render(request, 'core/booking_batch_result.html', {
                 'result': result,
                 'client': client,
                 'invoice_url': invoice_url,
-                'total_credit_used_aud': total_credit_used_aud,
+                'total_credit_used_cents': result['total_credit_used'],
                 'created_bookings': created_bookings
             })
             
@@ -153,9 +146,7 @@ def booking_create_batch(request):
     
     # GET request - show form
     clients = Client.objects.filter(status='active').order_by('name')
-    # Add credit_aud field for template use
-    for client in clients:
-        client.credit_aud = client.credit_cents / 100.0
+    # Pass cents values directly to template
     
     services = list_booking_services()
     
@@ -219,15 +210,10 @@ def calendar_view(request):
         month_end = date(year, month + 1, 1)
     
     # Count bookings (exclude deleted and cancelled/voided status)
-    bookings = Booking.objects.filter(
+    bookings = filter_active_bookings(Booking.objects.filter(
         start_dt__date__gte=month_start,
         start_dt__date__lt=month_end,
-        deleted=False
-    ).exclude(
-        status__icontains='cancel'
-    ).exclude(
-        status__icontains='void'
-    )
+    ))
     
     # Count SubOccurrences where active=True
     sub_occurrences = SubOccurrence.objects.filter(
@@ -269,14 +255,9 @@ def calendar_view(request):
     if selected_date:
         try:
             selected_dt = datetime.strptime(selected_date, '%Y-%m-%d').date()
-            selected_bookings = Booking.objects.filter(
+            selected_bookings = filter_active_bookings(Booking.objects.filter(
                 start_dt__date=selected_dt,
-                deleted=False
-            ).exclude(
-                status__icontains='cancel'
-            ).exclude(
-                status__icontains='void'
-            ).order_by('start_dt')
+            )).order_by('start_dt')
         except ValueError:
             pass
     

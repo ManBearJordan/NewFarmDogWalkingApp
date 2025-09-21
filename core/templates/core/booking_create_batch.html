@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load money_filters %}
 
 {% block title %}Create Bookings - {{ block.super }}{% endblock %}
 
@@ -14,7 +15,7 @@
             <select class="form-select" id="client_id" name="client_id" required>
                 <option value="">Choose a client...</option>
                 {% for client in clients %}
-                    <option value="{{ client.id }}">{{ client.name }} ({{ client.email }}) - Credit: ${{ client.credit_aud|floatformat:2 }}</option>
+                    <option value="{{ client.id }}">{{ client.name }} ({{ client.email }}) - Credit: {{ client.credit_cents|money_format }}</option>
                 {% endfor %}
             </select>
         </div>

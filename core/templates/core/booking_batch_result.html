@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load money_filters %}
 
 {% block title %}Booking Results - {{ block.super }}{% endblock %}
 
@@ -20,9 +21,9 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <p><strong>Total Credit Used:</strong> ${{ total_credit_used_aud|floatformat:2 }} AUD</p>
+                        <p><strong>Total Credit Used:</strong> {{ total_credit_used_cents|money_format }} AUD</p>
                         <p><strong>Client:</strong> {{ client.name }}</p>
-                        <p><strong>Remaining Credit:</strong> ${{ client.credit_aud|floatformat:2 }} AUD</p>
+                        <p><strong>Remaining Credit:</strong> {{ client.credit_cents|money_format }} AUD</p>
                     </div>
                     <div class="col-md-6">
                         {% if invoice_url %}
@@ -75,7 +76,7 @@
                                     </td>
                                     <td>{{ booking.location|default:"-" }}</td>
                                     <td>{{ booking.dogs }}</td>
-                                    <td>${{ booking.price_aud|floatformat:2 }}</td>
+                                    <td>{{ booking.price_cents|money_format }}</td>
                                     <td>{{ booking.notes|default:"-" }}</td>
                                 </tr>
                                 {% endfor %}
