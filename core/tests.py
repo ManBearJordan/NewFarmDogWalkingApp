@@ -2511,3 +2511,94 @@ class MoneyFiltersTest(TestCase):
         self.assertEqual(money_format_no_symbol(1050), "10.50")
         self.assertEqual(money_format_no_symbol(None), "0.00")
         self.assertEqual(money_format_no_symbol("invalid"), "0.00")
+
+
+class SmokeTest(TestCase):
+    """Smoke tests to ensure main pages return 200 status codes."""
+
+    def setUp(self):
+        """Set up test client and basic data."""
+        # Create a test client for page requests
+        self.client_test = TestClient()
+        
+        # Create a basic client for pages that may require it
+        self.test_client = Client.objects.create(
+            name='Test Client',
+            email='test@example.com',
+            phone='+1234567890',
+            status='active',
+            credit_cents=5000
+        )
+
+    def test_client_list_page(self):
+        """Test that client list page returns 200."""
+        response = self.client_test.get('/clients/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Clients')  # Basic content check
+
+    def test_booking_create_batch_page(self):
+        """Test that booking creation page returns 200."""
+        response = self.client_test.get('/bookings/create-batch/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Create Batch Bookings')
+
+    def test_calendar_page(self):
+        """Test that calendar page returns 200."""
+        response = self.client_test.get('/calendar/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Calendar')
+
+    def test_calendar_page_with_params(self):
+        """Test calendar page with year/month parameters."""
+        response = self.client_test.get('/calendar/?year=2025&month=6')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'June 2025')
+
+    def test_reports_invoices_page(self):
+        """Test that reports invoices page returns 200."""
+        response = self.client_test.get('/reports/invoices/')
+        self.assertEqual(response.status_code, 200)
+        # Page should load even if no Stripe key is configured
+        
+    def test_reports_invoices_page_with_limit(self):
+        """Test reports invoices page with limit parameter."""
+        response = self.client_test.get('/reports/invoices/?limit=5')
+        self.assertEqual(response.status_code, 200)
+
+    def test_admin_stripe_page_requires_staff(self):
+        """Test that admin Stripe page requires staff permission."""
+        # Without authentication, should redirect to login
+        response = self.client_test.get('/admin/stripe/')
+        # Should either redirect (302) to login or return 403/401
+        self.assertIn(response.status_code, [302, 403, 401])
+        
+    def test_admin_stripe_diagnostics_requires_staff(self):
+        """Test that admin Stripe diagnostics requires staff permission."""
+        response = self.client_test.get('/admin/stripe/diagnostics/')
+        # Should either redirect (302) to login or return 403/401
+        self.assertIn(response.status_code, [302, 403, 401])
+
+    def test_client_credit_endpoint_post_only(self):
+        """Test that credit endpoint requires POST method."""
+        # GET should return method not allowed
+        response = self.client_test.get(f'/clients/{self.test_client.id}/credit/')
+        self.assertEqual(response.status_code, 405)  # Method not allowed
+
+    def test_nonexistent_pages_return_404(self):
+        """Test that nonexistent pages properly return 404."""
+        test_urls = [
+            '/nonexistent/',
+            '/clients/999999/',  # Non-existent client page (if it existed)
+            '/invalid-path/',
+        ]
+        
+        for url in test_urls:
+            with self.subTest(url=url):
+                response = self.client_test.get(url)
+                self.assertEqual(response.status_code, 404)
+
+    def test_credit_endpoint_with_nonexistent_client(self):
+        """Test credit endpoint with nonexistent client returns 405 (POST only) on GET."""
+        # This endpoint is POST-only, so GET returns 405 regardless of client existence
+        response = self.client_test.get('/clients/999999/credit/')
+        self.assertEqual(response.status_code, 405)  # Method not allowed
