@@ -54,3 +54,7 @@ TEMPLATES = [
 ]
 
 STATIC_URL = '/static/'
+
+# Timezone configuration
+TIME_ZONE = 'Australia/Brisbane'
+USE_TZ = True

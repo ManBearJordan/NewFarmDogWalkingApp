@@ -3,3 +3,5 @@ stripe>=5.0
 keyring>=23.0
 pytest
 python-dotenv
+icalendar>=6.0
+pytz

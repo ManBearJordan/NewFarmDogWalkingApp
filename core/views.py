@@ -19,6 +19,7 @@ from .models import Client, Booking, AdminEvent, SubOccurrence
 from .booking_create_service import create_bookings_with_billing
 from .stripe_integration import list_booking_services, open_invoice_smart, list_recent_invoices
 from .credit import use_client_credit
+from .ics_export import export_all_bookings, export_bookings_by_ids
 
 
 def client_list(request):
@@ -328,3 +329,63 @@ def reports_invoices_list(request):
         'invoices': invoices,
         'limit': limit
     })
+
+
+def bookings_export_all_ics(request):
+    """Export all active bookings as ICS file."""
+    try:
+        ics_content = export_all_bookings()
+        
+        response = HttpResponse(ics_content, content_type='text/calendar; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="bookings_all.ics"'
+        return response
+        
+    except Exception as e:
+        return HttpResponse(
+            f'Error generating ICS export: {str(e)}', 
+            status=500, 
+            content_type='text/plain'
+        )
+
+
+def bookings_export_by_ids_ics(request):
+    """Export specific bookings by IDs as ICS file."""
+    try:
+        # Get ids parameter from query string
+        ids_param = request.GET.get('ids', '')
+        if not ids_param:
+            return HttpResponse(
+                'Missing ids parameter. Use format: ?ids=1,2,3', 
+                status=400, 
+                content_type='text/plain'
+            )
+        
+        # Parse comma-separated IDs
+        try:
+            booking_ids = [int(id_str.strip()) for id_str in ids_param.split(',') if id_str.strip()]
+        except ValueError:
+            return HttpResponse(
+                'Invalid id format. Use comma-separated integers: ?ids=1,2,3', 
+                status=400, 
+                content_type='text/plain'
+            )
+        
+        if not booking_ids:
+            return HttpResponse(
+                'No valid booking IDs provided', 
+                status=400, 
+                content_type='text/plain'
+            )
+        
+        ics_content = export_bookings_by_ids(booking_ids)
+        
+        response = HttpResponse(ics_content, content_type='text/calendar; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="bookings_{"-".join(map(str, booking_ids))}.ics"'
+        return response
+        
+    except Exception as e:
+        return HttpResponse(
+            f'Error generating ICS export: {str(e)}', 
+            status=500, 
+            content_type='text/plain'
+        )

@@ -2304,3 +2304,214 @@ class CalendarViewTest(TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '?year=2026&month=1')
+
+
+class ICSExportTest(TestCase):
+    """Test ICS export functionality."""
+
+    def setUp(self):
+        """Set up test data."""
+        from django.utils import timezone
+        from datetime import datetime, timedelta
+        
+        # Create test client
+        self.test_client = Client.objects.create(
+            name='Test Client',
+            email='test@example.com',
+            phone='123-456-7890',
+            address='123 Test St',
+            status='active'
+        )
+        
+        # Create regular booking
+        self.regular_booking = Booking.objects.create(
+            client=self.test_client,
+            service_code='WALK_1HR',
+            service_name='1 Hour Dog Walk',
+            service_label='1 Hour Dog Walk',
+            start_dt=timezone.make_aware(datetime(2025, 6, 15, 10, 0)),
+            end_dt=timezone.make_aware(datetime(2025, 6, 15, 11, 0)),
+            location='Test Park',
+            dogs=2,
+            status='confirmed',
+            price_cents=3500
+        )
+        
+        # Create overnight booking
+        self.overnight_booking = Booking.objects.create(
+            client=self.test_client,
+            service_code='SITTING_OVERNIGHT',
+            service_name='Overnight Pet Sitting',
+            service_label='Overnight Pet Sitting',
+            start_dt=timezone.make_aware(datetime(2025, 6, 20, 18, 0)),
+            end_dt=timezone.make_aware(datetime(2025, 6, 21, 8, 0)),
+            location='Client Home',
+            dogs=1,
+            status='confirmed',
+            price_cents=15000
+        )
+        
+        # Create cancelled booking (should be excluded)
+        self.cancelled_booking = Booking.objects.create(
+            client=self.test_client,
+            service_code='WALK_30MIN',
+            service_name='30 Minute Dog Walk',
+            service_label='30 Minute Dog Walk',
+            start_dt=timezone.make_aware(datetime(2025, 6, 25, 14, 0)),
+            end_dt=timezone.make_aware(datetime(2025, 6, 25, 14, 30)),
+            location='Local Area',
+            dogs=1,
+            status='cancelled',
+            price_cents=2000
+        )
+
+    def test_ics_export_all_bookings(self):
+        """Test exporting all bookings to ICS format."""
+        response = self.client.get(reverse('bookings_export_all_ics'))
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/calendar; charset=utf-8')
+        self.assertIn('attachment; filename="bookings_all.ics"', response['Content-Disposition'])
+        
+        ics_content = response.content.decode('utf-8')
+        
+        # Check basic ICS structure
+        self.assertIn('BEGIN:VCALENDAR', ics_content)
+        self.assertIn('END:VCALENDAR', ics_content)
+        self.assertIn('VERSION:2.0', ics_content)
+        self.assertIn('PRODID:-//NewFarm Dog Walking App//NewFarm Dog Walking App//EN', ics_content)
+        
+        # Check that regular booking is included
+        self.assertIn('1 Hour Dog Walk - Test Client', ics_content)
+        self.assertIn('Test Park', ics_content)
+        
+        # Check that overnight booking is included
+        self.assertIn('Overnight Pet Sitting - Test Client', ics_content)
+        
+        # Check that cancelled booking is excluded
+        self.assertNotIn('30 Minute Dog Walk - Test Client', ics_content)
+        
+        # Check VEVENT blocks
+        vevent_count = ics_content.count('BEGIN:VEVENT')
+        self.assertEqual(vevent_count, 2)  # Should have 2 active bookings
+
+    def test_ics_export_by_ids(self):
+        """Test exporting specific bookings by IDs."""
+        response = self.client.get(reverse('bookings_export_by_ids_ics'), {
+            'ids': f'{self.regular_booking.id},{self.overnight_booking.id}'
+        })
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/calendar; charset=utf-8')
+        
+        ics_content = response.content.decode('utf-8')
+        
+        # Check basic ICS structure
+        self.assertIn('BEGIN:VCALENDAR', ics_content)
+        self.assertIn('END:VCALENDAR', ics_content)
+        
+        # Check both specified bookings are included
+        self.assertIn('1 Hour Dog Walk - Test Client', ics_content)
+        self.assertIn('Overnight Pet Sitting - Test Client', ics_content)
+        
+        # Check VEVENT blocks
+        vevent_count = ics_content.count('BEGIN:VEVENT')
+        self.assertEqual(vevent_count, 2)
+
+    def test_ics_export_by_ids_missing_param(self):
+        """Test exporting by IDs without ids parameter."""
+        response = self.client.get(reverse('bookings_export_by_ids_ics'))
+        
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Missing ids parameter', response.content.decode())
+
+    def test_ics_export_by_ids_invalid_format(self):
+        """Test exporting by IDs with invalid format."""
+        response = self.client.get(reverse('bookings_export_by_ids_ics'), {
+            'ids': 'invalid,not-a-number'
+        })
+        
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Invalid id format', response.content.decode())
+
+    def test_ics_export_by_single_id(self):
+        """Test exporting a single booking by ID."""
+        response = self.client.get(reverse('bookings_export_by_ids_ics'), {
+            'ids': str(self.regular_booking.id)
+        })
+        
+        self.assertEqual(response.status_code, 200)
+        ics_content = response.content.decode('utf-8')
+        
+        # Check only one booking is included
+        vevent_count = ics_content.count('BEGIN:VEVENT')
+        self.assertEqual(vevent_count, 1)
+        
+        self.assertIn('1 Hour Dog Walk - Test Client', ics_content)
+        self.assertNotIn('Overnight Pet Sitting - Test Client', ics_content)
+
+    def test_overnight_booking_extended_end_date(self):
+        """Test that overnight bookings have end date extended by +1 day."""
+        from core.ics_export import booking_to_vevent
+        from datetime import timedelta
+        
+        event = booking_to_vevent(self.overnight_booking)
+        
+        # Get the original dates
+        original_end = self.overnight_booking.end_dt
+        
+        # The event end date should be extended by 1 day
+        expected_end = original_end + timedelta(days=1)
+        
+        # Convert to the same timezone for comparison
+        event_end = event['dtend'].dt
+        
+        # Check that the end date was extended
+        self.assertEqual(event_end.date(), expected_end.date())
+
+    def test_ics_timezone_handling(self):
+        """Test that ICS export uses Australia/Brisbane timezone."""
+        from core.ics_export import booking_to_vevent
+        import pytz
+        
+        event = booking_to_vevent(self.regular_booking)
+        
+        # Check that the timezone is Australia/Brisbane
+        brisbane_tz = pytz.timezone('Australia/Brisbane')
+        
+        start_dt = event['dtstart'].dt
+        end_dt = event['dtend'].dt
+        
+        # Both should be timezone-aware and in Brisbane timezone
+        self.assertIsNotNone(start_dt.tzinfo)
+        self.assertIsNotNone(end_dt.tzinfo)
+        
+        # Convert to UTC for comparison to handle timezone differences
+        expected_start_utc = self.regular_booking.start_dt.astimezone(brisbane_tz).astimezone(pytz.UTC)
+        actual_start_utc = start_dt.astimezone(pytz.UTC)
+        
+        self.assertEqual(actual_start_utc.replace(second=0, microsecond=0), 
+                        expected_start_utc.replace(second=0, microsecond=0))
+
+    def test_ics_event_properties(self):
+        """Test that ICS events have correct properties."""
+        from core.ics_export import booking_to_vevent
+        
+        event = booking_to_vevent(self.regular_booking)
+        
+        # Check required properties
+        self.assertIn('uid', event)
+        self.assertIn('summary', event)
+        self.assertIn('dtstart', event)
+        self.assertIn('dtend', event)
+        self.assertIn('description', event)
+        self.assertIn('location', event)
+        
+        # Check content
+        self.assertEqual(str(event['summary']), '1 Hour Dog Walk - Test Client')
+        self.assertEqual(str(event['location']), 'Test Park')
+        self.assertIn('Client: Test Client', str(event['description']))
+        self.assertIn('Dogs: 2', str(event['description']))
+        
+        # Check UID format
+        self.assertTrue(str(event['uid']).startswith(f'booking-{self.regular_booking.id}@'))
