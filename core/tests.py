@@ -1,7 +1,8 @@
 from django.test import TestCase, Client as TestClient
+from django.urls import reverse
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from unittest.mock import patch
 from .models import StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence
 
@@ -1814,3 +1815,301 @@ class BookingCreateServiceTest(TestCase):
         self.assertEqual(bookings[2].stripe_invoice_id, 'in_batch_test')
         mock_create_invoice.assert_called_once_with(self.client)
         self.assertEqual(mock_push_items.call_count, 2)
+
+
+class CalendarViewTest(TestCase):
+    """Test calendar view functionality."""
+
+    def setUp(self):
+        self.client_test = TestClient()
+        self.test_client = Client.objects.create(
+            name='Calendar Test Client',
+            email='calendar@test.com',
+            phone='123-456-7890',
+            address='123 Calendar St',
+            status='active'
+        )
+
+    def test_calendar_view_get_current_month(self):
+        """Test calendar view displays current month correctly."""
+        response = self.client_test.get(reverse('calendar_view'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Calendar -')
+        self.assertContains(response, 'Legend')
+        self.assertContains(response, 'Real Bookings (confirmed)')
+        self.assertContains(response, 'Active Subscriptions')
+        self.assertContains(response, 'Admin Events')
+
+    def test_calendar_view_get_specific_month(self):
+        """Test calendar view with specific year/month parameters."""
+        response = self.client_test.get(reverse('calendar_view'), {
+            'year': 2025,
+            'month': 6
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Calendar - June 2025')
+
+    def test_calendar_view_with_booking_data(self):
+        """Test calendar view shows correct dots for booking data."""
+        # Create test data for specific dates
+        test_date = date(2025, 3, 15)
+        
+        # Create booking (should show blue dot)
+        booking = Booking.objects.create(
+            client=self.test_client,
+            service_code='WALK_1HR',
+            service_name='Test Walk',
+            service_label='Test',
+            start_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time())),
+            end_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time()) + timedelta(hours=1)),
+            location='Test Park',
+            dogs=1,
+            status='confirmed',
+            price_cents=3500,
+            deleted=False
+        )
+
+        # Create admin event (should show orange dot)
+        admin_event = AdminEvent.objects.create(
+            due_dt=timezone.make_aware(datetime.combine(test_date.replace(day=20), datetime.min.time())),
+            title='Test Admin Event',
+            notes='Test notes'
+        )
+
+        # Create sub occurrence (should show purple dot)
+        sub_occurrence = SubOccurrence.objects.create(
+            stripe_subscription_id='sub_test_123',
+            start_dt=timezone.make_aware(datetime.combine(test_date.replace(day=25), datetime.min.time())),
+            end_dt=timezone.make_aware(datetime.combine(test_date.replace(day=25), datetime.min.time()) + timedelta(hours=1)),
+            active=True
+        )
+
+        # Test calendar view for March 2025
+        response = self.client_test.get(reverse('calendar_view'), {
+            'year': 2025,
+            'month': 3
+        })
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Calendar - March 2025')
+        
+        # Check that dots are rendered (custom template tag output)
+        self.assertContains(response, 'title="1 booking"')  # booking dot
+        self.assertContains(response, 'title="1 admin event"')  # admin event dot  
+        self.assertContains(response, 'title="1 subscription"')  # sub occurrence dot
+
+    def test_calendar_view_excludes_cancelled_bookings(self):
+        """Test calendar view excludes cancelled/voided/deleted bookings."""
+        test_date = date(2025, 3, 15)
+        
+        # Create cancelled booking (should not show dot)
+        Booking.objects.create(
+            client=self.test_client,
+            service_code='WALK_1HR',
+            service_name='Cancelled Walk',
+            service_label='Test',
+            start_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time())),
+            end_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time()) + timedelta(hours=1)),
+            location='Test Park',
+            dogs=1,
+            status='cancelled',
+            price_cents=3500,
+            deleted=False
+        )
+
+        # Create deleted booking (should not show dot)
+        Booking.objects.create(
+            client=self.test_client,
+            service_code='WALK_1HR',
+            service_name='Deleted Walk',
+            service_label='Test',
+            start_dt=timezone.make_aware(datetime.combine(test_date.replace(day=20), datetime.min.time())),
+            end_dt=timezone.make_aware(datetime.combine(test_date.replace(day=20), datetime.min.time()) + timedelta(hours=1)),
+            location='Test Park',
+            dogs=1,
+            status='confirmed',
+            price_cents=3500,
+            deleted=True
+        )
+
+        # Create voided booking (should not show dot)
+        Booking.objects.create(
+            client=self.test_client,
+            service_code='WALK_1HR',
+            service_name='Voided Walk',
+            service_label='Test',
+            start_dt=timezone.make_aware(datetime.combine(test_date.replace(day=25), datetime.min.time())),
+            end_dt=timezone.make_aware(datetime.combine(test_date.replace(day=25), datetime.min.time()) + timedelta(hours=1)),
+            location='Test Park',
+            dogs=1,
+            status='voided',
+            price_cents=3500,
+            deleted=False
+        )
+
+        # Test calendar view for March 2025
+        response = self.client_test.get(reverse('calendar_view'), {
+            'year': 2025,
+            'month': 3
+        })
+        
+        self.assertEqual(response.status_code, 200)
+        # Check that the page renders but has no booking dots
+        # Since we're using a custom template tag, check the actual calendar content
+        self.assertContains(response, 'Calendar - March 2025')
+        
+        # The test is that no booking dots are rendered for the specific test days
+        # Since all bookings are excluded, there should be no blue dots anywhere
+        self.assertNotContains(response, 'title="1 booking"')
+        self.assertNotContains(response, 'title="2 booking')  # Any booking count
+
+    def test_calendar_view_excludes_inactive_sub_occurrences(self):
+        """Test calendar view excludes inactive sub occurrences."""
+        test_date = date(2025, 3, 15)
+        
+        # Create inactive sub occurrence (should not show dot)
+        SubOccurrence.objects.create(
+            stripe_subscription_id='sub_inactive_123',
+            start_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time())),
+            end_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time()) + timedelta(hours=1)),
+            active=False
+        )
+
+        # Test calendar view for March 2025
+        response = self.client_test.get(reverse('calendar_view'), {
+            'year': 2025,
+            'month': 3
+        })
+        
+        self.assertEqual(response.status_code, 200)
+        # Should not contain purple dots since sub occurrence is inactive
+        self.assertNotContains(response, 'title="1 subscription"')
+        self.assertNotContains(response, 'title="2 subscription')
+
+    def test_calendar_day_details_view(self):
+        """Test calendar day details functionality."""
+        test_date = date(2025, 3, 15)
+        
+        # Create test bookings for the day
+        booking1 = Booking.objects.create(
+            client=self.test_client,
+            service_code='WALK_1HR',
+            service_name='Morning Walk',
+            service_label='Test',
+            start_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time().replace(hour=9))),
+            end_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time().replace(hour=10))),
+            location='Downtown Park',
+            dogs=2,
+            status='confirmed',
+            price_cents=3500,
+            notes='Two friendly dogs',
+            deleted=False
+        )
+
+        booking2 = Booking.objects.create(
+            client=self.test_client,
+            service_code='WALK_30MIN',
+            service_name='Afternoon Walk',
+            service_label='Test',
+            start_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time().replace(hour=15))),
+            end_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time().replace(hour=15, minute=30))),
+            location='City Park',
+            dogs=1,
+            status='confirmed',
+            price_cents=2000,
+            deleted=False
+        )
+
+        # Test calendar view with selected date
+        response = self.client_test.get(reverse('calendar_view'), {
+            'year': 2025,
+            'month': 3,
+            'date': '2025-03-15'
+        })
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Bookings for')
+        self.assertContains(response, 'Morning Walk')
+        self.assertContains(response, 'Afternoon Walk')
+        self.assertContains(response, 'Calendar Test Client')
+        self.assertContains(response, 'Downtown Park')
+        self.assertContains(response, 'City Park')
+        self.assertContains(response, 'Two friendly dogs')
+
+    def test_calendar_day_details_only_shows_bookings(self):
+        """Test calendar day details shows only bookings, not other events."""
+        test_date = date(2025, 3, 15)
+        
+        # Create booking (should show in details)
+        booking = Booking.objects.create(
+            client=self.test_client,
+            service_code='WALK_1HR',
+            service_name='Test Walk',
+            service_label='Test',
+            start_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time())),
+            end_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time()) + timedelta(hours=1)),
+            location='Test Park',
+            dogs=1,
+            status='confirmed',
+            price_cents=3500,
+            deleted=False
+        )
+
+        # Create admin event (should NOT show in details)
+        AdminEvent.objects.create(
+            due_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time())),
+            title='Test Admin Event',
+            notes='Should not appear in day details'
+        )
+
+        # Create sub occurrence (should NOT show in details)
+        SubOccurrence.objects.create(
+            stripe_subscription_id='sub_test_123',
+            start_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time())),
+            end_dt=timezone.make_aware(datetime.combine(test_date, datetime.min.time()) + timedelta(hours=1)),
+            active=True
+        )
+
+        # Test calendar view with selected date
+        response = self.client_test.get(reverse('calendar_view'), {
+            'year': 2025,
+            'month': 3,
+            'date': '2025-03-15'
+        })
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Bookings for')
+        self.assertContains(response, 'Test Walk')  # booking should appear
+        self.assertNotContains(response, 'Test Admin Event')  # admin event should NOT appear
+        self.assertNotContains(response, 'sub_test_123')  # sub occurrence should NOT appear
+
+    def test_calendar_navigation_links(self):
+        """Test calendar month navigation."""
+        response = self.client_test.get(reverse('calendar_view'), {
+            'year': 2025,
+            'month': 6
+        })
+        
+        self.assertEqual(response.status_code, 200)
+        # Check previous month link
+        self.assertContains(response, '?year=2025&month=5')
+        # Check next month link  
+        self.assertContains(response, '?year=2025&month=7')
+
+    def test_calendar_navigation_year_boundary(self):
+        """Test calendar navigation across year boundaries."""
+        # Test January (previous should be December of previous year)
+        response = self.client_test.get(reverse('calendar_view'), {
+            'year': 2025,
+            'month': 1
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '?year=2024&month=12')
+
+        # Test December (next should be January of next year)
+        response = self.client_test.get(reverse('calendar_view'), {
+            'year': 2025,
+            'month': 12
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '?year=2026&month=1')

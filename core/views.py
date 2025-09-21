@@ -10,10 +10,12 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib import messages
 from django.utils import timezone
-from datetime import datetime
+from django.db.models import Q
+from datetime import datetime, date
+from calendar import Calendar, monthrange
 import json
 
-from .models import Client, Booking
+from .models import Client, Booking, AdminEvent, SubOccurrence
 from .booking_create_service import create_bookings_with_billing
 from .stripe_integration import list_booking_services, open_invoice_smart
 from .credit import use_client_credit
@@ -191,3 +193,111 @@ def client_add_credit(request, client_id):
         return JsonResponse({'error': f'Invalid credit amount: {e}'}, status=400)
     except Exception as e:
         return JsonResponse({'error': f'Error adding credit: {e}'}, status=500)
+
+
+def calendar_view(request):
+    """Show calendar month view with day details."""
+    # Get current month or requested month
+    now = timezone.now()
+    year = int(request.GET.get('year', now.year))
+    month = int(request.GET.get('month', now.month))
+    selected_date = request.GET.get('date')
+    
+    # Get calendar data for the month
+    cal = Calendar(6)  # Start week on Sunday (6)
+    month_days = cal.monthdayscalendar(year, month)
+    
+    # Prepare day data with counts
+    days_data = {}
+    calendar_days = {}  # day number -> data for easier template access
+    
+    # Get all relevant data for the month
+    month_start = date(year, month, 1)
+    if month == 12:
+        month_end = date(year + 1, 1, 1)
+    else:
+        month_end = date(year, month + 1, 1)
+    
+    # Count bookings (exclude deleted and cancelled/voided status)
+    bookings = Booking.objects.filter(
+        start_dt__date__gte=month_start,
+        start_dt__date__lt=month_end,
+        deleted=False
+    ).exclude(
+        status__icontains='cancel'
+    ).exclude(
+        status__icontains='void'
+    )
+    
+    # Count SubOccurrences where active=True
+    sub_occurrences = SubOccurrence.objects.filter(
+        start_dt__date__gte=month_start,
+        start_dt__date__lt=month_end,
+        active=True
+    )
+    
+    # Count AdminEvents
+    admin_events = AdminEvent.objects.filter(
+        due_dt__date__gte=month_start,
+        due_dt__date__lt=month_end
+    )
+    
+    # Build day counts
+    for booking in bookings:
+        day_key = booking.start_dt.date()
+        day_num = day_key.day
+        if day_num not in calendar_days:
+            calendar_days[day_num] = {'bookings': 0, 'sub_occurrences': 0, 'admin_events': 0}
+        calendar_days[day_num]['bookings'] += 1
+    
+    for sub_occurrence in sub_occurrences:
+        day_key = sub_occurrence.start_dt.date()
+        day_num = day_key.day
+        if day_num not in calendar_days:
+            calendar_days[day_num] = {'bookings': 0, 'sub_occurrences': 0, 'admin_events': 0}
+        calendar_days[day_num]['sub_occurrences'] += 1
+    
+    for admin_event in admin_events:
+        day_key = admin_event.due_dt.date()
+        day_num = day_key.day
+        if day_num not in calendar_days:
+            calendar_days[day_num] = {'bookings': 0, 'sub_occurrences': 0, 'admin_events': 0}
+        calendar_days[day_num]['admin_events'] += 1
+    
+    # Get bookings for selected date if provided
+    selected_bookings = []
+    if selected_date:
+        try:
+            selected_dt = datetime.strptime(selected_date, '%Y-%m-%d').date()
+            selected_bookings = Booking.objects.filter(
+                start_dt__date=selected_dt,
+                deleted=False
+            ).exclude(
+                status__icontains='cancel'
+            ).exclude(
+                status__icontains='void'
+            ).order_by('start_dt')
+        except ValueError:
+            pass
+    
+    # Month navigation
+    prev_month = month - 1 if month > 1 else 12
+    prev_year = year if month > 1 else year - 1
+    next_month = month + 1 if month < 12 else 1
+    next_year = year if month < 12 else year + 1
+    
+    context = {
+        'year': year,
+        'month': month,
+        'month_name': date(year, month, 1).strftime('%B %Y'),
+        'month_days': month_days,
+        'calendar_days': calendar_days,
+        'selected_date': selected_date,
+        'selected_bookings': selected_bookings,
+        'prev_month': prev_month,
+        'prev_year': prev_year,
+        'next_month': next_month,
+        'next_year': next_year,
+    }
+    
+    return render(request, 'core/calendar.html', context)
