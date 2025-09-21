@@ -1123,6 +1123,248 @@ class ClientCreditTest(TestCase):
         self.assertEqual(db_client.credit_cents, 700)
 
 
+class SubscriptionSyncTest(TestCase):
+    """Test subscription sync functionality."""
+
+    def setUp(self):
+        """Set up test data."""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Create some existing SubOccurrence records
+        base_time = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        
+        # Past occurrence (should not be cleaned)
+        SubOccurrence.objects.create(
+            stripe_subscription_id='sub_past_001',
+            start_dt=base_time - timedelta(days=2),
+            end_dt=base_time - timedelta(days=1),
+            active=True
+        )
+        
+        # Future occurrence (should be cleaned)
+        SubOccurrence.objects.create(
+            stripe_subscription_id='sub_future_001',
+            start_dt=base_time + timedelta(days=1),
+            end_dt=base_time + timedelta(days=2),
+            active=True
+        )
+        
+        # Today occurrence (should be cleaned)
+        SubOccurrence.objects.create(
+            stripe_subscription_id='sub_today_001',
+            start_dt=base_time,
+            end_dt=base_time + timedelta(hours=2),
+            active=True
+        )
+
+    def test_sync_with_fake_data_no_stripe(self):
+        """Test subscription sync with fake data when Stripe not configured."""
+        from core.subscription_sync import sync_subscriptions_to_bookings_and_calendar
+        
+        # Ensure we start with some data
+        self.assertEqual(SubOccurrence.objects.count(), 3)
+        
+        # Run sync with fake data (no Stripe key)
+        result = sync_subscriptions_to_bookings_and_calendar(horizon_days=14)
+        
+        # Verify result structure
+        self.assertIn('processed', result)
+        self.assertIn('created', result)
+        self.assertIn('cleaned', result)
+        self.assertIn('errors', result)
+        
+        # Should process 3 fake subscriptions
+        self.assertEqual(result['processed'], 3)
+        
+        # Should clean 2 future/today records (past one remains)
+        self.assertEqual(result['cleaned'], 2)
+        
+        # Should create new records
+        self.assertGreater(result['created'], 0)
+        
+        # Should have no errors with fake data
+        self.assertEqual(result['errors'], 0)
+        
+        # Verify past record still exists
+        past_records = SubOccurrence.objects.filter(stripe_subscription_id='sub_past_001')
+        self.assertEqual(past_records.count(), 1)
+
+    def test_sync_horizon_logic(self):
+        """Test that horizon_days parameter correctly limits created occurrences."""
+        from core.subscription_sync import sync_subscriptions_to_bookings_and_calendar
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Test with very short horizon
+        result_short = sync_subscriptions_to_bookings_and_calendar(horizon_days=7)
+        count_short = result_short['created']
+        
+        # Clear and test with longer horizon
+        SubOccurrence.objects.all().delete()
+        result_long = sync_subscriptions_to_bookings_and_calendar(horizon_days=30)
+        count_long = result_long['created']
+        
+        # Longer horizon should create more occurrences
+        self.assertGreater(count_long, count_short)
+
+    def test_sync_cleans_only_future_records(self):
+        """Test that sync only cleans records starting from today."""
+        from core.subscription_sync import sync_subscriptions_to_bookings_and_calendar
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Add more test data
+        base_time = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        
+        # Add another past record
+        SubOccurrence.objects.create(
+            stripe_subscription_id='sub_past_002',
+            start_dt=base_time - timedelta(days=5),
+            end_dt=base_time - timedelta(days=4),
+            active=True
+        )
+        
+        # Count specific past records that should be preserved
+        past_ids_before = set(
+            SubOccurrence.objects.filter(
+                start_dt__date__lt=timezone.now().date()
+            ).values_list('stripe_subscription_id', flat=True)
+        )
+        
+        # Run sync
+        result = sync_subscriptions_to_bookings_and_calendar(horizon_days=14)
+        
+        # Check that the specific past records still exist
+        for past_id in past_ids_before:
+            self.assertTrue(
+                SubOccurrence.objects.filter(stripe_subscription_id=past_id).exists(),
+                f"Past record {past_id} should still exist"
+            )
+
+    def test_expand_subscription_occurrences(self):
+        """Test subscription occurrence expansion logic."""
+        from core.subscription_sync import _expand_subscription_occurrences
+        from django.utils import timezone
+        from datetime import timedelta
+        import time
+        
+        base_time = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        
+        # Test weekly subscription
+        weekly_sub = {
+            'id': 'sub_test_weekly',
+            'status': 'active',
+            'current_period_start': int(base_time.timestamp()),
+            'plan': {
+                'interval': 'week',
+                'interval_count': 1
+            }
+        }
+        
+        occurrences = _expand_subscription_occurrences(weekly_sub, horizon_days=21)
+        
+        # Should create approximately 3 weekly occurrences in 21 days
+        self.assertGreaterEqual(len(occurrences), 2)
+        self.assertLessEqual(len(occurrences), 4)
+        
+        # Verify occurrence structure
+        for occ in occurrences:
+            self.assertIn('subscription_id', occ)
+            self.assertIn('start_dt', occ)
+            self.assertIn('end_dt', occ)
+            self.assertIn('active', occ)
+            self.assertEqual(occ['subscription_id'], 'sub_test_weekly')
+            self.assertTrue(occ['active'])
+
+    def test_fake_subscriptions_generation(self):
+        """Test fake subscription data generation."""
+        from core.subscription_sync import _get_fake_subscriptions
+        
+        fake_subs = _get_fake_subscriptions()
+        
+        # Should return 3 fake subscriptions
+        self.assertEqual(len(fake_subs), 3)
+        
+        # Verify structure of fake subscriptions
+        for sub in fake_subs:
+            self.assertIn('id', sub)
+            self.assertIn('status', sub)
+            self.assertIn('current_period_start', sub)
+            self.assertIn('current_period_end', sub)
+            self.assertIn('plan', sub)
+            self.assertEqual(sub['status'], 'active')
+
+
+class LogUtilsTest(TestCase):
+    """Test logging utilities."""
+
+    def setUp(self):
+        """Clean up any existing log files."""
+        from core.log_utils import clear_log_file
+        clear_log_file('subscription_error_log.txt')
+        clear_log_file('subscription_sync_log.txt')
+        clear_log_file('test_log.txt')
+
+    def tearDown(self):
+        """Clean up log files after tests."""
+        from core.log_utils import clear_log_file
+        clear_log_file('subscription_error_log.txt')
+        clear_log_file('subscription_sync_log.txt')
+        clear_log_file('test_log.txt')
+
+    def test_log_subscription_error(self):
+        """Test error logging functionality."""
+        from core.log_utils import log_subscription_error
+        from pathlib import Path
+        from django.conf import settings
+        
+        test_message = "Test error message"
+        log_subscription_error(test_message)
+        
+        # Verify log file was created and contains message
+        log_path = Path(settings.BASE_DIR) / 'subscription_error_log.txt'
+        self.assertTrue(log_path.exists())
+        
+        with open(log_path, 'r') as f:
+            content = f.read()
+            self.assertIn(test_message, content)
+            self.assertIn('[', content)  # Should have timestamp
+
+    def test_log_subscription_info(self):
+        """Test info logging functionality."""
+        from core.log_utils import log_subscription_info
+        from pathlib import Path
+        from django.conf import settings
+        
+        test_message = "Test info message"
+        log_subscription_info(test_message)
+        
+        # Verify log file was created and contains message
+        log_path = Path(settings.BASE_DIR) / 'subscription_sync_log.txt'
+        self.assertTrue(log_path.exists())
+        
+        with open(log_path, 'r') as f:
+            content = f.read()
+            self.assertIn(test_message, content)
+
+    def test_clear_log_file(self):
+        """Test log file clearing functionality."""
+        from core.log_utils import log_subscription_error, clear_log_file
+        from pathlib import Path
+        from django.conf import settings
+        
+        # Create a log entry
+        log_subscription_error("Test message")
+        log_path = Path(settings.BASE_DIR) / 'subscription_error_log.txt'
+        self.assertTrue(log_path.exists())
+        
+        # Clear the log file
+        result = clear_log_file('subscription_error_log.txt')
+        self.assertTrue(result)
+        self.assertFalse(log_path.exists())
+
+
 class WebViewsTest(TestCase):
     """Test web views for client management and booking creation."""
     

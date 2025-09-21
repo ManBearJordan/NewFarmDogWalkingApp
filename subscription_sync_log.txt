@@ -1,0 +1,49 @@
+[2025-09-20 22:55:54] Starting subscription sync with horizon_days=14
+[2025-09-20 22:55:54] Cleaned 2 future SubOccurrence records
+[2025-09-20 22:55:54] Stripe API key not configured, using fake subscription data
+[2025-09-20 22:55:54] Created 3 occurrences for subscription sub_fake_weekly_walk_001
+[2025-09-20 22:55:54] Created 2 occurrences for subscription sub_fake_biweekly_grooming_002
+[2025-09-20 22:55:54] Created 1 occurrences for subscription sub_fake_monthly_sitting_003
+[2025-09-20 22:55:54] Sync completed: processed=3, created=6, cleaned=2, errors=0
+[2025-09-20 22:55:54] Starting subscription sync with horizon_days=7
+[2025-09-20 22:55:54] Cleaned 2 future SubOccurrence records
+[2025-09-20 22:55:54] Stripe API key not configured, using fake subscription data
+[2025-09-20 22:55:54] Created 2 occurrences for subscription sub_fake_weekly_walk_001
+[2025-09-20 22:55:54] Created 1 occurrences for subscription sub_fake_biweekly_grooming_002
+[2025-09-20 22:55:54] Created 1 occurrences for subscription sub_fake_monthly_sitting_003
+[2025-09-20 22:55:54] Sync completed: processed=3, created=4, cleaned=2, errors=0
+[2025-09-20 22:55:54] Starting subscription sync with horizon_days=30
+[2025-09-20 22:55:54] Cleaned 0 future SubOccurrence records
+[2025-09-20 22:55:54] Stripe API key not configured, using fake subscription data
+[2025-09-20 22:55:54] Created 5 occurrences for subscription sub_fake_weekly_walk_001
+[2025-09-20 22:55:54] Created 3 occurrences for subscription sub_fake_biweekly_grooming_002
+[2025-09-20 22:55:54] Created 2 occurrences for subscription sub_fake_monthly_sitting_003
+[2025-09-20 22:55:54] Sync completed: processed=3, created=10, cleaned=0, errors=0
+[2025-09-20 22:55:54] Starting subscription sync with horizon_days=14
+[2025-09-20 22:55:54] Cleaned 2 future SubOccurrence records
+[2025-09-20 22:55:54] Stripe API key not configured, using fake subscription data
+[2025-09-20 22:55:54] Created 3 occurrences for subscription sub_fake_weekly_walk_001
+[2025-09-20 22:55:54] Created 2 occurrences for subscription sub_fake_biweekly_grooming_002
+[2025-09-20 22:55:54] Created 1 occurrences for subscription sub_fake_monthly_sitting_003
+[2025-09-20 22:55:54] Sync completed: processed=3, created=6, cleaned=2, errors=0
+[2025-09-20 22:56:11] Starting subscription sync with horizon_days=7
+[2025-09-20 22:56:11] Cleaned 7 future SubOccurrence records
+[2025-09-20 22:56:11] Stripe API key not configured, using fake subscription data
+[2025-09-20 22:56:11] Created 2 occurrences for subscription sub_fake_weekly_walk_001
+[2025-09-20 22:56:11] Created 1 occurrences for subscription sub_fake_biweekly_grooming_002
+[2025-09-20 22:56:11] Created 1 occurrences for subscription sub_fake_monthly_sitting_003
+[2025-09-20 22:56:11] Sync completed: processed=3, created=4, cleaned=7, errors=0
+[2025-09-20 22:56:35] Starting subscription sync with horizon_days=14
+[2025-09-20 22:56:35] Cleaned 0 future SubOccurrence records
+[2025-09-20 22:56:35] Stripe API key not configured, using fake subscription data
+[2025-09-20 22:56:35] Created 3 occurrences for subscription sub_fake_weekly_walk_001
+[2025-09-20 22:56:35] Created 2 occurrences for subscription sub_fake_biweekly_grooming_002
+[2025-09-20 22:56:35] Created 1 occurrences for subscription sub_fake_monthly_sitting_003
+[2025-09-20 22:56:35] Sync completed: processed=3, created=6, cleaned=0, errors=0
+[2025-09-20 22:56:51] Starting subscription sync with horizon_days=21
+[2025-09-20 22:56:51] Cleaned 3 future SubOccurrence records
+[2025-09-20 22:56:51] Stripe API key not configured, using fake subscription data
+[2025-09-20 22:56:51] Created 4 occurrences for subscription sub_fake_weekly_walk_001
+[2025-09-20 22:56:51] Created 2 occurrences for subscription sub_fake_biweekly_grooming_002
+[2025-09-20 22:56:51] Created 1 occurrences for subscription sub_fake_monthly_sitting_003
+[2025-09-20 22:56:51] Sync completed: processed=3, created=7, cleaned=3, errors=0
