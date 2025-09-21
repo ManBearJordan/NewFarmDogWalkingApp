@@ -2304,3 +2304,301 @@ class CalendarViewTest(TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '?year=2026&month=1')
+
+
+class BookingFiltersTest(TestCase):
+    """Test booking status filtering utilities."""
+
+    def setUp(self):
+        """Set up test client and bookings with various statuses."""
+        self.client_obj = Client.objects.create(
+            name='Test Client',
+            email='test@example.com',
+            phone='+1234567890',
+            status='active'
+        )
+        
+        # Create bookings with different statuses
+        base_dt = timezone.now().replace(minute=0, second=0, microsecond=0)
+        
+        # Active booking (should be included)
+        self.active_booking = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='30 Min Walk',
+            service_label='Walk',
+            start_dt=base_dt,
+            end_dt=base_dt + timedelta(minutes=30),
+            location='Park',
+            dogs=1,
+            status='confirmed',
+            price_cents=2000,
+            deleted=False
+        )
+        
+        # Deleted booking (should be excluded)
+        self.deleted_booking = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='Deleted Walk',
+            service_label='Walk',
+            start_dt=base_dt + timedelta(hours=1),
+            end_dt=base_dt + timedelta(hours=1, minutes=30),
+            location='Park',
+            dogs=1,
+            status='confirmed',
+            price_cents=2000,
+            deleted=True
+        )
+        
+        # Cancelled booking (should be excluded)
+        self.cancelled_booking = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='Cancelled Walk',
+            service_label='Walk',
+            start_dt=base_dt + timedelta(hours=2),
+            end_dt=base_dt + timedelta(hours=2, minutes=30),
+            location='Park',
+            dogs=1,
+            status='cancelled',
+            price_cents=2000,
+            deleted=False
+        )
+        
+        # Voided booking (should be excluded)
+        self.voided_booking = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='Voided Walk',
+            service_label='Walk',
+            start_dt=base_dt + timedelta(hours=3),
+            end_dt=base_dt + timedelta(hours=3, minutes=30),
+            location='Park',
+            dogs=1,
+            status='voided',
+            price_cents=2000,
+            deleted=False
+        )
+
+    def test_filter_active_bookings_excludes_deleted(self):
+        """Test that filter_active_bookings excludes deleted bookings."""
+        from .booking_filters import filter_active_bookings
+        
+        all_bookings = Booking.objects.all()
+        active_bookings = filter_active_bookings(all_bookings)
+        
+        self.assertIn(self.active_booking, active_bookings)
+        self.assertNotIn(self.deleted_booking, active_bookings)
+
+    def test_filter_active_bookings_excludes_cancelled(self):
+        """Test that filter_active_bookings excludes cancelled bookings."""
+        from .booking_filters import filter_active_bookings
+        
+        all_bookings = Booking.objects.all()
+        active_bookings = filter_active_bookings(all_bookings)
+        
+        self.assertIn(self.active_booking, active_bookings)
+        self.assertNotIn(self.cancelled_booking, active_bookings)
+
+    def test_filter_active_bookings_excludes_voided(self):
+        """Test that filter_active_bookings excludes voided bookings."""
+        from .booking_filters import filter_active_bookings
+        
+        all_bookings = Booking.objects.all()
+        active_bookings = filter_active_bookings(all_bookings)
+        
+        self.assertIn(self.active_booking, active_bookings)
+        self.assertNotIn(self.voided_booking, active_bookings)
+
+    def test_get_active_bookings_returns_only_active(self):
+        """Test that get_active_bookings returns only active bookings."""
+        from .booking_filters import get_active_bookings
+        
+        active_bookings = get_active_bookings()
+        
+        # Should only contain the active booking
+        self.assertEqual(active_bookings.count(), 1)
+        self.assertIn(self.active_booking, active_bookings)
+        self.assertNotIn(self.deleted_booking, active_bookings)
+        self.assertNotIn(self.cancelled_booking, active_bookings)
+        self.assertNotIn(self.voided_booking, active_bookings)
+
+    def test_filter_active_bookings_case_insensitive_cancel(self):
+        """Test that cancelled status matching is case insensitive."""
+        from .booking_filters import filter_active_bookings
+        
+        # Create booking with CANCELLED (uppercase)
+        cancelled_upper = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='Upper Cancelled Walk',
+            service_label='Walk',
+            start_dt=timezone.now(),
+            end_dt=timezone.now() + timedelta(minutes=30),
+            location='Park',
+            dogs=1,
+            status='CANCELLED',
+            price_cents=2000,
+            deleted=False
+        )
+        
+        active_bookings = filter_active_bookings(Booking.objects.all())
+        self.assertNotIn(cancelled_upper, active_bookings)
+
+    def test_filter_active_bookings_case_insensitive_void(self):
+        """Test that voided status matching is case insensitive."""
+        from .booking_filters import filter_active_bookings
+        
+        # Create booking with VOIDED (uppercase)
+        voided_upper = Booking.objects.create(
+            client=self.client_obj,
+            service_code='WALK_30MIN',
+            service_name='Upper Voided Walk',
+            service_label='Walk',
+            start_dt=timezone.now(),
+            end_dt=timezone.now() + timedelta(minutes=30),
+            location='Park',
+            dogs=1,
+            status='VOIDED',
+            price_cents=2000,
+            deleted=False
+        )
+        
+        active_bookings = filter_active_bookings(Booking.objects.all())
+        self.assertNotIn(voided_upper, active_bookings)
+
+
+class MoneyFiltersTest(TestCase):
+    """Test money formatting template filters."""
+
+    def test_money_format_basic(self):
+        """Test basic money formatting from cents."""
+        from core.templatetags.money_filters import money_format
+        
+        # Test various cent values
+        self.assertEqual(money_format(2000), "$20.00")
+        self.assertEqual(money_format(1050), "$10.50")
+        self.assertEqual(money_format(99), "$0.99")
+        self.assertEqual(money_format(0), "$0.00")
+
+    def test_money_format_large_amounts(self):
+        """Test money formatting with large amounts."""
+        from core.templatetags.money_filters import money_format
+        
+        self.assertEqual(money_format(120000), "$1200.00")
+        self.assertEqual(money_format(999999), "$9999.99")
+
+    def test_money_format_edge_cases(self):
+        """Test money formatting edge cases."""
+        from core.templatetags.money_filters import money_format
+        
+        # Test None input
+        self.assertEqual(money_format(None), "$0.00")
+        
+        # Test string input that can be converted
+        self.assertEqual(money_format("2000"), "$20.00")
+        
+        # Test invalid input
+        self.assertEqual(money_format("invalid"), "$0.00")
+        self.assertEqual(money_format([]), "$0.00")
+
+    def test_money_format_no_symbol(self):
+        """Test money formatting without dollar symbol."""
+        from core.templatetags.money_filters import money_format_no_symbol
+        
+        self.assertEqual(money_format_no_symbol(2000), "20.00")
+        self.assertEqual(money_format_no_symbol(1050), "10.50")
+        self.assertEqual(money_format_no_symbol(None), "0.00")
+        self.assertEqual(money_format_no_symbol("invalid"), "0.00")
+
+
+class SmokeTest(TestCase):
+    """Smoke tests to ensure main pages return 200 status codes."""
+
+    def setUp(self):
+        """Set up test client and basic data."""
+        # Create a test client for page requests
+        self.client_test = TestClient()
+        
+        # Create a basic client for pages that may require it
+        self.test_client = Client.objects.create(
+            name='Test Client',
+            email='test@example.com',
+            phone='+1234567890',
+            status='active',
+            credit_cents=5000
+        )
+
+    def test_client_list_page(self):
+        """Test that client list page returns 200."""
+        response = self.client_test.get('/clients/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Clients')  # Basic content check
+
+    def test_booking_create_batch_page(self):
+        """Test that booking creation page returns 200."""
+        response = self.client_test.get('/bookings/create-batch/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Create Batch Bookings')
+
+    def test_calendar_page(self):
+        """Test that calendar page returns 200."""
+        response = self.client_test.get('/calendar/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Calendar')
+
+    def test_calendar_page_with_params(self):
+        """Test calendar page with year/month parameters."""
+        response = self.client_test.get('/calendar/?year=2025&month=6')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'June 2025')
+
+    def test_reports_invoices_page(self):
+        """Test that reports invoices page returns 200."""
+        response = self.client_test.get('/reports/invoices/')
+        self.assertEqual(response.status_code, 200)
+        # Page should load even if no Stripe key is configured
+        
+    def test_reports_invoices_page_with_limit(self):
+        """Test reports invoices page with limit parameter."""
+        response = self.client_test.get('/reports/invoices/?limit=5')
+        self.assertEqual(response.status_code, 200)
+
+    def test_admin_stripe_page_requires_staff(self):
+        """Test that admin Stripe page requires staff permission."""
+        # Without authentication, should redirect to login
+        response = self.client_test.get('/admin/stripe/')
+        # Should either redirect (302) to login or return 403/401
+        self.assertIn(response.status_code, [302, 403, 401])
+        
+    def test_admin_stripe_diagnostics_requires_staff(self):
+        """Test that admin Stripe diagnostics requires staff permission."""
+        response = self.client_test.get('/admin/stripe/diagnostics/')
+        # Should either redirect (302) to login or return 403/401
+        self.assertIn(response.status_code, [302, 403, 401])
+
+    def test_client_credit_endpoint_post_only(self):
+        """Test that credit endpoint requires POST method."""
+        # GET should return method not allowed
+        response = self.client_test.get(f'/clients/{self.test_client.id}/credit/')
+        self.assertEqual(response.status_code, 405)  # Method not allowed
+
+    def test_nonexistent_pages_return_404(self):
+        """Test that nonexistent pages properly return 404."""
+        test_urls = [
+            '/nonexistent/',
+            '/clients/999999/',  # Non-existent client page (if it existed)
+            '/invalid-path/',
+        ]
+        
+        for url in test_urls:
+            with self.subTest(url=url):
+                response = self.client_test.get(url)
+                self.assertEqual(response.status_code, 404)
+
+    def test_credit_endpoint_with_nonexistent_client(self):
+        """Test credit endpoint with nonexistent client returns 405 (POST only) on GET."""
+        # This endpoint is POST-only, so GET returns 405 regardless of client existence
+        response = self.client_test.get('/clients/999999/credit/')
+        self.assertEqual(response.status_code, 405)  # Method not allowed

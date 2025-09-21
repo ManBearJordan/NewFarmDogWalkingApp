@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load money_filters %}
 
 {% block title %}Clients - {{ block.super }}{% endblock %}
 
@@ -26,7 +27,7 @@
                             <td>{{ client.phone }}</td>
                             <td>
                                 <span class="badge bg-secondary">
-                                    ${{ client.credit_aud|floatformat:2 }}
+                                    {{ client.credit_cents|money_format }}
                                 </span>
                             </td>
                             <td>
