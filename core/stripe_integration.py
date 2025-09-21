@@ -258,6 +258,62 @@ def push_invoice_items_from_booking(booking, invoice_id: str) -> None:
     )
 
 
+def list_recent_invoices(limit: int = 10) -> List[Dict]:
+    """List recent invoices for clients that exist in our database.
+    
+    Args:
+        limit: Maximum number of invoices to return (default 10)
+        
+    Returns:
+        List[Dict]: List of invoice data with keys:
+        [{id, client_name, amount_cents, currency, status, created, client_id}, ...]
+        Returns empty list if Stripe not configured.
+    """
+    key = get_api_key()
+    if not key:
+        # Return stub data if Stripe not configured
+        return []
+    
+    try:
+        stripe.api_key = key
+        
+        # Get recent invoices from Stripe
+        invoices = stripe.Invoice.list(
+            limit=limit,
+            expand=['data.customer']
+        )
+        
+        # Import here to avoid circular imports
+        from core.models import Client
+        
+        # Get all our clients for lookup
+        our_clients = {client.stripe_customer_id: client 
+                      for client in Client.objects.filter(stripe_customer_id__isnull=False)}
+        
+        result = []
+        for invoice in invoices.data:
+            # Only include invoices for clients in our database
+            customer_id = invoice.customer.id if hasattr(invoice.customer, 'id') else invoice.customer
+            if customer_id in our_clients:
+                client = our_clients[customer_id]
+                result.append({
+                    'id': invoice.id,
+                    'client_name': client.name,
+                    'client_id': client.id,
+                    'amount_cents': invoice.total,
+                    'currency': invoice.currency.upper(),
+                    'status': invoice.status,
+                    'created': invoice.created
+                })
+        
+        return result
+        
+    except Exception as e:
+        # Return empty list on any error to avoid breaking the page
+        print(f"Warning: Could not retrieve invoices from Stripe: {e}")
+        return []
+
+
 def open_invoice_smart(invoice_id: str) -> str:
     """Return full dashboard URL for invoice in test vs live mode.
     

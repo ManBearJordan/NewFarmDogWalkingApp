@@ -730,6 +730,22 @@ class StripeIntegrationTest(TestCase):
         
         self.assertIn('Stripe API key not configured', str(context.exception))
 
+    def test_list_recent_invoices_no_key_configured(self):
+        """Test list_recent_invoices returns empty list when no key configured."""
+        from .stripe_integration import list_recent_invoices
+        
+        # Should return empty list, not raise error
+        invoices = list_recent_invoices()
+        self.assertEqual(invoices, [])
+
+    def test_list_recent_invoices_with_limit(self):
+        """Test list_recent_invoices respects limit parameter."""
+        from .stripe_integration import list_recent_invoices
+        
+        # Should return empty list when not configured
+        invoices = list_recent_invoices(limit=5)
+        self.assertEqual(invoices, [])
+
 
 class StripeIntegrationMockedTest(TestCase):
     """Test Stripe integration with mocked Stripe calls."""
@@ -938,6 +954,97 @@ class StripeIntegrationMockedTest(TestCase):
                     'source': 'NewFarmDogWalkingApp'
                 }
             )
+
+    @patch('stripe.Invoice.list')
+    def test_list_recent_invoices_mocked(self, mock_invoice_list):
+        """Test list_recent_invoices with mocked Stripe data."""
+        from .stripe_integration import list_recent_invoices
+        
+        # Update test client to have stripe_customer_id
+        self.client.stripe_customer_id = 'cus_test123'
+        self.client.save()
+        
+        # Create a second client for testing
+        client2 = Client.objects.create(
+            name='Second Client',
+            email='second@example.com',
+            phone='+0987654321',
+            address='456 Second St, Test City, TS 54321',
+            status='active',
+            stripe_customer_id='cus_second123'
+        )
+        
+        # Mock Stripe invoice data
+        mock_invoice_data = type('MockInvoiceData', (), {
+            'data': [
+                type('MockInvoice', (), {
+                    'id': 'in_test123',
+                    'customer': type('MockCustomer', (), {'id': 'cus_test123'}),
+                    'total': 3500,
+                    'currency': 'usd',
+                    'status': 'paid',
+                    'created': 1634567890
+                }),
+                type('MockInvoice', (), {
+                    'id': 'in_test456',
+                    'customer': type('MockCustomer', (), {'id': 'cus_second123'}),
+                    'total': 6500,
+                    'currency': 'usd', 
+                    'status': 'open',
+                    'created': 1634567800
+                }),
+                type('MockInvoice', (), {
+                    'id': 'in_unknown',
+                    'customer': type('MockCustomer', (), {'id': 'cus_unknown999'}),
+                    'total': 2000,
+                    'currency': 'usd',
+                    'status': 'paid',
+                    'created': 1634567700
+                })
+            ]
+        })
+        
+        mock_invoice_list.return_value = mock_invoice_data
+        
+        invoices = list_recent_invoices(limit=10)
+        
+        # Should return 2 invoices (only for clients in our DB)
+        self.assertEqual(len(invoices), 2)
+        
+        # Check first invoice (our test client)
+        invoice1 = invoices[0]
+        self.assertEqual(invoice1['id'], 'in_test123')
+        self.assertEqual(invoice1['client_name'], 'Test Client')
+        self.assertEqual(invoice1['client_id'], self.client.id)
+        self.assertEqual(invoice1['amount_cents'], 3500)
+        self.assertEqual(invoice1['currency'], 'USD')
+        self.assertEqual(invoice1['status'], 'paid')
+        self.assertEqual(invoice1['created'], 1634567890)
+        
+        # Check second invoice
+        invoice2 = invoices[1]
+        self.assertEqual(invoice2['id'], 'in_test456')
+        self.assertEqual(invoice2['client_name'], 'Second Client')
+        self.assertEqual(invoice2['client_id'], client2.id)
+        self.assertEqual(invoice2['amount_cents'], 6500)
+        self.assertEqual(invoice2['status'], 'open')
+        
+        # Verify mock was called with correct parameters
+        mock_invoice_list.assert_called_once_with(
+            limit=10,
+            expand=['data.customer']
+        )
+
+    @patch('stripe.Invoice.list')
+    def test_list_recent_invoices_stripe_error(self, mock_invoice_list):
+        """Test list_recent_invoices handles Stripe errors gracefully."""
+        from .stripe_integration import list_recent_invoices
+        
+        mock_invoice_list.side_effect = Exception("Stripe API error")
+        
+        # Should return empty list on error, not raise
+        invoices = list_recent_invoices()
+        self.assertEqual(invoices, [])
 
 
 class ClientCreditTest(TestCase):
@@ -1594,6 +1701,90 @@ class WebViewsTest(TestCase):
         }
         response = self.test_client.post('/bookings/create-batch/', booking_data)
         self.assertEqual(response.status_code, 302)  # Redirects back - no valid rows
+
+    def test_reports_invoices_list_get(self):
+        """Test reports invoices list GET request."""
+        response = self.test_client.get('/reports/invoices/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Reports: Recent Invoices')
+        self.assertContains(response, 'No recent invoices found')  # Empty when no Stripe config
+
+    def test_reports_invoices_list_get_with_limit(self):
+        """Test reports invoices list GET request with limit parameter."""
+        response = self.test_client.get('/reports/invoices/?limit=5')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Reports: Recent Invoices')
+        self.assertContains(response, 'limit: 5')
+        
+    @patch('core.views.list_recent_invoices')
+    def test_reports_invoices_list_with_data(self, mock_list_invoices):
+        """Test reports invoices list with mock invoice data."""
+        mock_list_invoices.return_value = [
+            {
+                'id': 'in_test123',
+                'client_name': 'Test Client',
+                'client_id': self.client_obj.id,
+                'amount_cents': 3500,
+                'currency': 'USD',
+                'status': 'paid',
+                'created': 1634567890
+            }
+        ]
+        
+        response = self.test_client.get('/reports/invoices/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'in_test123')
+        self.assertContains(response, 'Test Client')
+        self.assertContains(response, '$35.00')
+        self.assertContains(response, 'Paid')  # Note: template capitalizes status
+        # Should not contain "No invoices found" message
+        self.assertNotContains(response, 'No recent invoices found')
+
+    @patch('core.views.list_recent_invoices')
+    @patch('core.views.open_invoice_smart')
+    def test_reports_invoices_list_with_stripe_url(self, mock_open_invoice, mock_list_invoices):
+        """Test reports invoices list with Stripe URL generation."""
+        mock_list_invoices.return_value = [
+            {
+                'id': 'in_test123',
+                'client_name': 'Test Client',
+                'client_id': self.client_obj.id,
+                'amount_cents': 3500,
+                'currency': 'USD',
+                'status': 'paid',
+                'created': 1634567890
+            }
+        ]
+        mock_open_invoice.return_value = 'https://dashboard.stripe.com/test/invoices/in_test123'
+        
+        response = self.test_client.get('/reports/invoices/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Open in Stripe')
+        self.assertContains(response, 'https://dashboard.stripe.com/test/invoices/in_test123')
+        mock_open_invoice.assert_called_once_with('in_test123')
+
+    @patch('core.views.list_recent_invoices')
+    @patch('core.views.open_invoice_smart')
+    def test_reports_invoices_list_stripe_url_error(self, mock_open_invoice, mock_list_invoices):
+        """Test reports invoices list when Stripe URL generation fails."""
+        mock_list_invoices.return_value = [
+            {
+                'id': 'in_test123',
+                'client_name': 'Test Client',
+                'client_id': self.client_obj.id,
+                'amount_cents': 3500,
+                'currency': 'USD',
+                'status': 'paid',
+                'created': 1634567890
+            }
+        ]
+        mock_open_invoice.side_effect = RuntimeError('Stripe API key not configured')
+        
+        response = self.test_client.get('/reports/invoices/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'in_test123')
+        self.assertContains(response, 'N/A')  # Should show N/A when URL fails
+        self.assertNotContains(response, 'Open in Stripe')
 
 
 class BookingCreateServiceTest(TestCase):
