@@ -1,83 +1,45 @@
-# NewFarmDogWalkingApp — Clean Rewrite Skeleton
+# NewFarmDogWalking — GitHub Project Kit (Verbose)
 
-This repo has been reset to a minimal, secure starting point for the desktop/web app.
-Key points:
-- Stripe secret is read from the STRIPE_SECRET_KEY environment variable.
-- Optional secure fallback: system keyring (Windows Credential Manager on Windows).
-- No secret keys are committed to the repo.
+This kit bootstraps:
+- **Issue templates** so new tasks are consistent and labeled.
+- **Workflow** to auto-add issues/PRs to a GitHub Project and apply area labels.
+- **Project setup scripts** to create a Project with **Priority** and **Status** and a Kanban view.
+- **Labels seed script** to create the standard label set used in our spec.
 
-## Running locally
+## Files
+- `.github/ISSUE_TEMPLATE/*.yml` — Templates for Spec Task, Feature, Bug.
+- `.github/workflows/add-to-project.yml` — Automation to intake items into the Project.
+- `scripts/project_setup.ps1` / `.sh` — Create the Project and fields.
+- `scripts/labels_setup.ps1` — Seed labels.
 
-To set up the development environment:
-
-1. Create a virtual environment:
-   ```bash
-   python -m venv venv
+## One-time Setup
+1. **Copy this folder** into your repo and commit/push.
+2. **Create labels** (run once):
+   ```powershell
+   ./scripts/labels_setup.ps1
    ```
-
-2. Activate the virtual environment:
-   - On Windows: `venv\Scripts\activate`
-   - On macOS/Linux: `source venv/bin/activate`
-
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
+3. **Create a Project** (org-level):
+   ```powershell
+   ./scripts/project_setup.ps1 -Org ManBearJordan
    ```
+   Copy the Project URL.
+4. **Add repository secrets** (Settings → Secrets and variables → Actions):
+   - `GH_PAT_FOR_PROJECT` — classic token with project/repo/issues write.
+   - `NFDW_PROJECT_URL` — the Project URL (copied above).
+5. **Push** the `.github/workflows/add-to-project.yml` so automation is live.
 
-4. Run database migrations:
-   ```bash
-   python manage.py migrate
-   ```
+## Daily Usage
+- File a **Spec Task** using the template (title starts with `[Spec]`).
+- Or bulk-create tasks from `issues.json` using PowerShell:
+  ```powershell
+  Get-Content .\issues.json | ConvertFrom-Json | ForEach-Object {
+    gh issue create --title $_.title --body $_.body --label ($_.labels -join ",")
+  }
+  ```
+- New items auto-land on the Project board and get area labels based on keywords in the title/body.
 
-5. Start the development server:
-   ```bash
-   python manage.py runserver
-   ```
+## Notes
+- The workflow uses `actions/add-to-project` which requires an org-level Project (Beta).
+- Secret `GH_PAT_FOR_PROJECT` is used to mutate the Project and labels (fine-grained tokens don’t yet fully work for Projects).
 
-Local quickstart (user-ready):
-1) Install runtime and dependencies listed in requirements.txt.
-2) On first app launch the GUI admin will prompt the user to paste their Stripe secret key once.
-   The app stores it securely (keyring) and provides an Admin → Stripe Key action to replace it.
-3) Platform administrators can set STRIPE_SECRET_KEY in the environment for automated deployments.
-
-## Stripe Test vs Live Mode
-
-The application supports both Stripe test and live modes, determined automatically by your API key prefix:
-
-### Key Formats
-- **Test mode keys**: Start with `sk_test_` (e.g., `sk_test_51ABC...`)
-- **Live mode keys**: Start with `sk_live_` (e.g., `sk_live_51XYZ...`)
-
-### URL Base Switching
-The application automatically switches Stripe Dashboard URLs based on your key mode:
-- **Test mode**: URLs point to `https://dashboard.stripe.com/test/invoices/...`  
-- **Live mode**: URLs point to `https://dashboard.stripe.com/invoices/...`
-
-This ensures that when you click "View Invoice" links in the app, you're taken to the correct Stripe dashboard environment.
-
-### Setting Your Stripe Key
-
-#### Via Environment Variable (Recommended for deployments)
-```bash
-export STRIPE_SECRET_KEY=sk_test_your_key_here
-```
-
-#### Via Admin Interface (Recommended for local development)
-1. Start the application with `python manage.py runserver`
-2. Navigate to `/admin/` and log in as a superuser
-3. Go to `/admin/stripe/` or look for "Stripe Configuration" 
-4. Paste your Stripe secret key (test or live)
-5. Click "Update Key" to save
-
-The admin interface will:
-- Show the current configuration status (Test/Live/Not configured)
-- Display a masked version of your key for security
-- Allow you to update the key as needed
-- Validate key format before saving
-
-#### Key Storage Priority
-The application checks for Stripe keys in this order:
-1. **Environment variable** (`STRIPE_SECRET_KEY`) - highest priority
-2. **Database storage** (via admin interface) - fallback option
-
-This allows environment variables to override database settings for production deployments while still supporting GUI configuration for development.
+Happy shipping!

@@ -1,0 +1,21 @@
+name: Feature request
+description: Propose an enhancement
+title: "[Feat] <short title>"
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What problem does this solve?
+      placeholder: |
+        As a <role>, I want <capability>, so that <benefit>.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What's in vs out?
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria

@@ -1,0 +1,64 @@
+# Spec Task template: use for items derived from the spec MD files.
+name: Spec Task
+description: Implement a unit of work from the Product/Tech Spec
+title: "[Spec] <short title>"
+labels: ["spec"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when implementing a discrete piece from the spec (see /docs/spec/ or 00-README.md).
+        Keep scope small enough for a 1-2 day PR.
+  - type: input
+    id: spec_section
+    attributes:
+      label: Spec Section
+      description: Which spec file/section does this implement?
+      placeholder: e.g., 04-Stripe-Billing.md § Invoices — Batch Algorithm
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Choose a primary area for auto-labeling and board grouping.
+      options:
+        - bookings
+        - billing
+        - stripe
+        - calendar
+        - subscriptions
+        - backend
+        - api
+        - frontend
+        - admin
+        - devops
+        - security
+        - reports
+        - crm
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: P0 is urgent, P3 is nice-to-have.
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Bullet-point the observable behavior and tests.
+      placeholder: |
+        - Given ...
+        - When ...
+        - Then ...
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes / Links
+      description: Links to spec lines, designs, or PRDs.

@@ -1,0 +1,33 @@
+name: Local Agent
+version: 1.0.0
+schema: v1
+
+models:
+  # Chat role = default in the chat panel
+  - name: Coder (Qwen2.5 Coder 7B)
+    role: chat
+    provider: ollama
+    model: qwen2.5-coder:7b-instruct-q4_K_M
+
+  # Extra chat models you can switch to from the dropdown
+  - name: Planner (DeepSeek R1 8B)
+    role: chat
+    provider: ollama
+    model: deepseek-r1:8b
+
+  - name: Docs (Llama 3.1 8B)
+    role: chat
+    provider: ollama
+    model: llama3.1:8b
+
+  # Optional: use Qwen coder for inline autocomplete too
+  - name: Autocomplete (Qwen2.5)
+    role: autocomplete
+    provider: ollama
+    model: qwen2.5-coder:7b-instruct-q4_K_M
+
+  # Optional: let DeepSeek do “Edit selection” actions
+  - name: Edit (DeepSeek R1)
+    role: edit
+    provider: ollama
+    model: deepseek-r1:8b

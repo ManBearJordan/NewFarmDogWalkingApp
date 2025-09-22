@@ -1,0 +1,7 @@
+# Disable blank issues so everything flows through a template.
+blank_issues_enabled: false
+# Optional link to Discussions for Q&A.
+contact_links:
+  - name: Questions / Discussion
+    url: https://github.com/ManBearJordan/NewFarmDogWalkingApp/discussions
+    about: Ask questions and get help here.
