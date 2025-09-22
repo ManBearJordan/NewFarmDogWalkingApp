@@ -1,0 +1,45 @@
+name: Auto add issues & PRs to Project and label by area
+on:
+  issues:
+    types: [opened, edited, labeled]
+  pull_request:
+    types: [opened, edited, labeled]
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      # This step adds the item (issue/PR) into your Project (Beta) board.
+      # Set these two repo secrets in Settings → Secrets and variables → Actions
+      # - NFDW_PROJECT_URL: e.g., https://github.com/orgs/<ORG>/projects/<ID>
+      # - GH_PAT_FOR_PROJECT: PAT with project/repo/issues write (Classic token)
+      - name: Add to project
+        uses: actions/add-to-project@v0.5.0
+        with:
+          project-url: ${{ secrets.NFDW_PROJECT_URL }}
+          github-token: ${{ secrets.GH_PAT_FOR_PROJECT }}
+
+      # Add the generic 'spec' label to spec tasks by title pattern.
+      - name: Add 'spec' label by title
+        if: github.event_name == 'issues' && contains(github.event.issue.title, '[Spec]')
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: spec
+
+      # Lightweight keyword-based labeling for area tags.
+      - name: Area labels by keywords
+        if: github.event_name == 'issues'
+        run: |
+          TITLE="${{ github.event.issue.title }}"
+          BODY="${{ github.event.issue.body }}"
+          add_label() { gh issue edit ${{ github.event.issue.number }} --add-label "$1"; }
+          if echo "$TITLE $BODY" | grep -Ei 'booking|bookings'; then add_label bookings; fi
+          if echo "$TITLE $BODY" | grep -Ei 'stripe|invoice|billing'; then add_label billing; fi
+          if echo "$TITLE $BODY" | grep -Ei 'subscription|calendar'; then add_label subscriptions; add_label calendar; fi
+          if echo "$TITLE $BODY" | grep -Ei 'api|webhook'; then add_label api; fi
+          if echo "$TITLE $BODY" | grep -Ei 'admin|settings'; then add_label admin; fi
+          if echo "$TITLE $BODY" | grep -Ei 'frontend|ui'; then add_label frontend; fi
+          if echo "$TITLE $BODY" | grep -Ei 'security|privacy'; then add_label security; fi
+          if echo "$TITLE $BODY" | grep -Ei 'report|export|ics'; then add_label reports; fi
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_FOR_PROJECT }}
