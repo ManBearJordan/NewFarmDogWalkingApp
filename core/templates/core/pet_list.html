@@ -1,0 +1,84 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block content %}
+<h2 class="mb-3">Pets</h2>
+
+<form method="get" class="row g-2 mb-3">
+  <div class="col-auto">
+    <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search pets or clients">
+  </div>
+  <div class="col-auto">
+    <select name="client" class="form-select">
+      <option value="">All clients</option>
+      {% for c in clients %}
+        <option value="{{ c.id }}" {% if c.id|stringformat:"s" == client_filter %}selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-primary">Filter</button>
+    <a href="{% url 'pet_list' %}" class="btn btn-outline-secondary">Reset</a>
+  </div>
+  <div class="col-auto ms-auto">
+    <a href="{% url 'pet_create' %}" class="btn btn-success">Add Pet</a>
+  </div>
+  {% if messages %}
+    <div class="col-12 mt-2">
+      {% for m in messages %}<div class="alert alert-info py-1 mb-1">{{ m }}</div>{% endfor %}
+    </div>
+  {% endif %}
+</form>
+
+<div class="table-responsive">
+<table class="table table-hover align-middle">
+  <thead>
+    <tr>
+      <th>Client</th>
+      <th>Name</th>
+      <th>Species</th>
+      <th>Breed</th>
+      <th>Medications</th>
+      <th>Behaviour</th>
+      <th class="text-end"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in pets %}
+      <tr>
+        <td>{{ p.client.name }}</td>
+        <td>{{ p.name }}</td>
+        <td>{{ p.species|default:"—" }}</td>
+        <td>{{ p.breed|default:"—" }}</td>
+        <td class="small">{{ p.medications|default:"—" }}</td>
+        <td class="small">{{ p.behaviour|default:"—" }}</td>
+        <td class="text-end">
+          <a class="btn btn-sm btn-outline-primary" href="{% url 'pet_edit' p.id %}">Edit</a>
+          <a class="btn btn-sm btn-outline-danger" href="{% url 'pet_delete' p.id %}">Delete</a>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="text-muted">No pets found.</td></tr>
+    {% endfor %}
+  </tbody>
+  </table>
+</div>
+
+{% if is_paginated %}
+<nav>
+  <ul class="pagination">
+    {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&client={{ client_filter }}">Prev</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Prev</span></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+    {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&client={{ client_filter }}">Next</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Next</span></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

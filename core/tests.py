@@ -2,6 +2,7 @@ from django.test import TestCase, Client as TestClient
 from django.urls import reverse
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.contrib.auth.models import User
 from datetime import datetime, timedelta, date
 from unittest.mock import patch
 from .models import StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence
@@ -70,7 +71,7 @@ class PetModelTest(TestCase):
             name='Buddy',
             species='dog',
             breed='Golden Retriever',
-            meds='None currently',
+            medications='None currently',
             behaviour='Friendly and energetic'
         )
         
@@ -79,7 +80,7 @@ class PetModelTest(TestCase):
         self.assertEqual(pet.name, 'Buddy')
         self.assertEqual(pet.species, 'dog')
         self.assertEqual(pet.breed, 'Golden Retriever')
-        self.assertEqual(pet.meds, 'None currently')
+        self.assertEqual(pet.medications, 'None currently')
         self.assertEqual(pet.behaviour, 'Friendly and energetic')
         
         # Test reading
@@ -2602,3 +2603,118 @@ class SmokeTest(TestCase):
         # This endpoint is POST-only, so GET returns 405 regardless of client existence
         response = self.client_test.get('/clients/999999/credit/')
         self.assertEqual(response.status_code, 405)  # Method not allowed
+
+
+class PetViewsTest(TestCase):
+    """Test Pet CRUD views."""
+
+    def setUp(self):
+        # Create user for authentication
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        
+        # Create test clients
+        self.client1 = Client.objects.create(
+            name="Jane Doe",
+            email="jane@example.com",
+            phone="123-456-7890",
+            address="123 Main St",
+            status="active"
+        )
+        self.client2 = Client.objects.create(
+            name="Bob Smith", 
+            email="bob@example.com",
+            phone="098-765-4321",
+            address="456 Oak Ave",
+            status="active"
+        )
+    
+    def test_pets_list_requires_login(self):
+        """Test that pets list requires authentication."""
+        response = self.client.get(reverse("pet_list"))
+        self.assertIn(response.status_code, [301, 302])  # Redirect to login
+
+    def test_create_edit_delete_pet(self):
+        """Test full CRUD operations for pets."""
+        # Login first
+        self.client.login(username="testuser", password="testpass123")
+        
+        # Test CREATE
+        create_data = {
+            "client": self.client1.id,
+            "name": "Rex",
+            "species": "Dog",
+            "breed": "Kelpie",
+            "medications": "None",
+            "behaviour": "Friendly",
+            "notes": ""
+        }
+        response = self.client.post(reverse("pet_create"), create_data, follow=True)
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify pet was created
+        pet = Pet.objects.get(name="Rex")
+        self.assertEqual(pet.client, self.client1)
+        self.assertEqual(pet.species, "Dog")
+        self.assertEqual(pet.breed, "Kelpie")
+        
+        # Test EDIT
+        edit_data = create_data.copy()
+        edit_data["name"] = "Rexy"
+        response = self.client.post(reverse("pet_edit", args=[pet.id]), edit_data, follow=True)
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify pet was updated
+        pet.refresh_from_db()
+        self.assertEqual(pet.name, "Rexy")
+        
+        # Test DELETE
+        response = self.client.post(reverse("pet_delete", args=[pet.id]), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Pet.objects.count(), 0)
+
+    def test_list_filters_and_search(self):
+        """Test pet list filtering and search functionality."""
+        # Login first
+        self.client.login(username="testuser", password="testpass123")
+        
+        # Create test pets
+        pet1 = Pet.objects.create(
+            client=self.client1, 
+            name="Milo", 
+            species="Cat", 
+            breed="Ragdoll"
+        )
+        pet2 = Pet.objects.create(
+            client=self.client2, 
+            name="Max", 
+            species="Dog", 
+            breed="Kelpie"
+        )
+        
+        # Test no filter - should show both pets
+        response = self.client.get(reverse("pet_list"))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("Milo", content)
+        self.assertIn("Max", content)
+        
+        # Test client filter - should show only Milo
+        response = self.client.get(reverse("pet_list") + f"?client={self.client1.id}")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("Milo", content)
+        self.assertNotIn("Max", content)
+        
+        # Test search by breed - should show only Max
+        response = self.client.get(reverse("pet_list") + "?q=kelpie")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("Max", content)
+        self.assertNotIn("Milo", content)
+        
+        # Test search by client name - should show only Max
+        response = self.client.get(reverse("pet_list") + "?q=Bob")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("Max", content)
+        self.assertNotIn("Milo", content)
