@@ -50,6 +50,70 @@
 
 {% block scripts %}
 <script>
+// --- Price autofill from /api/service-info ---
+// Assumptions:
+//  - Each booking row has inputs named like:
+//      service_code, service_name, service_label, price_cents
+//  - If your inputs differ, update the selectors below.
+function debounce(fn, ms){let t;return (...args)=>{clearTimeout(t);t=setTimeout(()=>fn(...args),ms)}}
+
+async function fetchServiceInfo(params) {
+  const url = new URL("{% url 'api_service_info' %}", window.location.origin);
+  Object.entries(params).forEach(([k,v]) => { if (v!=null && v!=="") url.searchParams.set(k, v); });
+  const res = await fetch(url.toString(), {credentials: 'same-origin'});
+  if (!res.ok) throw new Error("Service info fetch failed");
+  return await res.json();
+}
+
+function wirePriceAutofillForRow(rowEl) {
+  const code   = rowEl.querySelector('[name$="[service_code]"], [name="service_code"]');
+  const name   = rowEl.querySelector('[name$="[service_name]"], [name="service_name"]');
+  const label  = rowEl.querySelector('[name$="[service_label]"],[name="service_label"]');
+  const price  = rowEl.querySelector('[name$="[price_cents]"], [name="price_cents"]');
+  if (!price) return;
+
+  // Track if user manually edited price; if so, stop auto-overwriting
+  let userTouchedPrice = false;
+  price.addEventListener('input', () => { userTouchedPrice = true; });
+
+  const handler = debounce(async () => {
+    try {
+      const info = await fetchServiceInfo({
+        service_code: code && code.value,
+        service_name: name && name.value,
+        service_label: label && label.value,
+      });
+      if (!userTouchedPrice && info && Number.isInteger(info.price_cents)) {
+        price.value = info.price_cents;
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+  }, 200);
+
+  [code, name, label].forEach(inp => {
+    if (inp) inp.addEventListener('change', handler);
+    if (inp) inp.addEventListener('input',  handler);
+  });
+}
+
+// Wire existing rows on load
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.booking-row, .row-item').forEach(wirePriceAutofillForRow);
+});
+
+// If the page has an "Add row" button that clones rows, hook into that:
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-add-row], .add-row-btn');
+  if (!btn) return;
+  // Give the DOM a tick to insert the new row, then wire it.
+  setTimeout(() => {
+    const rows = document.querySelectorAll('.booking-row, .row-item');
+    if (rows.length) wirePriceAutofillForRow(rows[rows.length - 1]);
+  }, 0);
+});
+
+// existing helpers...
 const services = {{ services_json|safe }};
 let rowCount = 0;
 
@@ -103,6 +167,9 @@ function addBookingRow() {
     container.appendChild(rowDiv);
     rowCount++;
     document.getElementById('row_count').value = rowCount;
+    
+    // Wire the new row for price autofill
+    wirePriceAutofillForRow(rowDiv);
 }
 
 function removeLastBookingRow() {
