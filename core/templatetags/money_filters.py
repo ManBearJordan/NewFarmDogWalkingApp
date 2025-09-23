@@ -49,3 +49,24 @@ def money_format_no_symbol(cents):
         return f"{dollars:.2f}"
     except (ValueError, TypeError):
         return "0.00"
+
+
+@register.filter
+def cents_to_dollars(cents):
+    """
+    Convert cents to dollar format with $ symbol.
+    
+    Args:
+        cents: Integer amount in cents
+        
+    Returns:
+        str: Formatted money string like "$20.00"
+    """
+    if cents is None:
+        return "$0.00"
+    
+    try:
+        dollars = float(cents) / 100.0
+        return f"${dollars:.2f}"
+    except (ValueError, TypeError):
+        return "$0.00"

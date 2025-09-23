@@ -4,7 +4,7 @@ Exposes get_api_key() and list_active_subscriptions().
 """
 import os
 import stripe
-from typing import Optional, List, Dict
+from typing import List, Dict, Optional, Any
 
 from .stripe_key_manager import get_stripe_key
 
@@ -343,6 +343,19 @@ def get_invoice_dashboard_url(invoice_id: str) -> str:
     return open_invoice_smart(invoice_id)
 
 
+def _dashboard_base() -> str:
+    key = get_stripe_key()
+    if not key:
+        # keep a sane default that won't 404 horribly
+        return "https://dashboard.stripe.com"
+    return "https://dashboard.stripe.com" if "_live_" in key or key.startswith("sk_live") else "https://dashboard.stripe.com/test"
+
+def get_customer_dashboard_url(customer_id: str) -> str:
+    """Return the correct dashboard link for a Stripe customer (test/live aware)."""
+    base = _dashboard_base()
+    return f"{base}/customers/{customer_id}"
+
+
 def _init_stripe():
     key = get_stripe_key()
     if not key:
@@ -362,3 +375,25 @@ def cancel_subscription_immediately(sub_id: str) -> None:
     except Exception:
         stripe.Subscription.modify(sub_id, cancel_at_period_end=False)
         stripe.Subscription.cancel(sub_id)
+
+def ensure_customer(client) -> str:
+    """
+    Ensure a Stripe customer exists for this client, keyed by email when available.
+    Updates phone/address on match. Returns stripe_customer_id.
+    """
+    _init_stripe()
+    email = (client.email or "").strip().lower()
+    if email:
+        # Try to find by email
+        res = stripe.Customer.search(query=f'email:"{email}"', limit=1)
+        for c in res.auto_paging_iter(limit=1):
+            stripe.Customer.modify(c["id"], name=client.name or None, phone=client.phone or None, address=None)
+            return c["id"]
+    # Create if not found / no email
+    created = stripe.Customer.create(
+        name=client.name or None,
+        email=email or None,
+        phone=client.phone or None,
+        address=None,
+    )
+    return created["id"]
