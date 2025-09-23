@@ -13,6 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
+from django.forms import ModelForm
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from django.db.models import Q
@@ -37,6 +38,7 @@ from .booking_filters import filter_active_bookings
 from .ics_export import bookings_to_ics
 from .date_range_helpers import parse_label, TZ
 from .subscription_sync import sync_subscriptions_to_bookings_and_calendar
+from .admin_views import stripe_status_view, stripe_diagnostics_view
 
 
 def client_list(request):
@@ -542,3 +544,64 @@ def subscription_delete(request: HttpRequest, sub_id: str) -> HttpResponse:
     ).delete()
     messages.success(request, f"Subscription {sub_id} cancelled. Removed {deleted} future holds.")
     return redirect("subscriptions_list")
+
+# -----------------------------
+# Admin Tasks (AdminEvent CRUD)
+# -----------------------------
+class AdminEventForm(ModelForm):
+    class Meta:
+        from .models import AdminEvent
+        model = AdminEvent
+        fields = ["due_dt", "title", "notes"]
+
+@login_required
+def admin_tasks_list(request: HttpRequest) -> HttpResponse:
+    """List AdminEvent with Upcoming (default) / Past filters and a search box."""
+    from .models import AdminEvent
+    filt = (request.GET.get("f") or "upcoming").lower()
+    q = (request.GET.get("q") or "").strip()
+    now = timezone.now().astimezone(TZ)
+    qs = AdminEvent.objects.all()
+    if filt == "past":
+        qs = qs.filter(due_dt__lt=now)
+    else:
+        filt = "upcoming"
+        qs = qs.filter(due_dt__gte=now)
+    if q:
+        qs = qs.filter(Q(title__icontains=q) | Q(notes__icontains=q))
+    qs = qs.order_by("due_dt")
+    return render(request, "core/admin_tasks_list.html", {"rows": qs, "f": filt, "q": q})
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def admin_task_create(request: HttpRequest) -> HttpResponse:
+    from .models import AdminEvent
+    form = AdminEventForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Task created.")
+        return redirect("admin_tasks_list")
+    return render(request, "core/admin_task_form.html", {"form": form, "obj": None})
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def admin_task_edit(request: HttpRequest, pk: int) -> HttpResponse:
+    from .models import AdminEvent
+    obj = get_object_or_404(AdminEvent, pk=pk)
+    form = AdminEventForm(request.POST or None, instance=obj)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Task updated.")
+        return redirect("admin_tasks_list")
+    return render(request, "core/admin_task_form.html", {"form": form, "obj": obj})
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def admin_task_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    from .models import AdminEvent
+    obj = get_object_or_404(AdminEvent, pk=pk)
+    if request.method == "POST":
+        obj.delete()
+        messages.success(request, "Task deleted.")
+        return redirect("admin_tasks_list")
+    return render(request, "core/admin_task_confirm_delete.html", {"obj": obj})

@@ -1,0 +1,10 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h2 class="mb-3">Delete Task</h2>
+<p>Are you sure you want to delete <strong>{{ obj.title }}</strong> scheduled for {{ obj.due_dt|date:"Y-m-d H:i" }}?</p>
+<form method="post">
+  {% csrf_token %}
+  <a href="{% url 'admin_tasks_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  <button class="btn btn-danger" type="submit">Yes, delete</button>
+</form>
+{% endblock %}
