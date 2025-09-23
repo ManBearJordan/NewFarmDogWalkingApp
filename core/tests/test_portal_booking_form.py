@@ -81,7 +81,7 @@ def test_booking_invoice_due_shows_public_link(authed_client, monkeypatch):
     monkeypatch.setattr(stripe_integration, "push_invoice_items_from_booking", lambda booking, invoice_id: None)
     # Mock credit functions 
     monkeypatch.setattr(credit, "get_client_credit", lambda client: 0)
-    monkeypatch.setattr(credit, "use_client_credit", lambda client, amount: None)
+    monkeypatch.setattr(credit, "deduct_client_credit", lambda client, amount: None)
     # After POST, assert redirect to confirm and link present.
     start = timezone.datetime(2025,9,26,18,0,tzinfo=TZ)
     # Ensure client has 0 credit for invoice path
