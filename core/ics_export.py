@@ -1,37 +1,91 @@
 from __future__ import annotations
+from typing import Iterable
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Iterable
+import hashlib
 
-def _fmt(dt):
-    # ICS in local tz with TZID
+from django.utils import timezone
+
+TZ = ZoneInfo("Australia/Brisbane")
+
+def _ical_escape(text: str) -> str:
+    """
+    RFC 5545 escaping for TEXT: backslash, comma, semicolon, and newlines.
+    """
+    text = (text or "")
+    text = text.replace("\\", "\\\\")
+    text = text.replace(",", "\\,")
+    text = text.replace(";", "\\;")
+    text = text.replace("\r\n", "\\n").replace("\n", "\\n")
+    return text
+
+def _fmt_dt(dt: datetime) -> str:
+    """
+    FORMAT: local time with TZID=Australia/Brisbane, floating avoided.
+    We'll output VALUE=DATE-TIME with TZID on DTSTART/DTEND lines.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=TZ)
+    dt = dt.astimezone(TZ)
     return dt.strftime("%Y%m%dT%H%M%S")
 
-def bookings_to_ics(bookings: Iterable, tz_str: str = "Australia/Brisbane") -> str:
+def _uid_for(booking) -> str:
     """
-    Minimal ICS builder (no external deps). Expects bookings with:
-    start_dt, end_dt (aware), service_label/name, client, location, notes, id
+    Stable-ish UID per booking id + start time to avoid collisions across environments.
     """
-    tz = ZoneInfo(tz_str)
+    raw = f"booking-{booking.id}-{int(booking.start_dt.timestamp())}"
+    h = hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    # Use a domain-like suffix to make calendar apps happy.
+    return f"{h}@newfarmdogwalking"
+
+def bookings_to_ics(qs: Iterable, *, alarm: bool = False) -> str:
+    """
+    Convert bookings to a single iCalendar string.
+    - Excludes cancelled/voided/deleted rows at the caller (view already filters).
+    - Adds a 5-minute display VALARM if alarm=True.
+    """
+    now = timezone.now().astimezone(TZ)
+    dtstamp = now.strftime("%Y%m%dT%H%M%S")
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//NewFarmDogWalking//Calendar//EN",
-        f"X-WR-TIMEZONE:{tz_str}",
+        "PRODID:-//NewFarmDogWalking//Bookings//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
     ]
-    for b in bookings:
-        title = b.service_label or b.service_name or b.service_code or "Service"
-        desc = f"Client: {b.client.name}\\nService: {title}\\nNotes: {b.notes or ''}"
-        uid = f"booking-{b.id}@newfarmdogwalking"
+
+    for b in qs:
+        start = _fmt_dt(b.start_dt)
+        end = _fmt_dt(b.end_dt)
+        summary = b.service_label or b.service_name or b.service_code or "Service"
+        desc_parts = []
+        if getattr(b, "notes", ""):
+            desc_parts.append(str(b.notes))
+        # include client for clarity in personal calendars
+        if getattr(b, "client", None):
+            desc_parts.append(f"Client: {getattr(b.client, 'name', '')}")
+        description = _ical_escape("\n".join(p for p in desc_parts if p))
+        location = _ical_escape(getattr(b, "location", "") or "")
+
         lines += [
             "BEGIN:VEVENT",
-            f"UID:{uid}",
-            f"DTSTART;TZID={tz_str}:{_fmt(b.start_dt.astimezone(tz))}",
-            f"DTEND;TZID={tz_str}:{_fmt(b.end_dt.astimezone(tz))}",
-            f"SUMMARY:{title}",
-            f"LOCATION:{(b.location or '').replace(',', ' ')}",
-            f"DESCRIPTION:{desc}",
-            "END:VEVENT",
+            f"UID:{_uid_for(b)}",
+            f"DTSTAMP:{dtstamp}",
+            f"DTSTART;TZID=Australia/Brisbane:{start}",
+            f"DTEND;TZID=Australia/Brisbane:{end}",
+            f"SUMMARY:{_ical_escape(summary)}",
+            f"DESCRIPTION:{description}",
+            f"LOCATION:{location}",
         ]
+        if alarm:
+            lines += [
+                "BEGIN:VALARM",
+                "TRIGGER:-PT5M",
+                "ACTION:DISPLAY",
+                "DESCRIPTION:Reminder",
+                "END:VALARM",
+            ]
+        lines.append("END:VEVENT")
+
     lines.append("END:VCALENDAR")
-    return "\r\n".join(lines)
+    return "\r\n".join(lines) + "\r\n"

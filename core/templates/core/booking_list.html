@@ -29,6 +29,9 @@
   <div class="col-auto ms-auto">
     <a class="btn btn-outline-success"
        href="{% url 'booking_export_ics' %}?range={{ range_label }}&start={{ start_q }}&end={{ end_q }}">Export all (.ics)</a>
+    <a class="btn btn-outline-success"
+       href="{% url 'booking_export_ics' %}?range={{ range_label }}&start={{ start_q }}&end={{ end_q }}&alarm=1"
+       title="Export with a 5-minute reminder alarm">Export all (.ics + alarm)</a>
     <button type="submit" formaction="{% url 'booking_export_ics' %}" formmethod="get" class="btn btn-success"
             onclick="this.form.ids.value = Array.from(document.querySelectorAll('.rowcheck:checked')).map(cb=>cb.value).join(',');">
       Export selected (.ics)
