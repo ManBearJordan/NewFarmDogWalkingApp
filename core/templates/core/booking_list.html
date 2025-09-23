@@ -1,0 +1,94 @@
+{% extends "core/base.html" %}
+{% load money_filters %}
+{% block content %}
+<h2 class="mb-3">Bookings</h2>
+
+<form method="get" class="row g-2 mb-3">
+  <div class="col-auto">
+    <select name="range" class="form-select">
+      <option value="this-week" {% if range_label == "this-week" %}selected{% endif %}>This week</option>
+      <option value="next-week" {% if range_label == "next-week" %}selected{% endif %}>Next week</option>
+      <option value="two-weeks" {% if range_label == "two-weeks" %}selected{% endif %}>Two weeks</option>
+      <option value="four-weeks" {% if range_label == "four-weeks" %}selected{% endif %}>Four weeks</option>
+      <option value="this-month" {% if range_label == "this-month" %}selected{% endif %}>This month</option>
+      <option value="next-month" {% if range_label == "next-month" %}selected{% endif %}>Next month</option>
+      <option value="month-after" {% if range_label == "month-after" %}selected{% endif %}>Month after</option>
+      <option value="next-3-months" {% if range_label == "next-3-months" %}selected{% endif %}>Next 3 months</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search client/service/location/notes">
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-primary">Apply</button>
+    <a class="btn btn-outline-secondary" href="{% url 'booking_list' %}">Reset</a>
+  </div>
+  <div class="col-auto ms-auto">
+    <a class="btn btn-outline-success" href="{% url 'booking_export_ics' %}?range={{ range_label }}">Export all (.ics)</a>
+    <button type="submit" formaction="{% url 'booking_export_ics' %}" formmethod="get" class="btn btn-success"
+            onclick="this.form.ids.value = Array.from(document.querySelectorAll('.rowcheck:checked')).map(cb=>cb.value).join(',');">
+      Export selected (.ics)
+    </button>
+    <input type="hidden" name="ids" value="">
+  </div>
+</form>
+
+{% if messages %}
+  {% for m in messages %}<div class="alert alert-info py-1">{{ m }}</div>{% endfor %}
+{% endif %}
+
+<div class="table-responsive">
+<table class="table table-hover align-middle">
+  <thead>
+    <tr>
+      <th style="width:28px;"><input type="checkbox" id="checkall" onclick="document.querySelectorAll('.rowcheck').forEach(cb=>cb.checked=this.checked)"></th>
+      <th>Date</th>
+      <th>Start</th>
+      <th>End</th>
+      <th>Client</th>
+      <th>Service</th>
+      <th>Location</th>
+      <th>Dogs</th>
+      <th>Status</th>
+      <th class="text-end">Price (AUD)</th>
+      <th class="text-end">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for b in bookings %}
+      <tr>
+        <td><input type="checkbox" class="rowcheck" value="{{ b.id }}"></td>
+        <td>{{ b.start_dt|date:"Y-m-d (D)" }}</td>
+        <td>{{ b.start_dt|date:"H:i" }}</td>
+        <td>{{ b.end_dt|date:"H:i" }}</td>
+        <td>{{ b.client.name }}</td>
+        <td>{{ b.service_label|default:b.service_name|default:b.service_code }}</td>
+        <td>{{ b.location }}</td>
+        <td>{{ b.dogs }}</td>
+        <td>{{ b.status }}</td>
+        <td class="text-end">
+          {% if b.price_cents %}{{ b.price_cents|money_format_no_symbol }}{% else %}—{% endif %}
+        </td>
+        <td class="text-end">
+          {% if b.stripe_invoice_id %}
+            <a class="btn btn-sm btn-outline-primary"
+               href="{% url 'booking_open_invoice' b.id %}?range={{ range_label }}">Open invoice</a>
+          {% else %}
+            <span class="text-muted small">No invoice</span>
+          {% endif %}
+          <a class="btn btn-sm btn-outline-danger"
+             href="{% url 'booking_soft_delete' b.id %}?range={{ range_label }}"
+             onclick="return confirm('Delete this booking?');">Delete</a>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="11" class="text-muted">No bookings for this range.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<script>
+  // helper for string split in template above
+</script>
+{% endblock %}

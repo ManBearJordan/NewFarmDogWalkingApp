@@ -6,8 +6,14 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path('', views.client_list, name='home'),
     path('clients/', views.client_list, name='client_list'),
     path('bookings/create-batch/', views.booking_create_batch, name='booking_create_batch'),
+    # Bookings tab (list & manage)
+    path("bookings/", views.booking_list, name="booking_list"),
+    path("bookings/<int:booking_id>/open-invoice/", views.booking_open_invoice, name="booking_open_invoice"),
+    path("bookings/<int:booking_id>/delete/", views.booking_soft_delete, name="booking_soft_delete"),
+    path("bookings/export/ics/", views.booking_export_ics, name="booking_export_ics"),
     path('clients/<int:client_id>/credit/', views.client_add_credit, name='client_add_credit'),
     path('calendar/', views.calendar_view, name='calendar_view'),
     path('reports/invoices/', views.reports_invoices_list, name='reports_invoices_list'),
