@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence
+from .models import StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence, Tag
 
 
 @admin.register(StripeSettings)
@@ -50,3 +50,9 @@ class SubOccurrenceAdmin(admin.ModelAdmin):
     list_filter = ['active']
     search_fields = ['stripe_subscription_id']
     date_hierarchy = 'start_dt'
+
+
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    list_display = ("name", "color", "created_at")
+    search_fields = ("name",)

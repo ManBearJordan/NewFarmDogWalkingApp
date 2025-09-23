@@ -13,6 +13,7 @@
                     <thead>
                         <tr>
                             <th>Name</th>
+                            <th>Tags</th>
                             <th>Email</th>
                             <th>Phone</th>
                             <th>Credit Balance</th>
@@ -23,6 +24,18 @@
                         {% for client in clients %}
                         <tr>
                             <td>{{ client.name }}</td>
+                            <td>
+                              {% with ts=client.tags.all %}
+                                {% if ts %}
+                                  {% for t in ts|slice:":3" %}
+                                    <span class="badge bg-secondary" {% if t.color %}style="background: {{ t.color }} !important;"{% endif %}>{{ t.name }}</span>
+                                  {% endfor %}
+                                  {% if ts|length > 3 %}
+                                    <span class="text-muted small">(+{{ ts|length|add:"-3" }} more)</span>
+                                  {% endif %}
+                                {% else %}—{% endif %}
+                              {% endwith %}
+                            </td>
                             <td>{{ client.email }}</td>
                             <td>{{ client.phone }}</td>
                             <td>

@@ -22,10 +22,11 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from datetime import datetime, date
 from calendar import Calendar, monthrange
+from django.views.decorators.http import require_http_methods
 import json
 
-from .models import Client, Booking, AdminEvent, SubOccurrence, Pet, BookingPet
-from .forms import PetForm
+from .models import Client, Booking, AdminEvent, SubOccurrence, Pet, BookingPet, Tag
+from .forms import PetForm, ClientForm
 from .booking_create_service import create_bookings_with_billing
 from .stripe_integration import (
     list_booking_services, 
@@ -71,6 +72,16 @@ def client_list(request):
     return render(request, 'core/client_list.html', {
         'clients': clients
     })
+
+
+def client_create(request: HttpRequest) -> HttpResponse:
+    """Create a client with tags support."""
+    form = ClientForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Client created.")
+        return redirect("client_list")
+    return render(request, "core/client_create.html", {"form": form})
 
 
 def booking_create_batch(request):
@@ -605,3 +616,60 @@ def admin_task_delete(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, "Task deleted.")
         return redirect("admin_tasks_list")
     return render(request, "core/admin_task_confirm_delete.html", {"obj": obj})
+
+
+# -----------------------------
+# CRM Tags
+# -----------------------------
+@login_required
+def tags_list(request: HttpRequest) -> HttpResponse:
+    q = (request.GET.get("q") or "").strip()
+    qs = Tag.objects.all()
+    if q:
+        qs = qs.filter(name__icontains=q)
+    qs = qs.order_by("name")
+    return render(request, "core/tags_list.html", {"rows": qs, "q": q})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def tag_create(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        name = (request.POST.get("name") or "").strip()
+        color = (request.POST.get("color") or "").strip() or None
+        if not name:
+            messages.error(request, "Name is required.")
+        else:
+            Tag.objects.create(name=name, color=color)
+            messages.success(request, "Tag created.")
+            return redirect("tags_list")
+    return render(request, "core/tag_form.html", {"obj": None})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def tag_edit(request: HttpRequest, pk: int) -> HttpResponse:
+    obj = get_object_or_404(Tag, pk=pk)
+    if request.method == "POST":
+        name = (request.POST.get("name") or "").strip()
+        color = (request.POST.get("color") or "").strip() or None
+        if not name:
+            messages.error(request, "Name is required.")
+        else:
+            obj.name = name
+            obj.color = color
+            obj.save(update_fields=["name", "color"])
+            messages.success(request, "Tag updated.")
+            return redirect("tags_list")
+    return render(request, "core/tag_form.html", {"obj": obj})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def tag_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    obj = get_object_or_404(Tag, pk=pk)
+    if request.method == "POST":
+        obj.delete()
+        messages.success(request, "Tag deleted.")
+        return redirect("tags_list")
+    return render(request, "core/tag_confirm_delete.html", {"obj": obj})

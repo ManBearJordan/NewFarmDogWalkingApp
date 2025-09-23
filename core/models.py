@@ -38,6 +38,9 @@ class Client(models.Model):
     credit_cents = models.IntegerField(default=0)
     status = models.CharField(max_length=50)
     stripe_customer_id = models.CharField(max_length=200, blank=True, null=True)
+    # CRM tags
+    # Note: Tag is declared below; use string reference to avoid reorder issues.
+    tags = models.ManyToManyField("Tag", blank=True, related_name="clients")
 
     def __str__(self):
         return self.name
@@ -103,3 +106,16 @@ class SubOccurrence(models.Model):
 
     def __str__(self):
         return f"Sub {self.stripe_subscription_id} ({self.start_dt.date()} - {self.end_dt.date()})"
+
+
+class Tag(models.Model):
+    """Simple CRM tag."""
+    name = models.CharField(max_length=64, unique=True)
+    color = models.CharField(max_length=7, blank=True, null=True, help_text="Hex like #2E86AB")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
