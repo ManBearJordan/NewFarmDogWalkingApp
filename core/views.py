@@ -5,7 +5,7 @@ Provides simple views for client management and booking creation.
 """
 
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib import messages
@@ -13,6 +13,8 @@ from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from django.db.models import Q
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -24,11 +26,17 @@ import json
 from .models import Client, Booking, AdminEvent, SubOccurrence, Pet, BookingPet
 from .forms import PetForm
 from .booking_create_service import create_bookings_with_billing
-from .stripe_integration import list_booking_services, open_invoice_smart, list_recent_invoices
+from .stripe_integration import (
+    list_booking_services, 
+    open_invoice_smart, 
+    list_recent_invoices,
+    cancel_subscription_immediately,
+)
 from .credit import use_client_credit
 from .booking_filters import filter_active_bookings
 from .ics_export import bookings_to_ics
 from .date_range_helpers import parse_label, TZ
+from .subscription_sync import sync_subscriptions_to_bookings_and_calendar
 
 
 def client_list(request):
@@ -469,3 +477,68 @@ def booking_export_ics(request):
     resp = HttpResponse(ics, content_type="text/calendar")
     resp["Content-Disposition"] = 'attachment; filename="bookings.ics"'
     return resp
+
+
+# -----------------------------
+# Subscriptions tab
+# -----------------------------
+@login_required
+def subscriptions_list(request: HttpRequest) -> HttpResponse:
+    """List distinct subscription IDs inferred from future active holds."""
+    from .models import SubOccurrence
+    now = timezone.now().astimezone(TZ)
+    rows = (
+        SubOccurrence.objects
+        .filter(active=True, start_dt__gte=now)
+        .values("stripe_subscription_id")
+        .distinct()
+    )
+    subs = []
+    for r in rows:
+        sid = r["stripe_subscription_id"]
+        next_occ = (
+            SubOccurrence.objects
+            .filter(stripe_subscription_id=sid, active=True, start_dt__gte=now)
+            .order_by("start_dt")
+            .first()
+        )
+        count = (
+            SubOccurrence.objects
+            .filter(stripe_subscription_id=sid, active=True, start_dt__gte=now)
+            .count()
+        )
+        subs.append({
+            "id": sid,
+            "next_dt": next_occ.start_dt if next_occ else None,
+            "upcoming": count,
+        })
+    return render(request, "core/subscriptions.html", {"subs": subs})
+
+
+@login_required
+def subscriptions_sync(request: HttpRequest) -> HttpResponse:
+    """Run the unified sync and show a toast with stats."""
+    stats = sync_subscriptions_to_bookings_and_calendar()
+    messages.success(request, f"Sync complete — processed: {stats.get('processed')}, created: {stats.get('created')}, cleaned: {stats.get('cleaned')}, errors: {stats.get('errors')}")
+    return redirect("subscriptions_list")
+
+
+@login_required
+def subscription_delete(request: HttpRequest, sub_id: str) -> HttpResponse:
+    """
+    Cancel subscription in Stripe and remove future holds.
+    """
+    from .models import SubOccurrence
+    # Cancel in Stripe (no-op if key missing will raise; show friendly error)
+    try:
+        cancel_subscription_immediately(sub_id)
+    except Exception as e:
+        messages.error(request, f"Stripe cancel failed: {e}")
+        return redirect("subscriptions_list")
+    # Clean future holds
+    now = timezone.now().astimezone(TZ)
+    deleted, _ = SubOccurrence.objects.filter(
+        stripe_subscription_id=sub_id, start_dt__gte=now
+    ).delete()
+    messages.success(request, f"Subscription {sub_id} cancelled. Removed {deleted} future holds.")
+    return redirect("subscriptions_list")

@@ -17,6 +17,10 @@ urlpatterns = [
     path('clients/<int:client_id>/credit/', views.client_add_credit, name='client_add_credit'),
     path('calendar/', views.calendar_view, name='calendar_view'),
     path('reports/invoices/', views.reports_invoices_list, name='reports_invoices_list'),
+    # Subscriptions tab
+    path("subscriptions/", views.subscriptions_list, name="subscriptions_list"),
+    path("subscriptions/sync/", views.subscriptions_sync, name="subscriptions_sync"),
+    path("subscriptions/<str:sub_id>/delete/", views.subscription_delete, name="subscription_delete"),
     # Pets
     path("pets/", views.PetListView.as_view(), name="pet_list"),
     path("pets/new/", views.PetCreateView.as_view(), name="pet_create"),

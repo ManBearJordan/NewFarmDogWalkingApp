@@ -1,0 +1,44 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h2 class="mb-3">Subscriptions</h2>
+
+<div class="d-flex mb-3">
+  <form method="post" action="{% url 'subscriptions_sync' %}">
+    {% csrf_token %}
+    <button class="btn btn-primary">Troubleshoot Sync</button>
+  </form>
+</div>
+
+{% if messages %}
+  {% for m in messages %}<div class="alert alert-info py-1">{{ m }}</div>{% endfor %}
+{% endif %}
+
+<div class="table-responsive">
+<table class="table table-hover align-middle">
+  <thead>
+    <tr>
+      <th>Subscription</th>
+      <th>Next date</th>
+      <th>Upcoming holds</th>
+      <th class="text-end">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in subs %}
+      <tr>
+        <td><code>{{ s.id }}</code></td>
+        <td>{% if s.next_dt %}{{ s.next_dt|date:"Y-m-d H:i" }}{% else %}—{% endif %}</td>
+        <td>{{ s.upcoming }}</td>
+        <td class="text-end">
+          <a class="btn btn-sm btn-outline-danger"
+             href="{% url 'subscription_delete' s.id %}"
+             onclick="return confirm('Cancel {{ s.id }} and remove future holds?');">Cancel</a>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="text-muted">No active subscriptions found from future holds.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
