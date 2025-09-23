@@ -1,0 +1,20 @@
+{% extends "core/base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <h2 class="mb-3">Client Login</h2>
+    <form method="post" class="card p-3">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="mt-2 d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Sign in</button>
+        <a class="btn btn-outline-secondary" href="/">Cancel</a>
+      </div>
+      {% if form.errors %}
+        <div class="alert alert-danger mt-3">Invalid username or password.</div>
+      {% endif %}
+    </form>
+    <p class="mt-2 small text-muted">If you don't have a login, please contact us to set up your portal access.</p>
+  </div>
+  </div>
+{% endblock %}

@@ -3,6 +3,7 @@ URL configuration for the core app.
 """
 
 from django.urls import path
+from django.contrib.auth import views as auth_views
 from . import views
 
 urlpatterns = [
@@ -37,6 +38,11 @@ urlpatterns = [
     # Admin Status (Stripe management)
     path("admin/stripe/", views.stripe_status_view, name="stripe_status"),
     path("admin/stripe/diagnostics/", views.stripe_diagnostics_view, name="stripe_diagnostics"),
+    # --- Auth (client portal) ---
+    path("accounts/login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
+    path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
+    # --- Portal ---
+    path("portal/", views.portal_home, name="portal_home"),
     # Admin Tasks (AdminEvent CRUD)
     path("admin/tasks/", views.admin_tasks_list, name="admin_tasks_list"),
     path("admin/tasks/new/", views.admin_task_create, name="admin_task_create"),

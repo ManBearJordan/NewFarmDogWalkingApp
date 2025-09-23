@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 
 class StripeSettings(models.Model):
@@ -41,6 +42,14 @@ class Client(models.Model):
     # CRM tags
     # Note: Tag is declared below; use string reference to avoid reorder issues.
     tags = models.ManyToManyField("Tag", blank=True, related_name="clients")
+    # Optional login for client portal (each client can have a single user)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="client_profile",
+    )
 
     def __str__(self):
         return self.name

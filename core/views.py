@@ -829,3 +829,41 @@ def stripe_status_view(request: HttpRequest) -> HttpResponse:
         "catalog_preview": services[:5],  # tiny peek
     }
     return render(request, "core/stripe_status.html", ctx)
+
+
+# -----------------------------
+# Client Portal
+# -----------------------------
+@login_required
+def portal_home(request: HttpRequest) -> HttpResponse:
+    """
+    Client-facing home page.
+    - If the logged-in user is linked to a Client, show upcoming bookings (next 90 days).
+    - Otherwise, show a message explaining no client profile is linked.
+    """
+    from .models import Client, Booking
+    user = request.user
+    client = getattr(user, "client_profile", None)  # via Client.user OneToOne
+    if not client:
+        return render(request, "core/portal_home.html", {
+            "client": None,
+            "bookings": [],
+            "note": "Your login is not linked to a client profile yet. Please contact support.",
+        })
+    now = timezone.now().astimezone(TZ)
+    horizon = now + timezone.timedelta(days=90)
+    rows = (
+        Booking.objects.filter(
+            client=client,
+            start_dt__gte=now,
+            start_dt__lt=horizon,
+            deleted=False,
+        )
+        .exclude(status__in=["cancelled", "canceled", "void", "voided"])
+        .order_by("start_dt")
+    )
+    return render(request, "core/portal_home.html", {
+        "client": client,
+        "bookings": rows,
+        "note": "",
+    })
