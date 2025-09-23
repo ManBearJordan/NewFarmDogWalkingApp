@@ -5,11 +5,14 @@ Provides simple views for client management and booking creation.
 """
 
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.utils import timezone
+from django.utils.http import urlencode
+from django.utils.safestring import mark_safe
 from django.db.models import Q
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -24,6 +27,8 @@ from .booking_create_service import create_bookings_with_billing
 from .stripe_integration import list_booking_services, open_invoice_smart, list_recent_invoices
 from .credit import use_client_credit
 from .booking_filters import filter_active_bookings
+from .ics_export import bookings_to_ics
+from .date_range_helpers import parse_label, TZ
 
 
 def client_list(request):
@@ -379,3 +384,88 @@ class PetDeleteView(LoginRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, "Pet deleted.")
         return super().delete(request, *args, **kwargs)
+
+
+# -----------------------------
+# Bookings tab (list & manage)
+# -----------------------------
+@login_required
+def booking_list(request):
+    from .models import Booking
+    # parse filters
+    range_label = request.GET.get("range", "this-week")
+    q = (request.GET.get("q") or "").strip()
+    start_dt, end_dt = parse_label(range_label)
+    qs = (
+        Booking.objects.select_related("client")
+        .filter(start_dt__gte=start_dt, start_dt__lt=end_dt)
+        .exclude(status__in=["cancelled", "canceled", "void", "voided"])
+        .exclude(deleted=True)
+        .order_by("start_dt")
+    )
+    if q:
+        qs = qs.filter(
+            Q(client__name__icontains=q)
+            | Q(service_label__icontains=q)
+            | Q(service_name__icontains=q)
+            | Q(location__icontains=q)
+            | Q(notes__icontains=q)
+        )
+    # keep selected ids for .ics export
+    selected_ids = request.GET.get("ids", "")
+    ctx = {
+        "bookings": qs,
+        "range_label": range_label,
+        "q": q,
+        "selected_ids": selected_ids,
+        "start_dt": start_dt,
+        "end_dt": end_dt,
+    }
+    return render(request, "core/booking_list.html", ctx)
+
+
+@login_required
+def booking_open_invoice(request, booking_id: int):
+    from .models import Booking
+    b = get_object_or_404(Booking, id=booking_id)
+    if not b.stripe_invoice_id:
+        messages.warning(request, "This booking does not have an invoice.")
+        params = urlencode({"range": request.GET.get("range", "this-week")})
+        return HttpResponseRedirect(f"{reverse_lazy('booking_list')}?{params}")
+    url = open_invoice_smart(b.stripe_invoice_id)
+    return HttpResponseRedirect(url)
+
+
+@login_required
+def booking_soft_delete(request, booking_id: int):
+    from .models import Booking
+    b = get_object_or_404(Booking, id=booking_id)
+    b.deleted = True
+    b.save(update_fields=["deleted"])
+    messages.success(request, "Booking deleted.")
+    params = urlencode({"range": request.GET.get("range", "this-week")})
+    return HttpResponseRedirect(f"{reverse_lazy('booking_list')}?{params}")
+
+
+@login_required
+def booking_export_ics(request):
+    """
+    Export ICS for either selected `ids` (comma-separated) or current filtered range.
+    """
+    from .models import Booking
+    ids = (request.GET.get("ids") or "").strip()
+    if ids:
+        id_list = [int(x) for x in ids.split(",") if x.isdigit()]
+        qs = Booking.objects.filter(id__in=id_list, deleted=False)
+    else:
+        range_label = request.GET.get("range", "this-week")
+        start_dt, end_dt = parse_label(range_label)
+        qs = (
+            Booking.objects.filter(start_dt__gte=start_dt, start_dt__lt=end_dt, deleted=False)
+            .exclude(status__in=["cancelled", "canceled", "void", "voided"])
+            .order_by("start_dt")
+        )
+    ics = bookings_to_ics(qs)
+    resp = HttpResponse(ics, content_type="text/calendar")
+    resp["Content-Disposition"] = 'attachment; filename="bookings.ics"'
+    return resp
