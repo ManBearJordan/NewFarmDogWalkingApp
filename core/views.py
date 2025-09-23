@@ -572,12 +572,13 @@ def booking_soft_delete(request, booking_id: int):
 
 
 @login_required
-def booking_export_ics(request):
+def booking_export_ics(request: HttpRequest) -> HttpResponse:
     """
     Export ICS for either selected `ids` (comma-separated) or current filtered range.
     """
     from .models import Booking
     ids = (request.GET.get("ids") or "").strip()
+    alarm = (request.GET.get("alarm") == "1")
     if ids:
         id_list = [int(x) for x in ids.split(",") if x.isdigit()]
         qs = Booking.objects.filter(id__in=id_list, deleted=False)
@@ -591,7 +592,7 @@ def booking_export_ics(request):
             .exclude(status__in=["cancelled", "canceled", "void", "voided"])
             .order_by("start_dt")
         )
-    ics = bookings_to_ics(qs)
+    ics = bookings_to_ics(qs, alarm=alarm)
     resp = HttpResponse(ics, content_type="text/calendar")
     resp["Content-Disposition"] = 'attachment; filename="bookings.ics"'
     return resp
