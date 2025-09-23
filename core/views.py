@@ -41,7 +41,7 @@ from .ics_export import bookings_to_ics
 from .date_range_helpers import parse_label, TZ, list_presets
 from .subscription_sync import sync_subscriptions_to_bookings_and_calendar
 from .unified_booking_helpers import get_canonical_service_info
-from .admin_views import stripe_status_view, stripe_diagnostics_view
+from .admin_views import stripe_diagnostics_view
 
 
 def client_list(request):
@@ -805,3 +805,27 @@ def api_service_info(request: HttpRequest) -> JsonResponse:
         price_cents=price,
     )
     return JsonResponse(info)
+
+
+def stripe_status_view(request: HttpRequest) -> HttpResponse:
+    """
+    Show Stripe key status and a quick peek at the live catalog (count).
+    Allow manual refresh via ?refresh=1
+    """
+    refresh = request.GET.get("refresh") == "1"
+    try:
+        services = list_booking_services(force_refresh=refresh)
+        svc_count = len(services)
+        if refresh:
+            messages.success(request, f"Refreshed service catalog ({svc_count} price(s)).")
+        elif svc_count == 0:
+            messages.warning(request, "No active prices found. Check your Stripe key or create active Prices.")
+    except Exception as e:
+        services = []
+        svc_count = 0
+        messages.error(request, f"Stripe error: {e}")
+    ctx = {
+        "catalog_count": svc_count,
+        "catalog_preview": services[:5],  # tiny peek
+    }
+    return render(request, "core/stripe_status.html", ctx)

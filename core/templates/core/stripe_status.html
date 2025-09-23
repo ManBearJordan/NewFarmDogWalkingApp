@@ -1,0 +1,37 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h2 class="mb-3">Stripe Status</h2>
+
+{% if messages %}
+  {% for m in messages %}<div class="alert alert-info py-1">{{ m }}</div>{% endfor %}
+{% endif %}
+
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a class="btn btn-outline-primary" href="{% url 'stripe_status' %}?refresh=1">Refresh catalog</a>
+  <span class="text-muted">Active prices in catalog: <strong>{{ catalog_count }}</strong></span>
+  {% if catalog_preview %}
+    <span class="ms-2 text-muted">(showing first {{ catalog_preview|length }})</span>
+  {% endif %}
+</div>
+
+{% if catalog_preview %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle">
+    <thead><tr>
+      <th>Display</th><th>Service code</th><th>Amount (cents)</th><th>Price ID</th><th>Product ID</th>
+    </tr></thead>
+    <tbody>
+      {% for s in catalog_preview %}
+      <tr>
+        <td>{{ s.display_name }}</td>
+        <td><code>{{ s.service_code }}</code></td>
+        <td>{% if s.amount_cents %}{{ s.amount_cents }}{% else %}—{% endif %}</td>
+        <td><code>{{ s.price_id }}</code></td>
+        <td><code>{{ s.product_id }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

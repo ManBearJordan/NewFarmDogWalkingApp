@@ -11,6 +11,7 @@ from django.contrib import messages
 import json
 
 from .stripe_key_manager import get_stripe_key, get_key_status, update_stripe_key
+from .stripe_integration import list_booking_services
 
 
 @staff_member_required
