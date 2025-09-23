@@ -37,7 +37,7 @@ from .stripe_integration import (
 from .credit import use_client_credit
 from .booking_filters import filter_active_bookings
 from .ics_export import bookings_to_ics
-from .date_range_helpers import parse_label, TZ
+from .date_range_helpers import parse_label, TZ, list_presets
 from .subscription_sync import sync_subscriptions_to_bookings_and_calendar
 from .unified_booking_helpers import get_canonical_service_info
 from .admin_views import stripe_status_view, stripe_diagnostics_view
@@ -416,8 +416,10 @@ def booking_list(request):
     from .models import Booking
     # parse filters
     range_label = request.GET.get("range", "this-week")
+    start_q = request.GET.get("start")  # for custom
+    end_q = request.GET.get("end")
     q = (request.GET.get("q") or "").strip()
-    start_dt, end_dt = parse_label(range_label)
+    start_dt, end_dt = parse_label(range_label, start_param=start_q, end_param=end_q)
     qs = (
         Booking.objects.select_related("client")
         .filter(start_dt__gte=start_dt, start_dt__lt=end_dt)
@@ -439,6 +441,9 @@ def booking_list(request):
         "bookings": qs,
         "range_label": range_label,
         "q": q,
+        "start_q": start_q or start_dt.date().isoformat(),
+        "end_q": end_q or end_dt.date().isoformat(),
+        "presets": list_presets(),
         "selected_ids": selected_ids,
         "start_dt": start_dt,
         "end_dt": end_dt,
@@ -481,7 +486,9 @@ def booking_export_ics(request):
         qs = Booking.objects.filter(id__in=id_list, deleted=False)
     else:
         range_label = request.GET.get("range", "this-week")
-        start_dt, end_dt = parse_label(range_label)
+        start_q = request.GET.get("start")
+        end_q = request.GET.get("end")
+        start_dt, end_dt = parse_label(range_label, start_param=start_q, end_param=end_q)
         qs = (
             Booking.objects.filter(start_dt__gte=start_dt, start_dt__lt=end_dt, deleted=False)
             .exclude(status__in=["cancelled", "canceled", "void", "voided"])
