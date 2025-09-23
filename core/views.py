@@ -11,11 +11,15 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Q
+from django.urls import reverse_lazy
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from datetime import datetime, date
 from calendar import Calendar, monthrange
 import json
 
-from .models import Client, Booking, AdminEvent, SubOccurrence
+from .models import Client, Booking, AdminEvent, SubOccurrence, Pet, BookingPet
+from .forms import PetForm
 from .booking_create_service import create_bookings_with_billing
 from .stripe_integration import list_booking_services, open_invoice_smart, list_recent_invoices
 from .credit import use_client_credit
@@ -309,3 +313,69 @@ def reports_invoices_list(request):
         'invoices': invoices,
         'limit': limit
     })
+
+
+#
+# Pets — CRUD UI
+#
+class PetListView(LoginRequiredMixin, ListView):
+    template_name = "core/pet_list.html"
+    model = Pet
+    context_object_name = "pets"
+    paginate_by = 20
+
+    def get_queryset(self):
+        qs = Pet.objects.select_related("client").order_by("client__name", "name")
+        q = (self.request.GET.get("q") or "").strip()
+        client_id = (self.request.GET.get("client") or "").strip()
+        if q:
+            qs = qs.filter(
+                Q(name__icontains=q)
+                | Q(species__icontains=q)
+                | Q(breed__icontains=q)
+                | Q(medications__icontains=q)
+                | Q(behaviour__icontains=q)
+                | Q(client__name__icontains=q)
+            )
+        if client_id:
+            qs = qs.filter(client_id=client_id)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["q"] = (self.request.GET.get("q") or "").strip()
+        ctx["client_filter"] = (self.request.GET.get("client") or "").strip()
+        ctx["clients"] = Client.objects.order_by("name")
+        return ctx
+
+
+class PetCreateView(LoginRequiredMixin, CreateView):
+    model = Pet
+    form_class = PetForm
+    template_name = "core/pet_form.html"
+    success_url = reverse_lazy("pet_list")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Pet created.")
+        return super().form_valid(form)
+
+
+class PetUpdateView(LoginRequiredMixin, UpdateView):
+    model = Pet
+    form_class = PetForm
+    template_name = "core/pet_form.html"
+    success_url = reverse_lazy("pet_list")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Pet updated.")
+        return super().form_valid(form)
+
+
+class PetDeleteView(LoginRequiredMixin, DeleteView):
+    model = Pet
+    template_name = "core/pet_confirm_delete.html"
+    success_url = reverse_lazy("pet_list")
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, "Pet deleted.")
+        return super().delete(request, *args, **kwargs)

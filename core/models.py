@@ -48,8 +48,9 @@ class Pet(models.Model):
     name = models.CharField(max_length=100)
     species = models.CharField(max_length=50, default='dog')
     breed = models.CharField(max_length=100, blank=True)
-    meds = models.TextField(blank=True)
+    medications = models.TextField(blank=True)
     behaviour = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.name} ({self.client.name})"
