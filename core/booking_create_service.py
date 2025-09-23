@@ -13,45 +13,83 @@ from .models import Client, Booking
 from .credit import get_client_credit, use_client_credit
 from .service_map import resolve_service_fields
 from .domain_rules import is_overnight
-from .stripe_integration import create_or_reuse_draft_invoice, push_invoice_items_from_booking
+from .stripe_integration import (
+    ensure_customer,
+    create_or_reuse_draft_invoice,
+    push_invoice_items_from_booking,
+)
+from .unified_booking_helpers import create_booking_with_unified_fields, get_canonical_service_info
 
 
-def create_bookings_with_billing(client: Client, rows: List[Dict]) -> Dict:
+def create_bookings_from_rows(client, rows):
     """
-    Create multiple bookings with credit application and billing.
-    
-    Args:
-        client: Client model instance
-        rows: List of booking data dicts with keys:
-              {service_label|service_code, start_dt, end_dt, location, dogs, price_cents, notes}
-    
-    Returns:
-        Dict with keys: {created_ids: [int], invoice_id: str|None, total_credit_used: int}
-    
-    Behavior:
-        - Resolve service_code + display_label via service_map.resolve_service_fields
-        - If overnight, increment end_dt by +1 day
-        - Apply client credit per row first
-        - Reuse ONE draft invoice across all rows with non-zero due
-        - Link booking.stripe_invoice_id when invoiced; leave NULL if fully credit-covered
-        - Deduct credit once after loop
+    rows: list of dicts from the batch UI. Each row minimally contains:
+      start_dt, end_dt, service_code/name/label (any of them), price_cents (optional),
+      location, dogs, notes.
     """
-"""
-Booking creation service with billing integration.
+    if not rows:
+        return {
+            "bookings": [],
+            "total_credit_used": 0,
+            "invoice_id": None,
+        }
 
-This module provides functionality to create multiple bookings with
-credit application and Stripe invoice management.
-"""
+    total_credit_available = get_client_credit(client) 
+    total_credit_used = 0
+    bookings_to_invoice = []
+    created_bookings = []
+    invoice_id = None
 
-from datetime import timedelta
-from typing import Dict, List, Optional
-from django.db import transaction
+    with transaction.atomic():
+        for row in rows:
+            # Canonicalise inputs and create the booking using the unified helper
+            booking = create_booking_with_unified_fields(
+                client=client,
+                start_dt=row["start_dt"],
+                end_dt=row["end_dt"],
+                location=row.get("location") or "",
+                dogs=row.get("dogs") or 1,
+                notes=row.get("notes") or "",
+                status="confirmed",
+                price_cents=row.get("price_cents"),
+                service_code=row.get("service_code"),
+                service_name=row.get("service_name"),
+                service_label=row.get("service_label"),
+            )
 
-from .models import Client, Booking
-from .credit import get_client_credit, use_client_credit
-from .service_map import resolve_service_fields
-from .domain_rules import is_overnight
-from .stripe_integration import create_or_reuse_draft_invoice, push_invoice_items_from_booking
+            price_due = booking.price_cents or 0
+            # Apply credit per row
+            credit_for_row = min(price_due, max(0, total_credit_available - total_credit_used))
+            net_due = price_due - credit_for_row
+            total_credit_used += credit_for_row
+
+            # If there's still amount due after credit, add to invoice
+            if net_due > 0:
+                # Ensure we have a customer and invoice
+                customer_id = ensure_customer(client)
+                if invoice_id is None:
+                    invoice_id = create_or_reuse_draft_invoice(client)
+                
+                # Update booking with invoice ID
+                booking.stripe_invoice_id = invoice_id
+                booking.save()
+                bookings_to_invoice.append(booking)
+            
+            created_bookings.append(booking)
+
+        # Push invoice items for bookings that need invoicing
+        for booking in bookings_to_invoice:
+            push_invoice_items_from_booking(booking, invoice_id)
+
+        # Deduct the total credit used
+        if total_credit_used > 0:
+            use_client_credit(client, total_credit_used)
+
+    return {
+        "bookings": created_bookings,
+        "total_credit_used": total_credit_used,
+        "invoice_id": invoice_id,
+    }
 
 
 def create_bookings_with_billing(client: Client, rows: List[Dict]) -> Dict:
