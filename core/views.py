@@ -35,7 +35,7 @@ from .stripe_integration import (
     list_recent_invoices,
     get_customer_dashboard_url,
 )
-from .credit import use_client_credit
+from .credit import add_client_credit
 from .booking_filters import filter_active_bookings
 from .ics_export import bookings_to_ics
 from .date_range_helpers import parse_label, TZ, list_presets
@@ -165,20 +165,20 @@ def client_credit_add(request: HttpRequest, client_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("client_list")
     try:
-        # Accept either cents or dollars.fraction; prefer cents if integer-like
+        # Accept cents ("2500"), dollars ("25.00"), or negative adjustments (e.g., "-1000") by opt-in flag.
         raw = (request.POST.get("amount") or "").strip()
+        allow_negative = request.POST.get("allow_negative") == "1"
         if not raw:
             raise ValueError("Amount required")
-        if raw.isdigit():
-            cents = int(raw)
+        # parse to cents
+        if raw.lstrip("-").isdigit():
+            cents = int(raw)  # may be negative
         else:
             cents = int(round(float(raw) * 100))
-        c.credit_cents = (c.credit_cents or 0) + cents
-        c.save(update_fields=["credit_cents"])
-        dollars = cents / 100.0
-        messages.success(request, f"Added ${dollars:.2f} credit to {c.name}.")
+        new_bal = add_client_credit(c, cents, allow_negative=allow_negative, reason="manual-adjust")
+        messages.success(request, f"Credit updated. New balance: ${new_bal/100:.2f}")
     except Exception as e:
-        messages.error(request, f"Failed to add credit: {e}")
+        messages.error(request, f"Failed to update credit: {e}")
     return redirect("client_list")
 
 
