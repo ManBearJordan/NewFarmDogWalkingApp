@@ -38,6 +38,9 @@ urlpatterns = [
     # Admin Status (Stripe management)
     path("admin/stripe/", views.stripe_status_view, name="stripe_status"),
     path("admin/stripe/diagnostics/", views.stripe_diagnostics_view, name="stripe_diagnostics"),
+    # --- Admin: Stripe Key update ---
+    path("admin/stripe/status/", views.stripe_status_view, name="stripe_status"),
+    path("admin/stripe/key/update/", views.stripe_key_update, name="stripe_key_update"),
     # --- Auth (client portal) ---
     path("accounts/login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
