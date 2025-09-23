@@ -6,6 +6,8 @@ import os
 import stripe
 from typing import Optional, List, Dict
 
+from .stripe_key_manager import get_stripe_key
+
 def get_api_key(env_var_name: str = 'STRIPE_SECRET_KEY') -> Optional[str]:
     key = os.getenv(env_var_name)
     if key:
@@ -334,3 +336,29 @@ def open_invoice_smart(invoice_id: str) -> str:
         return f"https://dashboard.stripe.com/test/invoices/{invoice_id}"
     else:
         return f"https://dashboard.stripe.com/invoices/{invoice_id}"
+
+
+def get_invoice_dashboard_url(invoice_id: str) -> str:
+    """Return full dashboard URL for invoice."""
+    return open_invoice_smart(invoice_id)
+
+
+def _init_stripe():
+    key = get_stripe_key()
+    if not key:
+        raise RuntimeError("Stripe key is not configured")
+    stripe.api_key = key
+    return key
+
+
+def cancel_subscription_immediately(sub_id: str) -> None:
+    """
+    Immediately cancel a subscription in Stripe.
+    """
+    _init_stripe()
+    # Prefer delete; if the account forbids hard delete, fall back to update.
+    try:
+        stripe.Subscription.delete(sub_id)
+    except Exception:
+        stripe.Subscription.modify(sub_id, cancel_at_period_end=False)
+        stripe.Subscription.cancel(sub_id)
