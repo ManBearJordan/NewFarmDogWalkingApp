@@ -29,10 +29,11 @@ from .models import Client, Booking, AdminEvent, SubOccurrence, Pet, BookingPet,
 from .forms import PetForm, ClientForm
 from .booking_create_service import create_bookings_with_billing
 from .stripe_integration import (
-    list_booking_services, 
-    open_invoice_smart, 
+    ensure_customer,
+    list_booking_services,
+    get_invoice_dashboard_url,
     list_recent_invoices,
-    cancel_subscription_immediately,
+    get_customer_dashboard_url,
 )
 from .credit import use_client_credit
 from .booking_filters import filter_active_bookings
@@ -83,6 +84,99 @@ def client_create(request: HttpRequest) -> HttpResponse:
         messages.success(request, "Client created.")
         return redirect("client_list")
     return render(request, "core/client_create.html", {"form": form})
+
+# -----------------------------
+# Clients: Stripe + Credit actions
+# -----------------------------
+@login_required
+def clients_stripe_sync(request: HttpRequest) -> HttpResponse:
+    """
+    Link clients to Stripe customers by email (case-insensitive).
+    Updates phone/address and saves stripe_customer_id on match/create.
+    """
+    from .models import Client
+    if request.method != "POST":
+        return redirect("client_list")
+    updated = 0
+    failed = 0
+    qs = Client.objects.all()
+    for c in qs:
+        try:
+            if c.email:
+                sid = ensure_customer(c)
+                if sid and c.stripe_customer_id != sid:
+                    c.stripe_customer_id = sid
+                    c.save(update_fields=["stripe_customer_id"])
+                    updated += 1
+        except Exception as e:
+            failed += 1
+    messages.success(request, f"Stripe customer sync complete. Linked/updated: {updated}. Errors: {failed}.")
+    return redirect("client_list")
+
+
+@login_required
+def client_stripe_link(request: HttpRequest, client_id: int) -> HttpResponse:
+    """
+    Link a single client to Stripe by explicit input (cus_… or email).
+    """
+    from .models import Client
+    c = get_object_or_404(Client, id=client_id)
+    if request.method != "POST":
+        return redirect("client_list")
+    value = (request.POST.get("stripe_id_or_email") or "").strip()
+    if not value:
+        messages.error(request, "Enter a Stripe customer ID or email.")
+        return redirect("client_list")
+    try:
+        if value.lower().startswith("cus_"):
+            c.stripe_customer_id = value
+            c.save(update_fields=["stripe_customer_id"])
+            messages.success(request, f"Linked to {value}.")
+        else:
+            # treat as email
+            c.email = value
+            sid = ensure_customer(c)
+            c.stripe_customer_id = sid
+            c.save(update_fields=["email", "stripe_customer_id"])
+            messages.success(request, f"Linked via email → {sid}.")
+    except Exception as e:
+        messages.error(request, f"Link failed: {e}")
+    return redirect("client_list")
+
+
+@login_required
+def client_stripe_open(request: HttpRequest, client_id: int) -> HttpResponse:
+    from .models import Client
+    c = get_object_or_404(Client, id=client_id)
+    if not c.stripe_customer_id:
+        messages.warning(request, "This client is not linked to Stripe.")
+        return redirect("client_list")
+    url = get_customer_dashboard_url(c.stripe_customer_id)
+    return HttpResponseRedirect(url)
+
+
+@login_required
+def client_credit_add(request: HttpRequest, client_id: int) -> HttpResponse:
+    from .models import Client
+    c = get_object_or_404(Client, id=client_id)
+    if request.method != "POST":
+        return redirect("client_list")
+    try:
+        # Accept either cents or dollars.fraction; prefer cents if integer-like
+        raw = (request.POST.get("amount") or "").strip()
+        if not raw:
+            raise ValueError("Amount required")
+        if raw.isdigit():
+            cents = int(raw)
+        else:
+            cents = int(round(float(raw) * 100))
+        c.credit_cents = (c.credit_cents or 0) + cents
+        c.save(update_fields=["credit_cents"])
+        dollars = cents / 100.0
+        messages.success(request, f"Added ${dollars:.2f} credit to {c.name}.")
+    except Exception as e:
+        messages.error(request, f"Failed to add credit: {e}")
+    return redirect("client_list")
 
 
 def booking_create_batch(request):

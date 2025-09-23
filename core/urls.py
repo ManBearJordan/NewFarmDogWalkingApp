@@ -9,6 +9,11 @@ urlpatterns = [
     path('', views.client_list, name='home'),
     path('clients/', views.client_list, name='client_list'),
     path('clients/new/', views.client_create, name='client_create'),
+    # Clients: Stripe + Credit actions
+    path("clients/stripe/sync/", views.clients_stripe_sync, name="clients_stripe_sync"),
+    path("clients/<int:client_id>/stripe/link/", views.client_stripe_link, name="client_stripe_link"),
+    path("clients/<int:client_id>/stripe/open/", views.client_stripe_open, name="client_stripe_open"),
+    path("clients/<int:client_id>/credit/add/", views.client_credit_add, name="client_credit_add"),
     path('bookings/create-batch/', views.booking_create_batch, name='booking_create_batch'),
     # Bookings tab (list & manage)
     path("bookings/", views.booking_list, name="booking_list"),
