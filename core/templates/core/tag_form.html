@@ -1,0 +1,24 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h2 class="mb-3">{% if obj %}Edit Tag{% else %}New Tag{% endif %}</h2>
+<form method="post" class="card p-3">
+  {% csrf_token %}
+  <div class="mb-3">
+    <label class="form-label">Name</label>
+    <input type="text" class="form-control" name="name" value="{{ obj.name|default:'' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Color (optional)</label>
+    <input type="text" class="form-control" name="color" placeholder="#2E86AB" value="{{ obj.color|default:'' }}">
+  </div>
+  <div class="mt-2">
+    <a href="{% url 'tags_list' %}" class="btn btn-outline-secondary">Cancel</a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </div>
+  {% if messages %}
+    <div class="mt-2">
+      {% for m in messages %}<div class="alert alert-info py-1 mb-1">{{ m }}</div>{% endfor %}
+    </div>
+  {% endif %}
+</form>
+{% endblock %}

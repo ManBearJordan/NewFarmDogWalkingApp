@@ -8,6 +8,7 @@ from . import views
 urlpatterns = [
     path('', views.client_list, name='home'),
     path('clients/', views.client_list, name='client_list'),
+    path('clients/new/', views.client_create, name='client_create'),
     path('bookings/create-batch/', views.booking_create_batch, name='booking_create_batch'),
     # Bookings tab (list & manage)
     path("bookings/", views.booking_list, name="booking_list"),
@@ -34,4 +35,9 @@ urlpatterns = [
     path("admin/tasks/new/", views.admin_task_create, name="admin_task_create"),
     path("admin/tasks/<int:pk>/edit/", views.admin_task_edit, name="admin_task_edit"),
     path("admin/tasks/<int:pk>/delete/", views.admin_task_delete, name="admin_task_delete"),
+    # CRM Tags
+    path("crm/tags/", views.tags_list, name="tags_list"),
+    path("crm/tags/new/", views.tag_create, name="tag_create"),
+    path("crm/tags/<int:pk>/edit/", views.tag_edit, name="tag_edit"),
+    path("crm/tags/<int:pk>/delete/", views.tag_delete, name="tag_delete"),
 ]

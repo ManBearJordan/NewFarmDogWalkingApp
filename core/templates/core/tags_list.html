@@ -1,0 +1,52 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h2 class="mb-3">Tags</h2>
+
+<form method="get" class="row g-2 mb-3">
+  <div class="col-auto">
+    <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search tags">
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-primary">Apply</button>
+    <a class="btn btn-outline-secondary" href="{% url 'tags_list' %}">Reset</a>
+  </div>
+  <div class="col-auto ms-auto">
+    <a class="btn btn-success" href="{% url 'tag_create' %}">New Tag</a>
+  </div>
+</form>
+
+{% if messages %}
+  {% for m in messages %}<div class="alert alert-info py-1">{{ m }}</div>{% endfor %}
+{% endif %}
+
+<div class="table-responsive">
+<table class="table table-hover align-middle">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Color</th>
+      <th class="text-end">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.name }}</td>
+        <td>
+          {% if r.color %}
+            <span class="badge" style="background: {{ r.color }};">&nbsp;&nbsp;&nbsp;</span>
+            <code class="ms-1">{{ r.color }}</code>
+          {% else %}—{% endif %}
+        </td>
+        <td class="text-end">
+          <a class="btn btn-sm btn-outline-primary" href="{% url 'tag_edit' r.id %}">Edit</a>
+          <a class="btn btn-sm btn-outline-danger" href="{% url 'tag_delete' r.id %}">Delete</a>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="3" class="text-muted">No tags.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
