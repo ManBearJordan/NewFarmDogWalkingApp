@@ -26,4 +26,12 @@ urlpatterns = [
     path("pets/new/", views.PetCreateView.as_view(), name="pet_create"),
     path("pets/<int:pk>/edit/", views.PetUpdateView.as_view(), name="pet_edit"),
     path("pets/<int:pk>/delete/", views.PetDeleteView.as_view(), name="pet_delete"),
+    # Admin Status (Stripe management)
+    path("admin/stripe/", views.stripe_status_view, name="stripe_status"),
+    path("admin/stripe/diagnostics/", views.stripe_diagnostics_view, name="stripe_diagnostics"),
+    # Admin Tasks (AdminEvent CRUD)
+    path("admin/tasks/", views.admin_tasks_list, name="admin_tasks_list"),
+    path("admin/tasks/new/", views.admin_task_create, name="admin_task_create"),
+    path("admin/tasks/<int:pk>/edit/", views.admin_task_edit, name="admin_task_edit"),
+    path("admin/tasks/<int:pk>/delete/", views.admin_task_delete, name="admin_task_delete"),
 ]

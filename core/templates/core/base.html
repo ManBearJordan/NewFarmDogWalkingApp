@@ -10,15 +10,43 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
             <a class="navbar-brand" href="{% url 'client_list' %}">NewFarm Dog Walking</a>
-            <div class="navbar-nav">
-                <a class="nav-link" href="{% url 'booking_list' %}">Bookings</a>
-                <a class="nav-link" href="{% url 'subscriptions_list' %}">Subscriptions</a>
-                <a class="nav-link" href="{% url 'pet_list' %}">Pets</a>
-                <a class="nav-link" href="{% url 'client_list' %}">Clients</a>
-                <a class="nav-link" href="{% url 'booking_create_batch' %}">Create Bookings</a>
-                <a class="nav-link" href="{% url 'calendar_view' %}">Calendar</a>
-                <a class="nav-link" href="{% url 'reports_invoices_list' %}">Reports</a>
-                <a class="nav-link" href="/admin/">Admin</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'booking_list' %}">Bookings</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'subscriptions_list' %}">Subscriptions</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'pet_list' %}">Pets</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Admin
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="adminMenu">
+                            <li><a class="dropdown-item" href="{% url 'admin_tasks_list' %}">Tasks</a></li>
+                            <li><a class="dropdown-item" href="{% url 'stripe_status' %}">Stripe Status</a></li>
+                            <li><a class="dropdown-item" href="{% url 'stripe_diagnostics' %}">Stripe Diagnostics</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'client_list' %}">Clients</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'booking_create_batch' %}">Create Bookings</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'calendar_view' %}">Calendar</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'reports_invoices_list' %}">Reports</a>
+                    </li>
+                </ul>
             </div>
         </div>
     </nav>
