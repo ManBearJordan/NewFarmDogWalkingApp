@@ -32,3 +32,12 @@ class ClientForm(forms.ModelForm):
     class Meta:
         model = Client
         fields = ["name", "email", "phone", "address", "notes", "tags"]
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if not instance.status:  # Set default status if not already set
+            instance.status = 'active'
+        if commit:
+            instance.save()
+            self.save_m2m()  # Save the many-to-many relationship for tags
+        return instance

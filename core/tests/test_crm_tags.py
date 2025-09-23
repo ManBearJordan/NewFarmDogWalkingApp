@@ -17,9 +17,9 @@ def test_tag_crud_and_assign_to_client(authed):
     # Create client with tag
     resp = authed.post(reverse("client_create"), {
         "name": "Alice",
-        "email": "",
-        "phone": "",
-        "address": "",
+        "email": "alice@example.com",
+        "phone": "123-456-7890",
+        "address": "123 Main St",
         "notes": "",
         "tags": [t.id],
     }, follow=True)
