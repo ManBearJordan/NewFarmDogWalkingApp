@@ -9,6 +9,9 @@
 
 {% if client %}
   <p class="text-muted">Welcome, {{ client.name }}.</p>
+  <div class="mb-3">
+    <a class="btn btn-success" href="{% url 'portal_booking_create' %}">New booking</a>
+  </div>
   <div class="table-responsive">
   <table class="table table-hover align-middle">
     <thead>
