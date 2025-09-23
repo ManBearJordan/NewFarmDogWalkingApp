@@ -43,3 +43,13 @@ This kit bootstraps:
 - Secret `GH_PAT_FOR_PROJECT` is used to mutate the Project and labels (fine-grained tokens don’t yet fully work for Projects).
 
 Happy shipping!
+
+## Tests
+Run `pytest -q` (or with coverage):
+
+```bash
+pytest --maxfail=1 --disable-warnings -q
+pytest --cov=core --cov-report=term-missing --cov-report=xml
+```
+
+The CI-ready coverage report is written to `coverage.xml`.
