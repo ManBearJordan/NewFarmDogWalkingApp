@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from django.db import transaction
 
 from .models import Client, Booking
-from .credit import get_client_credit, use_client_credit
+from .credit import get_client_credit, deduct_client_credit
 from .service_map import resolve_service_fields
 from .domain_rules import is_overnight
 from .stripe_integration import (
@@ -83,7 +83,7 @@ def create_bookings_from_rows(client, rows):
 
         # Deduct the total credit used
         if total_credit_used > 0:
-            use_client_credit(client, total_credit_used)
+            deduct_client_credit(client, total_credit_used)
 
     return {
         "bookings": created_bookings,
@@ -193,9 +193,9 @@ def create_bookings_with_billing(client: Client, rows: List[Dict]) -> Dict:
             for booking in bookings_to_invoice:
                 push_invoice_items_from_booking(booking, invoice_id)
 
-        # Deduct total credit used once after processing all rows
+        # Commit the credit deduction once after the loop (atomic & validated)
         if total_credit_used > 0:
-            use_client_credit(client, total_credit_used)
+            deduct_client_credit(client, total_credit_used)
 
     return {
         'created_ids': [b.id for b in created_bookings],

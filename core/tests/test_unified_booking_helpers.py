@@ -52,7 +52,7 @@ def test_batch_creation_still_uses_credit_and_single_invoice(monkeypatch):
         {"start_dt": now, "end_dt": now, "service_label": "Dog Walk", "price_cents": 1200},  # So both fit in credit
     ]
     result = create_bookings_from_rows(cl, rows)
-    # Credit 2500 should cover both bookings (1200 + 1200 = 2400)
+    # Credit 2500 covers first fully (1200) and second (1200) = 2400; a single draft reused
     assert len(result["bookings"]) == 2
     # No invoice should be needed since all covered by credit
     assert result["invoice_id"] is None
