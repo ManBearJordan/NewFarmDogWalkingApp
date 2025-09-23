@@ -4,7 +4,8 @@ Exposes get_api_key() and list_active_subscriptions().
 """
 import os
 import stripe
-from typing import List, Dict, Optional, Any
+import time
+from typing import List, Dict, Optional, Any, Tuple
 
 from .stripe_key_manager import get_stripe_key
 
@@ -38,71 +39,22 @@ def list_active_subscriptions(api_key: Optional[str] = None, **params):
     return stripe.Subscription.list(**params)
 
 
-def list_booking_services() -> List[Dict]:
-    """Return static list of booking services for catalog.
-    
-    Returns:
-        List[Dict]: Service catalog with format:
-        [{service_code, display_name, amount_cents, product_id, price_id}, ...]
+def list_booking_services(force_refresh: bool = False) -> List[Dict[str, Any]]:
     """
-    return [
-        {
-            'service_code': 'WALK_30MIN',
-            'display_name': '30 Minute Dog Walk',
-            'amount_cents': 2000,  # $20.00
-            'product_id': 'prod_walk_30min',
-            'price_id': 'price_walk_30min'
-        },
-        {
-            'service_code': 'WALK_1HR',
-            'display_name': '1 Hour Dog Walk',
-            'amount_cents': 3500,  # $35.00
-            'product_id': 'prod_walk_1hr',
-            'price_id': 'price_walk_1hr'
-        },
-        {
-            'service_code': 'WALK_2HR',
-            'display_name': '2 Hour Dog Walk',
-            'amount_cents': 6500,  # $65.00
-            'product_id': 'prod_walk_2hr',
-            'price_id': 'price_walk_2hr'
-        },
-        {
-            'service_code': 'GROOMING_BASIC',
-            'display_name': 'Basic Dog Grooming',
-            'amount_cents': 4500,  # $45.00
-            'product_id': 'prod_grooming_basic',
-            'price_id': 'price_grooming_basic'
-        },
-        {
-            'service_code': 'GROOMING_FULL',
-            'display_name': 'Full Service Dog Grooming',
-            'amount_cents': 7500,  # $75.00
-            'product_id': 'prod_grooming_full',
-            'price_id': 'price_grooming_full'
-        },
-        {
-            'service_code': 'SITTING_HALF_DAY',
-            'display_name': 'Half Day Pet Sitting',
-            'amount_cents': 5000,  # $50.00
-            'product_id': 'prod_sitting_half_day',
-            'price_id': 'price_sitting_half_day'
-        },
-        {
-            'service_code': 'SITTING_FULL_DAY',
-            'display_name': 'Full Day Pet Sitting',
-            'amount_cents': 9000,  # $90.00
-            'product_id': 'prod_sitting_full_day',
-            'price_id': 'price_sitting_full_day'
-        },
-        {
-            'service_code': 'OVERNIGHT_CARE',
-            'display_name': 'Overnight Pet Care',
-            'amount_cents': 12000,  # $120.00
-            'product_id': 'prod_overnight_care',
-            'price_id': 'price_overnight_care'
-        }
-    ]
+    Returns active services derived from Stripe Prices + Products.
+    Caches results for STRIPE_CATALOG_TTL_SECONDS (default 300s).
+    If Stripe key is missing or an API error occurs, returns cached if available, else [].
+    """
+    if not force_refresh and _cache_valid():
+        return list(_CATALOG_CACHE.get("items") or [])
+    try:
+        items = _fetch_catalog_from_stripe()
+        _set_cache(items)
+        return items
+    except Exception:
+        # Fallback to whatever we have
+        cached = list(_CATALOG_CACHE.get("items") or [])
+        return cached
 
 
 def ensure_customer(client) -> str:
@@ -375,6 +327,81 @@ def cancel_subscription_immediately(sub_id: str) -> None:
     except Exception:
         stripe.Subscription.modify(sub_id, cancel_at_period_end=False)
         stripe.Subscription.cancel(sub_id)
+
+# --------------------------------------------------------------------
+# Live Service Catalog (Products/Prices) with TTL cache
+_CATALOG_CACHE: Dict[str, Any] = {
+    "at": 0,            # unix ts
+    "items": [],        # cached result list
+}
+
+def _catalog_ttl_seconds() -> int:
+    # soft dependency on settings to avoid circular imports at import time
+    try:
+        from django.conf import settings
+        return int(getattr(settings, "STRIPE_CATALOG_TTL_SECONDS", 300))
+    except Exception:
+        return 300
+
+def _now_ts() -> int:
+    return int(time.time())
+
+def _cache_valid() -> bool:
+    age = _now_ts() - int(_CATALOG_CACHE.get("at") or 0)
+    return age < _catalog_ttl_seconds()
+
+def _set_cache(items: List[Dict[str, Any]]) -> None:
+    _CATALOG_CACHE["items"] = items or []
+    _CATALOG_CACHE["at"] = _now_ts()
+
+def _map_prices_to_services(prices: List[Any]) -> List[Dict[str, Any]]:
+    """
+    Map Stripe Price objects (with expanded product if available) into the app's catalog schema.
+    We prefer:
+      - service_code     := product.metadata.service_code OR price.nickname OR product.name (slugified by caller if needed)
+      - display_name     := product.name OR price.nickname
+      - amount_cents     := price.unit_amount (int)
+      - product_id       := product.id
+      - price_id         := price.id
+    """
+    out: List[Dict[str, Any]] = []
+    for p in prices:
+        prod = p.get("product")
+        # When not expanded, prod may be a string id; try to use what we can.
+        prod_id = prod.get("id") if isinstance(prod, dict) else (prod if isinstance(prod, str) else None)
+        prod_name = (prod.get("name") if isinstance(prod, dict) else None) or ""
+        service_code = None
+        if isinstance(prod, dict):
+            meta = prod.get("metadata") or {}
+            service_code = meta.get("service_code")
+        # fallback chain for code
+        service_code = service_code or (p.get("nickname") or "") or (prod_name or "")
+        display_name = prod_name or (p.get("nickname") or "")
+        amount_cents = p.get("unit_amount")
+        out.append({
+            "service_code": service_code,
+            "display_name": display_name or service_code or "Service",
+            "amount_cents": int(amount_cents) if isinstance(amount_cents, int) else None,
+            "product_id": prod_id,
+            "price_id": p.get("id"),
+        })
+    # De-dup by price_id (safety), keep order from Stripe
+    seen = set()
+    uniq = []
+    for item in out:
+        pid = item["price_id"]
+        if pid in seen:
+            continue
+        seen.add(pid)
+        uniq.append(item)
+    return uniq
+
+def _fetch_catalog_from_stripe() -> List[Dict[str, Any]]:
+    _init_stripe()
+    # Pull active Prices, expand product to avoid extra round trips
+    res = stripe.Price.list(active=True, expand=["data.product"], limit=100)
+    prices = list(res.auto_paging_iter(limit=100))
+    return _map_prices_to_services(prices)
 
 def ensure_customer(client) -> str:
     """
