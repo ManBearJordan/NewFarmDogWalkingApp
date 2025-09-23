@@ -6,6 +6,30 @@
   {% for m in messages %}<div class="alert alert-info py-1">{{ m }}</div>{% endfor %}
 {% endif %}
 
+<div class="card p-3 mb-3">
+  <div class="d-flex flex-wrap align-items-center gap-3">
+    <div>
+      <div class="text-muted small">Key storage</div>
+      <div><strong>{{ key_status.mode|default:"—" }}</strong></div>
+    </div>
+    <div>
+      <div class="text-muted small">Configured</div>
+      <div><strong>{% if key_status.configured %}Yes{% else %}No{% endif %}</strong></div>
+    </div>
+    <div>
+      <div class="text-muted small">Environment</div>
+      <div><strong>{{ key_status.test_or_live|default:"—" }}</strong></div>
+    </div>
+    <div class="ms-auto">
+      <form method="post" action="{% url 'stripe_key_update' %}" class="d-flex gap-2">
+        {% csrf_token %}
+        <input type="password" name="stripe_api_key" class="form-control" placeholder="sk_test_... or sk_live_..." style="min-width: 320px;">
+        <button class="btn btn-primary">Change Stripe Key</button>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="d-flex align-items-center gap-2 mb-3">
   <a class="btn btn-outline-primary" href="{% url 'stripe_status' %}?refresh=1">Refresh catalog</a>
   <span class="text-muted">Active prices in catalog: <strong>{{ catalog_count }}</strong></span>

@@ -35,6 +35,7 @@ from .stripe_integration import (
     list_recent_invoices,
     get_customer_dashboard_url,
 )
+from .stripe_key_manager import get_key_status, update_stripe_key
 from .credit import add_client_credit
 from .booking_filters import filter_active_bookings
 from .ics_export import bookings_to_ics
@@ -813,8 +814,7 @@ def api_service_info(request: HttpRequest) -> JsonResponse:
 
 def stripe_status_view(request: HttpRequest) -> HttpResponse:
     """
-    Show Stripe key status and a quick peek at the live catalog (count).
-    Allow manual refresh via ?refresh=1
+    Show Stripe key status + catalog peek. Manual refresh via ?refresh=1
     """
     refresh = request.GET.get("refresh") == "1"
     try:
@@ -828,11 +828,31 @@ def stripe_status_view(request: HttpRequest) -> HttpResponse:
         services = []
         svc_count = 0
         messages.error(request, f"Stripe error: {e}")
+    status = get_key_status()
     ctx = {
         "catalog_count": svc_count,
         "catalog_preview": services[:5],  # tiny peek
+        "key_status": status,
     }
     return render(request, "core/stripe_status.html", ctx)
+
+@login_required
+def stripe_key_update(request: HttpRequest) -> HttpResponse:
+    """
+    Admin: Change Stripe key. Writes to keyring when enabled; otherwise in-memory for this process.
+    """
+    if request.method != "POST":
+        return redirect("stripe_status")
+    new_key = (request.POST.get("stripe_api_key") or "").strip()
+    update_stripe_key(new_key if new_key else None)
+    st = get_key_status()
+    mode = st.get("mode") or "unknown"
+    tl = st.get("test_or_live") or "unknown"
+    if st.get("configured"):
+        messages.success(request, f"Stripe key updated (mode: {mode}, env: {tl}).")
+    else:
+        messages.warning(request, f"Stripe key cleared (mode: {mode}).")
+    return redirect("stripe_status")
 
 
 # -----------------------------

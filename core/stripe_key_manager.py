@@ -1,78 +1,106 @@
-"""
-Stripe key manager for core app.
-
-Implements the required functions:
-- get_stripe_key(): read from ENV first, fallback to DB model StripeSettings if present.
-- get_key_status(): {configured: bool, mode: 'test'|'live'|None} based on key prefix.
-- update_stripe_key(key:str): persist to DB (create/update single row).
-"""
-import os
+from __future__ import annotations
+import threading
 from typing import Optional, Dict
-from .models import StripeSettings
 
+from django.conf import settings
+from django.utils.timezone import now
+import os
+
+_LOCK = threading.RLock()
+_MEM: Dict[str, str] = {}  # in-memory override for current process only
+
+def _has_keyring() -> bool:
+    if not getattr(settings, "USE_KEYRING", False):
+        return False
+    try:
+        import keyring  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+def _get_from_keyring() -> Optional[str]:
+    if not _has_keyring():
+        return None
+    try:
+        import keyring
+        return keyring.get_password(settings.KEYRING_SERVICE_NAME, "STRIPE_API_KEY")
+    except Exception:
+        return None
+
+def _set_in_keyring(value: Optional[str]) -> bool:
+    if not _has_keyring():
+        return False
+    try:
+        import keyring
+        if value:
+            keyring.set_password(settings.KEYRING_SERVICE_NAME, "STRIPE_API_KEY", value)
+        else:
+            try:
+                keyring.delete_password(settings.KEYRING_SERVICE_NAME, "STRIPE_API_KEY")
+            except Exception:
+                pass
+        return True
+    except Exception:
+        return False
 
 def get_stripe_key() -> Optional[str]:
-    """Read from ENV first, fallback to DB model StripeSettings if present."""
-    # Check environment variables first
-    for name in ("STRIPE_SECRET_KEY", "STRIPE_API_KEY"):
-        key = os.getenv(name)
-        if key and key.strip():
-            return key.strip()
-    
-    # Fallback to database
-    try:
-        db_key = StripeSettings.get_stripe_key()
-        if db_key and db_key.strip():
-            return db_key.strip()
-    except Exception:
-        pass
-    
-    return None
+    """
+    Resolve the currently active Stripe secret key.
+    Priority: in-memory override → keyring (if enabled) → environment.
+    """
+    with _LOCK:
+        if "STRIPE_API_KEY" in _MEM:
+            return _MEM.get("STRIPE_API_KEY") or None
+    # keyring
+    key = _get_from_keyring()
+    if key:
+        return key
+    # env
+    return os.getenv("STRIPE_API_KEY") or None
 
+def update_stripe_key(new_key: Optional[str]) -> None:
+    """
+    Update key in the most persistent store available:
+    - If keyring is enabled → write to keyring and clear in-memory override.
+    - Else → set in-memory override for this process (does not write env).
+    """
+    with _LOCK:
+        if _has_keyring():
+            _set_in_keyring(new_key)
+            # clear memory so keyring is source of truth
+            if "STRIPE_API_KEY" in _MEM:
+                del _MEM["STRIPE_API_KEY"]
+        else:
+            # last resort: memory only for this process
+            if new_key:
+                _MEM["STRIPE_API_KEY"] = new_key
+            else:
+                _MEM.pop("STRIPE_API_KEY", None)
 
-def get_key_status() -> Dict[str, Optional[object]]:
-    """Return {configured: bool, mode: 'test'|'live'|None} based on key prefix."""
+def get_key_status() -> Dict[str, object]:
+    """
+    Returns:
+      {
+        configured: bool,
+        mode: 'memory'|'keyring'|'env'|None,
+        test_or_live: 'test'|'live'|None,
+      }
+    """
     key = get_stripe_key()
-    
-    if not key:
-        return {
-            'configured': False,
-            'mode': None
-        }
-    
     mode = None
-    if key.startswith('sk_test_'):
-        mode = 'test'
-    elif key.startswith('sk_live_'):
-        mode = 'live'
-    
+    with _LOCK:
+        if "STRIPE_API_KEY" in _MEM:
+            mode = "memory"
+    if mode is None:
+        if _get_from_keyring():
+            mode = "keyring"
+        elif os.getenv("STRIPE_API_KEY"):
+            mode = "env"
+    test_or_live = None
+    if key:
+        test_or_live = "live" if (key.startswith("sk_live") or "_live_" in key) else "test"
     return {
-        'configured': True,
-        'mode': mode
+        "configured": bool(key),
+        "mode": mode,
+        "test_or_live": test_or_live,
     }
-
-
-def update_stripe_key(key: str) -> None:
-    """Persist to DB (create/update single row)."""
-    if not key or not isinstance(key, str):
-        raise ValueError("Key must be a non-empty string")
-    
-    key = key.strip()
-    if not key:
-        raise ValueError("Key must be a non-empty string")
-    
-    # Determine if it's live mode based on key prefix
-    is_live = key.startswith('sk_live_')
-    
-    # Create or update the single StripeSettings row
-    obj, created = StripeSettings.objects.get_or_create(
-        defaults={
-            'stripe_secret_key': key,
-            'is_live_mode': is_live
-        }
-    )
-    
-    if not created:
-        obj.stripe_secret_key = key
-        obj.is_live_mode = is_live
-        obj.save()

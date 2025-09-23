@@ -83,6 +83,11 @@ if CELERY_BROKER_URL and START_CELERY_BEAT:
         },
     }
 
+# --- Stripe key storage ---
+# Prefer OS keyring if available/allowed; otherwise env var + in-memory override.
+USE_KEYRING = os.getenv("USE_KEYRING", "0") == "1"
+KEYRING_SERVICE_NAME = os.getenv("KEYRING_SERVICE_NAME", "NewFarmDogWalking")
+
 # --- Client portal auth ---
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/portal/"
