@@ -39,6 +39,7 @@ from .booking_filters import filter_active_bookings
 from .ics_export import bookings_to_ics
 from .date_range_helpers import parse_label, TZ
 from .subscription_sync import sync_subscriptions_to_bookings_and_calendar
+from .unified_booking_helpers import get_canonical_service_info
 from .admin_views import stripe_status_view, stripe_diagnostics_view
 
 
@@ -673,3 +674,33 @@ def tag_delete(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, "Tag deleted.")
         return redirect("tags_list")
     return render(request, "core/tag_confirm_delete.html", {"obj": obj})
+
+
+# -----------------------------
+# API: service info → canonical + price
+# -----------------------------
+@login_required
+def api_service_info(request: HttpRequest) -> JsonResponse:
+    """
+    Query params:
+      - service_code (optional)
+      - service_name (optional)
+      - service_label (optional)
+      - price_cents (optional override)
+    Returns canonical fields incl. price_cents.
+    """
+    code  = request.GET.get("service_code") or None
+    name  = request.GET.get("service_name") or None
+    label = request.GET.get("service_label") or None
+    price = request.GET.get("price_cents")
+    try:
+        price = int(price) if price not in (None, "",) else None
+    except Exception:
+        price = None
+    info = get_canonical_service_info(
+        service_code=code,
+        service_name=name,
+        service_label=label,
+        price_cents=price,
+    )
+    return JsonResponse(info)

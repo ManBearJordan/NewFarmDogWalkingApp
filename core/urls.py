@@ -22,6 +22,8 @@ urlpatterns = [
     path("subscriptions/", views.subscriptions_list, name="subscriptions_list"),
     path("subscriptions/sync/", views.subscriptions_sync, name="subscriptions_sync"),
     path("subscriptions/<str:sub_id>/delete/", views.subscription_delete, name="subscription_delete"),
+    # API: service info for price autofill
+    path("api/service-info/", views.api_service_info, name="api_service_info"),
     # Pets
     path("pets/", views.PetListView.as_view(), name="pet_list"),
     path("pets/new/", views.PetCreateView.as_view(), name="pet_create"),
