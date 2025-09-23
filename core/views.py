@@ -41,6 +41,9 @@ from .ics_export import bookings_to_ics
 from .date_range_helpers import parse_label, TZ, list_presets
 from .subscription_sync import sync_subscriptions_to_bookings_and_calendar
 from .unified_booking_helpers import get_canonical_service_info
+from .unified_booking_helpers import create_booking_with_unified_fields
+from .booking_create_service import create_bookings_from_rows
+from .stripe_integration import get_invoice_public_url
 from .admin_views import stripe_diagnostics_view
 
 
@@ -867,3 +870,134 @@ def portal_home(request: HttpRequest) -> HttpResponse:
         "bookings": rows,
         "note": "",
     })
+
+
+# -----------------------------
+# Portal Booking: create
+# -----------------------------
+@login_required
+def portal_booking_create(request: HttpRequest) -> HttpResponse:
+    """
+    Client-facing booking form using live Stripe catalog.
+    Validates availability against Bookings + SubOccurrence (active).
+    On success: creates booking and applies credit-first + invoice reuse.
+    Redirects to confirmation showing invoice URL if due.
+    """
+    from .models import Client, Booking, SubOccurrence
+    user = request.user
+    client = getattr(user, "client_profile", None)
+    if not client:
+        messages.error(request, "Your login is not linked to a client profile.")
+        return redirect("portal_home")
+
+    # Build service choices from live catalog
+    catalog = list_booking_services(force_refresh=False)
+    # value: price_id (preferred stable choice), but we still resolve via label/name if needed
+    service_choices = [(s["price_id"], f'{s.get("display_name") or s.get("service_code") or "Service"} — ${(s.get("amount_cents") or 0)/100:.2f}') for s in catalog]
+
+    if request.method == "POST":
+        price_id = (request.POST.get("service_price_id") or "").strip()
+        location = (request.POST.get("location") or "").strip()
+        notes = (request.POST.get("notes") or "").strip()
+        start_raw = (request.POST.get("start_dt") or "").strip()
+        end_raw = (request.POST.get("end_dt") or "").strip()
+
+        # Parse datetimes in Australia/Brisbane
+        try:
+            # Expect HTML5 datetime-local (YYYY-MM-DDTHH:MM)
+            from datetime import datetime
+            start_dt = datetime.fromisoformat(start_raw)
+            end_dt = datetime.fromisoformat(end_raw)
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=TZ)
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=TZ)
+        except Exception:
+            messages.error(request, "Invalid start/end date/time.")
+            return render(request, "core/portal_booking_form.html", {
+                "service_choices": service_choices,
+                "defaults": request.POST,
+            })
+
+        if end_dt <= start_dt:
+            messages.error(request, "End time must be after start time.")
+            return render(request, "core/portal_booking_form.html", {
+                "service_choices": service_choices,
+                "defaults": request.POST,
+            })
+
+        # Resolve catalog row by price_id; fall back to canonical resolver for label/name
+        selected = next((s for s in catalog if s["price_id"] == price_id), None)
+        if not selected:
+            messages.error(request, "Please choose a valid service.")
+            return render(request, "core/portal_booking_form.html", {
+                "service_choices": service_choices,
+                "defaults": request.POST,
+            })
+
+        # Availability: no overlap with any non-cancelled booking; also block if overlapping an active hold.
+        overlap_q = Q(start_dt__lt=end_dt, end_dt__gt=start_dt)
+        clashes = (
+            Booking.objects
+            .filter(overlap_q)
+            .exclude(status__in=["cancelled", "canceled", "void", "voided"])
+            .exclude(deleted=True)
+            .exists()
+        )
+        hold_clashes = (
+            SubOccurrence.objects
+            .filter(active=True, start_dt__lt=end_dt, end_dt__gt=start_dt)
+            .exists()
+        )
+        if clashes or hold_clashes:
+            messages.error(request, "That time is not available. Please choose a different slot.")
+            return render(request, "core/portal_booking_form.html", {
+                "service_choices": service_choices,
+                "defaults": request.POST,
+            })
+
+        # Build a single-row batch to reuse credit+invoice workflow
+        row = {
+            "start_dt": start_dt,
+            "end_dt": end_dt,
+            "service_label": selected.get("display_name"),
+            "service_name": selected.get("display_name"),
+            "service_code": selected.get("service_code"),
+            "price_cents": selected.get("amount_cents"),
+            "location": location,
+            "dogs": 1,
+            "notes": notes,
+        }
+        result = create_bookings_from_rows(client, [row])
+        b = result["bookings"][0]  # the one we just created
+
+        # Decide what to show: public invoice URL if any amount due (booking has stripe_invoice_id)
+        hosted_url = None
+        if b.stripe_invoice_id:
+            hosted_url = get_invoice_public_url(b.stripe_invoice_id)
+
+        # Stash confirmation data in session (simple pass-through) and redirect (avoid form resubmits)
+        request.session["portal_confirm"] = {
+            "booking_id": b.id,
+            "service": b.service_label or b.service_name or b.service_code or "Service",
+            "start": b.start_dt.isoformat(),
+            "end": b.end_dt.isoformat(),
+            "due": bool(b.stripe_invoice_id),
+            "invoice_url": hosted_url,
+        }
+        return redirect("portal_booking_confirm")
+
+    # GET: render form
+    return render(request, "core/portal_booking_form.html", {
+        "service_choices": service_choices,
+        "defaults": {},
+    })
+
+
+@login_required
+def portal_booking_confirm(request: HttpRequest) -> HttpResponse:
+    ctx = request.session.pop("portal_confirm", None)
+    if not ctx:
+        messages.info(request, "No recent booking found.")
+        return redirect("portal_home")
+    return render(request, "core/portal_booking_confirm.html", {"ctx": ctx, "TZ": TZ})

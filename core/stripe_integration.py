@@ -295,6 +295,21 @@ def get_invoice_dashboard_url(invoice_id: str) -> str:
     return open_invoice_smart(invoice_id)
 
 
+def get_invoice_public_url(invoice_id: str) -> Optional[str]:
+    """
+    Return the hosted invoice URL (client-facing) or None if not available.
+    """
+    try:
+        _init_stripe()
+    except Exception:
+        return None
+    try:
+        inv = stripe.Invoice.retrieve(invoice_id, expand=[])
+        return inv.get("hosted_invoice_url")
+    except Exception:
+        return None
+
+
 def _dashboard_base() -> str:
     key = get_stripe_key()
     if not key:

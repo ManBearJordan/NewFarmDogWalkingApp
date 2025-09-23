@@ -1,0 +1,43 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h2 class="mb-3">New Booking</h2>
+
+{% if messages %}
+  {% for m in messages %}<div class="alert alert-warning py-1">{{ m }}</div>{% endfor %}
+{% endif %}
+
+<form method="post" class="card p-3">
+  {% csrf_token %}
+  <div class="mb-3">
+    <label class="form-label">Service</label>
+    <select class="form-select" name="service_price_id" required>
+      <option value="">Select a service…</option>
+      {% for value,label in service_choices %}
+        <option value="{{ value }}" {% if defaults.service_price_id == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label class="form-label">Start (AEST)</label>
+      <input type="datetime-local" class="form-control" name="start_dt" value="{{ defaults.start_dt|default:'' }}" required>
+    </div>
+    <div class="col-md-6 mb-3">
+      <label class="form-label">End (AEST)</label>
+      <input type="datetime-local" class="form-control" name="end_dt" value="{{ defaults.end_dt|default:'' }}" required>
+    </div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Location</label>
+    <input type="text" class="form-control" name="location" value="{{ defaults.location|default:'' }}" placeholder="e.g., 123 James St, New Farm">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Notes (optional)</label>
+    <textarea class="form-control" name="notes" rows="2">{{ defaults.notes|default:'' }}</textarea>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'portal_home' %}">Cancel</a>
+    <button class="btn btn-primary">Submit booking</button>
+  </div>
+</form>
+{% endblock %}

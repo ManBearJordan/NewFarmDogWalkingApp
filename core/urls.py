@@ -43,6 +43,8 @@ urlpatterns = [
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
     # --- Portal ---
     path("portal/", views.portal_home, name="portal_home"),
+    path("portal/bookings/new/", views.portal_booking_create, name="portal_booking_create"),
+    path("portal/bookings/confirm/", views.portal_booking_confirm, name="portal_booking_confirm"),
     # Admin Tasks (AdminEvent CRUD)
     path("admin/tasks/", views.admin_tasks_list, name="admin_tasks_list"),
     path("admin/tasks/new/", views.admin_task_create, name="admin_task_create"),
