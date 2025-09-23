@@ -3,18 +3,21 @@
 {% block content %}
 <h2 class="mb-3">Bookings</h2>
 
-<form method="get" class="row g-2 mb-3">
+<form method="get" class="row g-2 mb-3" id="bookingFilters">
   <div class="col-auto">
-    <select name="range" class="form-select">
-      <option value="this-week" {% if range_label == "this-week" %}selected{% endif %}>This week</option>
-      <option value="next-week" {% if range_label == "next-week" %}selected{% endif %}>Next week</option>
-      <option value="two-weeks" {% if range_label == "two-weeks" %}selected{% endif %}>Two weeks</option>
-      <option value="four-weeks" {% if range_label == "four-weeks" %}selected{% endif %}>Four weeks</option>
-      <option value="this-month" {% if range_label == "this-month" %}selected{% endif %}>This month</option>
-      <option value="next-month" {% if range_label == "next-month" %}selected{% endif %}>Next month</option>
-      <option value="month-after" {% if range_label == "month-after" %}selected{% endif %}>Month after</option>
-      <option value="next-3-months" {% if range_label == "next-3-months" %}selected{% endif %}>Next 3 months</option>
+    <select name="range" id="rangeSelect" class="form-select">
+      {% for val,label in presets %}
+        <option value="{{ val }}" {% if val == range_label %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
     </select>
+  </div>
+  <div class="col-auto" id="customDates" style="display: {% if range_label == 'custom' %}block{% else %}none{% endif %}">
+    <div class="input-group">
+      <span class="input-group-text">Start</span>
+      <input class="form-control" type="date" name="start" value="{{ start_q }}">
+      <span class="input-group-text">End</span>
+      <input class="form-control" type="date" name="end" value="{{ end_q }}">
+    </div>
   </div>
   <div class="col-auto">
     <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search client/service/location/notes">
@@ -24,7 +27,8 @@
     <a class="btn btn-outline-secondary" href="{% url 'booking_list' %}">Reset</a>
   </div>
   <div class="col-auto ms-auto">
-    <a class="btn btn-outline-success" href="{% url 'booking_export_ics' %}?range={{ range_label }}">Export all (.ics)</a>
+    <a class="btn btn-outline-success"
+       href="{% url 'booking_export_ics' %}?range={{ range_label }}&start={{ start_q }}&end={{ end_q }}">Export all (.ics)</a>
     <button type="submit" formaction="{% url 'booking_export_ics' %}" formmethod="get" class="btn btn-success"
             onclick="this.form.ids.value = Array.from(document.querySelectorAll('.rowcheck:checked')).map(cb=>cb.value).join(',');">
       Export selected (.ics)
@@ -89,6 +93,10 @@
 </div>
 
 <script>
-  // helper for string split in template above
+  // Toggle custom start/end when "Custom range" is selected
+  document.getElementById('rangeSelect')?.addEventListener('change', function(){
+    const show = this.value === 'custom';
+    document.getElementById('customDates').style.display = show ? 'block' : 'none';
+  });
 </script>
 {% endblock %}
