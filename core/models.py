@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 
 class StripeSettings(models.Model):
@@ -53,6 +54,26 @@ class Client(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class StripeKeyAudit(models.Model):
+    """
+    Record when a staff user updates the Stripe key via the admin UI.
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    when = models.DateTimeField(default=timezone.now, db_index=True)
+    previous_mode = models.CharField(max_length=32, null=True, blank=True)
+    new_mode = models.CharField(max_length=32, null=True, blank=True)
+    previous_test_or_live = models.CharField(max_length=16, null=True, blank=True)
+    new_test_or_live = models.CharField(max_length=16, null=True, blank=True)
+    note = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-when"]
+
+    def __str__(self):
+        who = getattr(self.user, "username", "unknown")
+        return f"StripeKey change by {who} at {self.when.isoformat()}"
 
 
 class Pet(models.Model):

@@ -30,7 +30,8 @@
         </form>
       {% else %}
         <div class="text-muted small">
-          Only staff can change the Stripe key. If you need to update it, contact a staff user.
+          Only staff can change the Stripe key.
+          <a href="mailto:{{ support_email }}" class="ms-2">Contact support</a>
         </div>
       {% endif %}
     </div>

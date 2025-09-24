@@ -87,6 +87,8 @@ if CELERY_BROKER_URL and START_CELERY_BEAT:
 # Prefer OS keyring if available/allowed; otherwise env var + in-memory override.
 USE_KEYRING = os.getenv("USE_KEYRING", "0") == "1"
 KEYRING_SERVICE_NAME = os.getenv("KEYRING_SERVICE_NAME", "NewFarmDogWalking")
+# Contact for non-staff support (used in templates)
+SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "support@newfarmdogwalking.example")
 
 # --- Client portal auth ---
 LOGIN_URL = "/accounts/login/"

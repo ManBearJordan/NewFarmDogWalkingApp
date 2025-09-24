@@ -1,5 +1,13 @@
 from django.contrib import admin
 from .models import StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence, Tag
+from .models import StripeKeyAudit
+
+
+@admin.register(StripeKeyAudit)
+class StripeKeyAuditAdmin(admin.ModelAdmin):
+    list_display = ("when", "user", "previous_mode", "new_mode", "previous_test_or_live", "new_test_or_live")
+    list_filter = ("previous_mode", "new_mode", "previous_test_or_live", "new_test_or_live")
+    search_fields = ("user__username", "note")
 
 
 @admin.register(StripeSettings)
