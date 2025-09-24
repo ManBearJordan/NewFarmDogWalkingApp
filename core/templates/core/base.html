@@ -7,6 +7,10 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
+    <!-- Toasts container (messages) -->
+    <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080">
+      <div id="toast-stack" class="toast-container"></div>
+    </div>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
             <a class="navbar-brand" href="{% url 'client_list' %}">NewFarm Dog Walking</a>
@@ -54,21 +58,49 @@
         </div>
     </nav>
     
-    <div class="container mt-4">
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-        
-        {% block content %}
-        {% endblock %}
+    <div class="container py-3">
+        {% block content %}{% endblock %}
     </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      // Render Django messages as Bootstrap toasts (expects messages in context)
+      (function(){
+        const msgs = [
+          {% if messages %}
+            {% for m in messages %}
+              { level: "{{ m.tags|default:'info' }}", text: {{ m|safe|escapejs }} },
+            {% endfor %}
+          {% endif %}
+        ];
+        const stack = document.getElementById('toast-stack');
+        msgs.forEach(m => {
+          const el = document.createElement('div');
+          el.className = 'toast align-items-center text-bg-' + (m.level.includes('error')?'danger':(m.level.includes('success')?'success':'info')) + ' border-0';
+          el.role = 'status';
+          el.ariaLive = 'polite';
+          el.ariaAtomic = 'true';
+          el.innerHTML = `
+            <div class="d-flex">
+              <div class="toast-body">${m.text}</div>
+              <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>`;
+          stack.appendChild(el);
+          new bootstrap.Toast(el, { delay: 3500 }).show();
+        });
+      })();
+
+      // Prevent double-submits: add data-disable-on-submit to <form>
+      (function(){
+        document.querySelectorAll('form[data-disable-on-submit]').forEach(f => {
+          f.addEventListener('submit', function(){
+            this.querySelectorAll('button[type="submit"],input[type="submit"]').forEach(b => {
+              b.disabled = true; b.dataset.originalText = b.innerText; b.innerText = 'Working...';
+            });
+          });
+        });
+      })();
+    </script>
     {% block scripts %}
     {% endblock %}
 </body>
