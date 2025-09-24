@@ -1,28 +1,42 @@
 {% extends "core/base.html" %}
+{% load money_filters %}
 {% block content %}
-<h2 class="mb-3">Booking submitted</h2>
-<p>Service: <strong>{{ ctx.service }}</strong></p>
-<p>When: <strong>{{ ctx.start|date:"Y-m-d H:i" }}</strong> – <strong>{{ ctx.end|date:"Y-m-d H:i" }}</strong> (AEST)</p>
-
-{% if ctx.due %}
-  <div class="alert alert-info">
-    A payment is due for this booking.
-    {% if ctx.invoice_url %}
-      <div class="mt-2">
-        <a class="btn btn-primary" href="{{ ctx.invoice_url }}" target="_blank" rel="noopener">Open invoice</a>
-      </div>
-    {% else %}
-      <div class="small text-muted mt-2">An invoice has been created. If the link isn't available yet, it will appear shortly.</div>
-    {% endif %}
+<div class="d-flex align-items-center mb-3">
+  <h2 class="mb-0">Booking created</h2>
+  <div class="ms-auto">
+    <span class="badge text-bg-secondary" title="Remaining credit">
+      Credit: {{ client_credit_cents|cents_to_dollars }}
+    </span>
   </div>
-{% else %}
-  <div class="alert alert-success">This booking is fully covered by your client credit. No payment is due.</div>
-{% endif %}
+</div>
 
-<div class="mt-3">
-  <a class="btn btn-outline-primary" href="{% url 'portal_home' %}">Back to My Bookings</a>
-  <a class="btn btn-outline-secondary" href="{% url 'portal_booking_create' %}">Make another booking</a>
-  <a class="btn btn-outline-success" href="{% url 'booking_export_ics' %}?ids={{ ctx.booking_id }}">Add to calendar (.ics)</a>
-  <!-- note: booking_export_ics supports selected IDs -->
+<div class="card">
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-md-6">
+        <div><strong>Service:</strong> {{ data.service }}</div>
+        <div><strong>Start:</strong> {{ data.start }}</div>
+        <div><strong>End:</strong> {{ data.end }}</div>
+      </div>
+      <div class="col-md-6">
+        {% if data.due %}
+          {% if data.invoice_url %}
+            <a class="btn btn-primary" href="{{ data.invoice_url }}" target="_blank" rel="noopener">Open invoice</a>
+          {% else %}
+            <div class="alert alert-info mt-2" role="alert">
+              A payment is due, but the invoice link isn't available yet. Please refresh in a few seconds.
+            </div>
+          {% endif %}
+        {% else %}
+          <div class="alert alert-success mt-2" role="alert">
+            Covered by credit — no payment due.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="mt-3">
+      <a class="btn btn-outline-secondary" href="{% url 'portal_home' %}">Back to portal</a>
+    </div>
+  </div>
 </div>
 {% endblock %}

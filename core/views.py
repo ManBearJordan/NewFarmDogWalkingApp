@@ -38,6 +38,15 @@ from .stripe_integration import (
 )
 from .stripe_key_manager import get_key_status, update_stripe_key
 from .credit import add_client_credit
+
+
+def _get_linked_client(user):
+    """Return the client linked to this auth user (adjust if your model differs)."""
+    from .models import Client
+    try:
+        return Client.objects.get(user=user)
+    except Client.DoesNotExist:
+        return None
 from .booking_filters import filter_active_bookings
 from .ics_export import bookings_to_ics
 from .date_range_helpers import parse_label, TZ, list_presets
@@ -889,12 +898,14 @@ def portal_home(request: HttpRequest) -> HttpResponse:
     """
     from .models import Client, Booking
     user = request.user
-    client = getattr(user, "client_profile", None)  # via Client.user OneToOne
+    client = _get_linked_client(user)
     if not client:
         return render(request, "core/portal_home.html", {
             "client": None,
             "bookings": [],
             "note": "Your login is not linked to a client profile yet. Please contact support.",
+            "client_credit_cents": 0,
+            "client_obj": None,
         })
     now = timezone.now().astimezone(TZ)
     horizon = now + timezone.timedelta(days=90)
@@ -908,11 +919,14 @@ def portal_home(request: HttpRequest) -> HttpResponse:
         .exclude(status__in=["cancelled", "canceled", "void", "voided"])
         .order_by("start_dt")
     )
-    return render(request, "core/portal_home.html", {
+    ctx = {
         "client": client,
         "bookings": rows,
         "note": "",
-    })
+        "client_credit_cents": getattr(client, "credit_cents", 0) if client else 0,
+        "client_obj": client,
+    }
+    return render(request, "core/portal_home.html", ctx)
 
 
 # -----------------------------
@@ -928,7 +942,7 @@ def portal_booking_create(request: HttpRequest) -> HttpResponse:
     """
     from .models import Client, Booking, SubOccurrence
     user = request.user
-    client = getattr(user, "client_profile", None)
+    client = _get_linked_client(user)
     if not client:
         messages.error(request, "Your login is not linked to a client profile.")
         return redirect("portal_home")
@@ -993,11 +1007,15 @@ def portal_booking_create(request: HttpRequest) -> HttpResponse:
             .exists()
         )
         if clashes or hold_clashes:
-            messages.error(request, "That time is not available. Please choose a different slot.")
-            return render(request, "core/portal_booking_form.html", {
-                "service_choices": service_choices,
-                "defaults": request.POST,
-            })
+            # Friendlier validation copy
+            friendly = "That time conflicts with an existing booking/hold. Please pick a different time."
+            messages.error(request, friendly)
+            return render(
+                request,
+                "core/portal_booking_form.html",
+                {"service_choices": service_choices, "form_error": friendly, "defaults": request.POST},
+                status=200,
+            )
 
         # Build a single-row batch to reuse credit+invoice workflow
         row = {
@@ -1039,8 +1057,15 @@ def portal_booking_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def portal_booking_confirm(request: HttpRequest) -> HttpResponse:
-    ctx = request.session.pop("portal_confirm", None)
-    if not ctx:
+    data = request.session.pop("portal_confirm", None)
+    if not data:
         messages.info(request, "No recent booking found.")
         return redirect("portal_home")
-    return render(request, "core/portal_booking_confirm.html", {"ctx": ctx, "TZ": TZ})
+    client = _get_linked_client(request.user)
+    ctx = {
+        "data": data,
+        "client_credit_cents": getattr(client, "credit_cents", 0) if client else 0,
+        "client_obj": client,
+        "TZ": TZ,
+    }
+    return render(request, "core/portal_booking_confirm.html", ctx)
