@@ -21,12 +21,18 @@
       <div><strong>{{ key_status.test_or_live|default:"—" }}</strong></div>
     </div>
     <div class="ms-auto">
-      <form method="post" action="{% url 'stripe_key_update' %}" class="d-flex gap-2" data-disable-on-submit>
-        {% csrf_token %}
-        <label for="stripeKey" class="visually-hidden">Stripe Secret Key</label>
-        <input id="stripeKey" type="password" name="stripe_api_key" class="form-control" placeholder="sk_test_... or sk_live_..." style="min-width: 320px;" aria-label="Stripe secret key">
-        <button class="btn btn-primary" title="Save Stripe key">Change Stripe Key</button>
-      </form>
+      {% if request.user.is_staff %}
+        <form method="post" action="{% url 'stripe_key_update' %}" class="d-flex gap-2" data-disable-on-submit>
+          {% csrf_token %}
+          <label for="stripeKey" class="visually-hidden">Stripe Secret Key</label>
+          <input id="stripeKey" type="password" name="stripe_api_key" class="form-control" placeholder="sk_test_... or sk_live_..." style="min-width: 320px;" aria-label="Stripe secret key">
+          <button class="btn btn-primary" title="Save Stripe key">Change Stripe Key</button>
+        </form>
+      {% else %}
+        <div class="text-muted small">
+          Only staff can change the Stripe key. If you need to update it, contact a staff user.
+        </div>
+      {% endif %}
     </div>
   </div>
 </div>
