@@ -1,69 +1,147 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-bs-theme="auto">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}NewFarm Dog Walking App{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}NewFarmDogWalking{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    /* Global spinner overlay */
+    #globalSpinner {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,.25);
+      z-index: 2000;
+      backdrop-filter: blur(1px);
+    }
+    #globalSpinner .spinner-border {
+      width: 3rem; height: 3rem;
+    }
+  </style>
 </head>
 <body>
-    <!-- Toasts container (messages) -->
-    <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080">
-      <div id="toast-stack" class="toast-container"></div>
-    </div>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'client_list' %}">NewFarm Dog Walking</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'booking_list' %}">Bookings</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'subscriptions_list' %}">Subscriptions</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'pet_list' %}">Pets</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'tags_list' %}">Tags</a>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="adminMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Admin
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="adminMenu">
-                            <li><a class="dropdown-item" href="{% url 'admin_tasks_list' %}">Tasks</a></li>
-                            <li><a class="dropdown-item" href="{% url 'stripe_status' %}">Stripe Status</a></li>
-                            <li><a class="dropdown-item" href="{% url 'stripe_diagnostics' %}">Stripe Diagnostics</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'client_list' %}">Clients</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'booking_create_batch' %}">Create Bookings</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'calendar_view' %}">Calendar</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'reports_invoices_list' %}">Reports</a>
-                    </li>
-                </ul>
-            </div>
+  <!-- Top bar with theme toggle -->
+  <nav class="navbar navbar-expand-lg border-bottom" aria-label="Top navigation">
+    <div class="container">
+      <a class="navbar-brand" href="/">NFDW</a>
+      <div class="ms-auto d-flex align-items-center gap-2">
+        <div class="btn-group" role="group" aria-label="Theme selector">
+          <button class="btn btn-sm btn-outline-secondary" id="themeLightBtn" type="button" title="Light theme">Light</button>
+          <button class="btn btn-sm btn-outline-secondary" id="themeAutoBtn"  type="button" title="Follow system (auto)">Auto</button>
+          <button class="btn btn-sm btn-outline-secondary" id="themeDarkBtn"  type="button" title="Dark theme">Dark</button>
         </div>
-    </nav>
-    
-    <div class="container py-3">
-        {% block content %}{% endblock %}
+      </div>
     </div>
+  </nav>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
+  <!-- Toasts container (messages) -->
+  <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080">
+    <div id="toast-stack" class="toast-container"></div>
+  </div>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+      <div class="container">
+          <a class="navbar-brand" href="{% url 'client_list' %}">NewFarm Dog Walking</a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+              <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbarNav">
+              <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                  <li class="nav-item">
+                      <a class="nav-link" href="{% url 'booking_list' %}">Bookings</a>
+                  </li>
+                  <li class="nav-item">
+                      <a class="nav-link" href="{% url 'subscriptions_list' %}">Subscriptions</a>
+                  </li>
+                  <li class="nav-item">
+                      <a class="nav-link" href="{% url 'pet_list' %}">Pets</a>
+                  </li>
+                  <li class="nav-item">
+                      <a class="nav-link" href="{% url 'tags_list' %}">Tags</a>
+                  </li>
+                  <li class="nav-item dropdown">
+                      <a class="nav-link dropdown-toggle" href="#" id="adminMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                          Admin
+                      </a>
+                      <ul class="dropdown-menu" aria-labelledby="adminMenu">
+                          <li><a class="dropdown-item" href="{% url 'admin_tasks_list' %}">Tasks</a></li>
+                          <li><a class="dropdown-item" href="{% url 'stripe_status' %}">Stripe Status</a></li>
+                          <li><a class="dropdown-item" href="{% url 'stripe_diagnostics' %}">Stripe Diagnostics</a></li>
+                      </ul>
+                  </li>
+                  <li class="nav-item">
+                      <a class="nav-link" href="{% url 'client_list' %}">Clients</a>
+                  </li>
+                  <li class="nav-item">
+                      <a class="nav-link" href="{% url 'booking_create_batch' %}">Create Bookings</a>
+                  </li>
+                  <li class="nav-item">
+                      <a class="nav-link" href="{% url 'calendar_view' %}">Calendar</a>
+                  </li>
+                  <li class="nav-item">
+                      <a class="nav-link" href="{% url 'reports_invoices_list' %}">Reports</a>
+                  </li>
+              </ul>
+          </div>
+      </div>
+  </nav>
+  
+  <div class="container py-3">
+      {% block content %}{% endblock %}
+  </div>
+
+  <!-- Global spinner overlay -->
+  <div id="globalSpinner" aria-hidden="true">
+    <div class="text-center">
+      <div class="spinner-border" role="status" aria-label="Loading"></div>
+      <div class="mt-2 fw-semibold">Working…</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+      // -----------------------------
+      // Theme: light/dark/auto with persistence
+      // -----------------------------
+      (function(){
+        const storageKey = 'nfdw-theme';
+        const getPreferred = () => {
+          const saved = localStorage.getItem(storageKey);
+          if (saved === 'light' || saved === 'dark' || saved === 'auto') return saved;
+          return 'auto';
+        };
+        const applyTheme = (mode) => {
+          const html = document.documentElement;
+          if (mode === 'auto') {
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            html.setAttribute('data-bs-theme', prefersDark ? 'dark' : 'light');
+          } else {
+            html.setAttribute('data-bs-theme', mode);
+          }
+          // update button active states
+          document.getElementById('themeLightBtn')?.classList.toggle('active', mode==='light');
+          document.getElementById('themeAutoBtn')?.classList.toggle('active', mode==='auto');
+          document.getElementById('themeDarkBtn')?.classList.toggle('active', mode==='dark');
+        };
+        const current = getPreferred();
+        applyTheme(current);
+        // react to system changes when in auto
+        const mql = window.matchMedia('(prefers-color-scheme: dark)');
+        mql.addEventListener?.('change', () => { if (getPreferred()==='auto') applyTheme('auto'); });
+        // wire buttons
+        document.getElementById('themeLightBtn')?.addEventListener('click', ()=>{ localStorage.setItem(storageKey,'light'); applyTheme('light'); });
+        document.getElementById('themeAutoBtn')?.addEventListener('click',  ()=>{ localStorage.setItem(storageKey,'auto');  applyTheme('auto');  });
+        document.getElementById('themeDarkBtn')?.addEventListener('click',  ()=>{ localStorage.setItem(storageKey,'dark');  applyTheme('dark');  });
+      })();
+
+      // -----------------------------
+      // Global spinner helpers
+      // -----------------------------
+      function showSpinner(){ document.getElementById('globalSpinner').style.display = 'flex'; }
+      function hideSpinner(){ document.getElementById('globalSpinner').style.display = 'none'; }
+
       // Render Django messages as Bootstrap toasts (expects messages in context)
       (function(){
         const msgs = [
@@ -97,10 +175,23 @@
             this.querySelectorAll('button[type="submit"],input[type="submit"]').forEach(b => {
               b.disabled = true; b.dataset.originalText = b.innerText; b.innerText = 'Working...';
             });
+            showSpinner();
           });
         });
       })();
-    </script>
+
+      // Show spinner when clicking any element with data-show-spinner (e.g., long GETs)
+      (function(){
+        document.addEventListener('click', function(e){
+          const t = e.target.closest('[data-show-spinner]');
+          if (!t) return;
+          // Allow normal navigation; just show spinner
+          showSpinner();
+          // In case navigation is prevented by JS, hide after a grace period
+          setTimeout(()=>{ try{ hideSpinner(); }catch(e){} }, 12000);
+        }, { capture: true });
+      })();
+  </script>
     {% block scripts %}
     {% endblock %}
 </body>
