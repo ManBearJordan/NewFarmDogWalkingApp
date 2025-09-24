@@ -45,11 +45,10 @@ This kit bootstraps:
 Happy shipping!
 
 ## Tests
-Run `pytest -q` (or with coverage):
+Run tests with coverage (writes `coverage.xml`):
 
 ```bash
 pytest --maxfail=1 --disable-warnings -q
-pytest --cov=core --cov-report=term-missing --cov-report=xml
 ```
 
-The CI-ready coverage report is written to `coverage.xml`.
+The CI-ready coverage report is written to `coverage.xml`. You can add a badge later via Shields.io/CI.

@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
@@ -836,7 +837,7 @@ def stripe_status_view(request: HttpRequest) -> HttpResponse:
     }
     return render(request, "core/stripe_status.html", ctx)
 
-@login_required
+@staff_member_required
 def stripe_key_update(request: HttpRequest) -> HttpResponse:
     """
     Admin: Change Stripe key. Writes to keyring when enabled; otherwise in-memory for this process.
