@@ -1,55 +1,134 @@
-# NewFarmDogWalking — GitHub Project Kit (Verbose)
+# New Farm Dog Walking App
 
-This kit bootstraps:
-- **Issue templates** so new tasks are consistent and labeled.
-- **Workflow** to auto-add issues/PRs to a GitHub Project and apply area labels.
-- **Project setup scripts** to create a Project with **Priority** and **Status** and a Kanban view.
-- **Labels seed script** to create the standard label set used in our spec.
+A Django-based desktop application that syncs Stripe subscriptions and invoices into bookings and calendar entries. The app provides both a web interface and can be packaged as a desktop application using PyWebView.
 
-## Files
-- `.github/ISSUE_TEMPLATE/*.yml` — Templates for Spec Task, Feature, Bug.
-- `.github/workflows/add-to-project.yml` — Automation to intake items into the Project.
-- `scripts/project_setup.ps1` / `.sh` — Create the Project and fields.
-- `scripts/labels_setup.ps1` — Seed labels.
+## Quick Start
 
-## One-time Setup
-1. **Copy this folder** into your repo and commit/push.
-2. **Create labels** (run once):
-   ```powershell
-   ./scripts/labels_setup.ps1
-   ```
-3. **Create a Project** (org-level):
-   ```powershell
-   ./scripts/project_setup.ps1 -Org ManBearJordan
-   ```
-   Copy the Project URL.
-4. **Add repository secrets** (Settings → Secrets and variables → Actions):
-   - `GH_PAT_FOR_PROJECT` — classic token with project/repo/issues write.
-   - `NFDW_PROJECT_URL` — the Project URL (copied above).
-5. **Push** the `.github/workflows/add-to-project.yml` so automation is live.
+### Prerequisites
+- Python 3.8 or higher
+- Stripe account (test mode recommended for development)
 
-## Daily Usage
-- File a **Spec Task** using the template (title starts with `[Spec]`).
-- Or bulk-create tasks from `issues.json` using PowerShell:
-  ```powershell
-  Get-Content .\issues.json | ConvertFrom-Json | ForEach-Object {
-    gh issue create --title $_.title --body $_.body --label ($_.labels -join ",")
-  }
-  ```
-- New items auto-land on the Project board and get area labels based on keywords in the title/body.
-
-## Notes
-- The workflow uses `actions/add-to-project` which requires an org-level Project (Beta).
-- Secret `GH_PAT_FOR_PROJECT` is used to mutate the Project and labels (fine-grained tokens don’t yet fully work for Projects).
-
-Happy shipping!
-
-## Tests
-Run `pytest -q` (or with coverage):
+### 1. Clone and Set Up Environment
 
 ```bash
-pytest --maxfail=1 --disable-warnings -q
-pytest --cov=core --cov-report=term-missing --cov-report=xml
+git clone https://github.com/ManBearJordan/NewFarmDogWalkingApp.git
+cd NewFarmDogWalkingApp
 ```
 
-The CI-ready coverage report is written to `coverage.xml`.
+Create a virtual environment:
+```bash
+python -m venv venv
+```
+
+Activate the virtual environment:
+- **Windows**: `venv\Scripts\activate`
+- **macOS/Linux**: `source venv/bin/activate`
+
+Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Configure Environment
+
+Copy the example environment file:
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and update the settings, particularly:
+- `DJANGO_SECRET_KEY`: Generate a new secret key for production
+- `STRIPE_API_KEY`: Your Stripe API key (see Stripe setup below)
+
+### 3. Database Setup
+
+Run database migrations:
+```bash
+python manage.py migrate
+```
+
+Create a superuser account:
+```bash
+python manage.py createsuperuser
+```
+
+### 4. Stripe Key Setup
+
+You can configure your Stripe API key in two ways:
+
+#### Option A: Environment Variable (Recommended for Production)
+Set `STRIPE_API_KEY` in your `.env` file:
+```bash
+STRIPE_API_KEY=sk_test_your_key_here
+```
+
+#### Option B: Admin Interface (Recommended for Development)
+1. Start the development server:
+   ```bash
+   python manage.py runserver
+   ```
+
+2. Navigate to `http://localhost:8000/admin/` and log in with your superuser account
+
+3. Go to the Stripe configuration section or visit `http://localhost:8000/stripe/`
+
+4. Paste your Stripe secret key (test keys start with `sk_test_`, live keys start with `sk_live_`)
+
+5. Click "Update Key" to save
+
+### 5. Start the Development Server
+
+```bash
+python manage.py runserver
+```
+
+The application will be available at `http://localhost:8000/`
+
+### 6. Creating a Test Client
+
+1. Go to the admin interface at `http://localhost:8000/admin/`
+2. Navigate to "Clients" and click "Add client"
+3. Fill in the client details (name, email, phone)
+4. Optionally link to a User account for portal access
+5. Save the client
+
+For portal access, ensure the client has a linked User account and that user can log in at `http://localhost:8000/accounts/login/`
+
+## Key Features
+
+- **Stripe Integration**: Automatically sync subscriptions and invoices
+- **Booking Management**: Convert Stripe data into calendar bookings
+- **Client Portal**: Allow clients to view and create bookings
+- **Admin Interface**: Manage clients, bookings, and system settings
+- **Desktop App**: Can be packaged as a standalone desktop application
+
+## Development
+
+### Running Tests
+```bash
+python manage.py test
+```
+
+### Database Reset
+If you need to reset the database:
+```bash
+rm app.db
+python manage.py migrate
+python manage.py createsuperuser
+```
+
+### Development Scripts
+- `scripts/run_dev.ps1` (Windows PowerShell) - Load .env and start server
+- Check `docs/` folder for detailed documentation
+
+## Documentation
+
+- `docs/ARCHITECTURE.md` - System architecture and design decisions
+- `docs/portal.md` - Client portal usage guide
+- `docs/ops.md` - Operations and deployment guide
+- `SECURITY.md` - Security considerations
+- `CONTRIBUTING.md` - Contribution guidelines
+
+## Support
+
+For issues and feature requests, please use the GitHub issue tracker.
