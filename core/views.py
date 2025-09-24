@@ -37,6 +37,7 @@ from .stripe_integration import (
     get_customer_dashboard_url,
 )
 from .stripe_key_manager import get_key_status, update_stripe_key
+from .models import StripeKeyAudit
 from .credit import add_client_credit
 
 
@@ -860,10 +861,12 @@ def stripe_status_view(request: HttpRequest) -> HttpResponse:
         svc_count = 0
         messages.error(request, f"Stripe error: {e}")
     status = get_key_status()
+    from django.conf import settings as _settings
     ctx = {
         "catalog_count": svc_count,
         "catalog_preview": services[:5],  # tiny peek
         "key_status": status,
+        "support_email": getattr(_settings, "SUPPORT_EMAIL", "support@newfarmdogwalking.example"),
     }
     return render(request, "core/stripe_status.html", ctx)
 
@@ -875,14 +878,39 @@ def stripe_key_update(request: HttpRequest) -> HttpResponse:
     if request.method != "POST":
         return redirect("stripe_status")
     new_key = (request.POST.get("stripe_api_key") or "").strip()
+
+    # Capture state before change
+    before = get_key_status()
+    prev_mode = before.get("mode")
+    prev_tl = before.get("test_or_live")
+
+    # Apply new key (writes to keyring if enabled, else in-memory)
     update_stripe_key(new_key if new_key else None)
-    st = get_key_status()
-    mode = st.get("mode") or "unknown"
-    tl = st.get("test_or_live") or "unknown"
-    if st.get("configured"):
-        messages.success(request, f"Stripe key updated (mode: {mode}, env: {tl}).")
+
+    # Capture after state
+    after = get_key_status()
+    new_mode = after.get("mode")
+    new_tl = after.get("test_or_live")
+
+    # Audit: who changed the key and what changed
+    try:
+        StripeKeyAudit.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            when=timezone.now(),
+            previous_mode=prev_mode,
+            new_mode=new_mode,
+            previous_test_or_live=prev_tl,
+            new_test_or_live=new_tl,
+            note="Updated via admin Stripe Status UI",
+        )
+    except Exception:
+        # Do not let audit failures break the UI
+        pass
+
+    if after.get("configured"):
+        messages.success(request, f"Stripe key updated (mode: {new_mode}, env: {new_tl}).")
     else:
-        messages.warning(request, f"Stripe key cleared (mode: {mode}).")
+        messages.warning(request, f"Stripe key cleared (mode: {new_mode}).")
     return redirect("stripe_status")
 
 
