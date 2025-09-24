@@ -380,14 +380,15 @@ def calendar_view(request):
             calendar_days[day_num] = {'bookings': 0, 'sub_occurrences': 0, 'admin_events': 0}
         calendar_days[day_num]['admin_events'] += 1
     
-    # Get bookings for selected date if provided
-    selected_bookings = []
+    # Get bookings for selected date if provided - provide as day_detail structure
+    day_detail = None
     if selected_date:
         try:
             selected_dt = datetime.strptime(selected_date, '%Y-%m-%d').date()
-            selected_bookings = filter_active_bookings(Booking.objects.filter(
+            bookings = filter_active_bookings(Booking.objects.filter(
                 start_dt__date=selected_dt,
             )).order_by('start_dt')
+            day_detail = {'bookings': bookings}
         except ValueError:
             pass
     
@@ -404,7 +405,7 @@ def calendar_view(request):
         'month_days': month_days,
         'calendar_days': calendar_days,
         'selected_date': selected_date,
-        'selected_bookings': selected_bookings,
+        'day_detail': day_detail,
         'prev_month': prev_month,
         'prev_year': prev_year,
         'next_month': next_month,
@@ -642,6 +643,26 @@ def subscriptions_sync(request: HttpRequest) -> HttpResponse:
     stats = sync_subscriptions_to_bookings_and_calendar()
     messages.success(request, f"Sync complete — processed: {stats.get('processed')}, created: {stats.get('created')}, cleaned: {stats.get('cleaned')}, errors: {stats.get('errors')}")
     return redirect("subscriptions_list")
+
+
+@login_required
+def calendar_troubleshoot_sync(request: HttpRequest) -> JsonResponse:
+    """
+    Run the unified subscription sync and return stats JSON:
+    { processed, created, cleaned, errors }
+    """
+    try:
+        stats = sync_subscriptions_to_bookings_and_calendar()
+        # Ensure all expected keys exist for the modal
+        payload = {
+            "processed": int(stats.get("processed", 0)) if isinstance(stats, dict) else 0,
+            "created":   int(stats.get("created", 0)) if isinstance(stats, dict) else 0,
+            "cleaned":   int(stats.get("cleaned", 0)) if isinstance(stats, dict) else 0,
+            "errors":    int(stats.get("errors", 0)) if isinstance(stats, dict) else 0,
+        }
+        return JsonResponse(payload, status=200)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required

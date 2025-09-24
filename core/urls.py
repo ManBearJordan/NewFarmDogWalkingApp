@@ -48,6 +48,8 @@ urlpatterns = [
     path("portal/", views.portal_home, name="portal_home"),
     path("portal/bookings/new/", views.portal_booking_create, name="portal_booking_create"),
     path("portal/bookings/confirm/", views.portal_booking_confirm, name="portal_booking_confirm"),
+    # --- Calendar: troubleshoot sync ---
+    path("calendar/troubleshoot-sync/", views.calendar_troubleshoot_sync, name="calendar_troubleshoot_sync"),
     # Admin Tasks (AdminEvent CRUD)
     path("admin/tasks/", views.admin_tasks_list, name="admin_tasks_list"),
     path("admin/tasks/new/", views.admin_task_create, name="admin_task_create"),
