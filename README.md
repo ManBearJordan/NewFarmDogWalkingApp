@@ -105,9 +105,13 @@ For portal access, ensure the client has a linked User account and that user can
 ## Development
 
 ### Running Tests
+Run tests with coverage (writes `coverage.xml`):
+
 ```bash
-python manage.py test
+pytest --maxfail=1 --disable-warnings -q
 ```
+
+The CI-ready coverage report is written to `coverage.xml`. You can add a badge later via Shields.io/CI.
 
 ### Database Reset
 If you need to reset the database:

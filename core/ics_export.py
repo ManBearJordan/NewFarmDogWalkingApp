@@ -38,11 +38,11 @@ def _uid_for(booking) -> str:
     # Use a domain-like suffix to make calendar apps happy.
     return f"{h}@newfarmdogwalking"
 
-def bookings_to_ics(qs: Iterable, *, alarm: bool = False) -> str:
+def bookings_to_ics(qs: Iterable, *, alarm: bool = False, alarm_minutes: int = 5) -> str:
     """
     Convert bookings to a single iCalendar string.
     - Excludes cancelled/voided/deleted rows at the caller (view already filters).
-    - Adds a 5-minute display VALARM if alarm=True.
+    - Adds a VALARM if alarm=True, with alarm_minutes before (defaults to 5, min 1).
     """
     now = timezone.now().astimezone(TZ)
     dtstamp = now.strftime("%Y%m%dT%H%M%S")
@@ -78,9 +78,17 @@ def bookings_to_ics(qs: Iterable, *, alarm: bool = False) -> str:
             f"LOCATION:{location}",
         ]
         if alarm:
+            # Sanitize alarm_minutes with fallback to 5 and minimum of 1
+            try:
+                minutes = int(alarm_minutes)
+                if minutes < 1:
+                    minutes = 1
+            except (ValueError, TypeError):
+                minutes = 5
+            
             lines += [
                 "BEGIN:VALARM",
-                "TRIGGER:-PT5M",
+                f"TRIGGER:-PT{minutes}M",
                 "ACTION:DISPLAY",
                 "DESCRIPTION:Reminder",
                 "END:VALARM",

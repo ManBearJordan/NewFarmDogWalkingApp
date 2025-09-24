@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q --cov=core --cov-report=term-missing --cov-report=xml"
 DJANGO_SETTINGS_MODULE = "newfarm.settings"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
 markers = [
