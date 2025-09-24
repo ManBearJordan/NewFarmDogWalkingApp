@@ -3,34 +3,31 @@
 {% block content %}
 <h2 class="mb-3">Clients</h2>
 
-<form method="post" action="{% url 'clients_stripe_sync' %}" class="mb-3">
+<form method="post" action="{% url 'clients_stripe_sync' %}" class="mb-3" data-disable-on-submit>
   {% csrf_token %}
-  <button class="btn btn-outline-primary">Sync Stripe customers</button>
+  <button class="btn btn-outline-primary" title="Link clients to Stripe by email">Sync Stripe customers</button>
   <span class="text-muted ms-2 small">Links by email; updates phone/address; respects test/live key.</span>
-  {% if messages %}
-    {% for m in messages %}<div class="alert alert-info py-1 mt-2">{{ m }}</div>{% endfor %}
-  {% endif %}
 </form>
 
 <div class="table-responsive">
 <table class="table table-hover align-middle">
-  <thead>
+  <thead class="table-light">
     <tr>
-      <th>Name</th>
-      <th>Credit (AUD)</th>
-      <th>Email</th>
-      <th>Phone</th>
-      <th>Address</th>
-      <th>Stripe</th>
-      <th>Tags</th>
-      <th class="text-end">Actions</th>
+      <th scope="col">Name</th>
+      <th scope="col">Credit (AUD)</th>
+      <th scope="col">Email</th>
+      <th scope="col">Phone</th>
+      <th scope="col">Address</th>
+      <th scope="col">Stripe</th>
+      <th scope="col">Tags</th>
+      <th scope="col" class="text-end">Actions</th>
     </tr>
   </thead>
   <tbody>
     {% for c in clients %}
       <tr>
         <td>{{ c.name }}</td>
-        <td>{% if c.credit_cents %}{{ c.credit_cents|cents_to_dollars }}{% else %}—{% endif %}</td>
+        <td>{{ c.credit_cents|cents_to_dollars }}</td>
         <td>{{ c.email|default:"—" }}</td>
         <td>{{ c.phone|default:"—" }}</td>
         <td class="small">{{ c.address|default:"—" }}</td>
@@ -81,20 +78,20 @@
           <!-- Credit modal -->
           <div class="modal fade" id="creditModal{{ c.id }}" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog">
-              <form method="post" action="{% url 'client_credit_add' c.id %}" class="modal-content">
+              <form method="post" action="{% url 'client_credit_add' c.id %}" class="modal-content" data-disable-on-submit>
                 {% csrf_token %}
                 <div class="modal-header">
                   <h5 class="modal-title">Add credit ({{ c.name }})</h5>
                   <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                  <label class="form-label">Amount</label>
-                  <input class="form-control" name="amount" placeholder="e.g. 2500 (cents) or 25.00 (dollars)">
+                  <label class="form-label" for="amt{{ c.id }}">Amount</label>
+                  <input id="amt{{ c.id }}" class="form-control" name="amount" placeholder="e.g. 2500 (cents) or 25.00 (dollars)" aria-describedby="amtHelp{{ c.id }}">
                   <div class="form-check mt-2">
                     <input class="form-check-input" type="checkbox" id="neg{{ c.id }}" name="allow_negative" value="1">
                     <label class="form-check-label" for="neg{{ c.id }}">Allow negative adjustment (reduce credit)</label>
                   </div>
-                  <p class="small text-muted mt-2">Stored in cents; UI shows dollars. Example: 2500 = $25.00. Use negative to reduce or correct balance.</p>
+                  <p id="amtHelp{{ c.id }}" class="small text-muted mt-2">Stored in cents; UI shows dollars. Example: 2500 = $25.00. Use negative to reduce or correct balance.</p>
                 </div>
                 <div class="modal-footer">
                   <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>

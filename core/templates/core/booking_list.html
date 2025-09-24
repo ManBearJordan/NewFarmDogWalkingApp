@@ -28,6 +28,7 @@
   </div>
   <div class="col-auto ms-auto">
     <a class="btn btn-outline-success"
+       title="Export all bookings in current range to iCalendar"
        href="{% url 'booking_export_ics' %}?range={{ range_label }}&start={{ start_q }}&end={{ end_q }}">Export all (.ics)</a>
     <a class="btn btn-outline-success"
        href="{% url 'booking_export_ics' %}?range={{ range_label }}&start={{ start_q }}&end={{ end_q }}&alarm=1"
@@ -46,19 +47,19 @@
 
 <div class="table-responsive">
 <table class="table table-hover align-middle">
-  <thead>
+  <thead class="table-light">
     <tr>
-      <th style="width:28px;"><input type="checkbox" id="checkall" onclick="document.querySelectorAll('.rowcheck').forEach(cb=>cb.checked=this.checked)"></th>
-      <th>Date</th>
-      <th>Start</th>
-      <th>End</th>
-      <th>Client</th>
-      <th>Service</th>
-      <th>Location</th>
-      <th>Dogs</th>
-      <th>Status</th>
-      <th class="text-end">Price (AUD)</th>
-      <th class="text-end">Actions</th>
+      <th scope="col" aria-label="Select"><input type="checkbox" id="checkall" onclick="document.querySelectorAll('.rowcheck').forEach(cb=>cb.checked=this.checked)"></th>
+      <th scope="col">Date</th>
+      <th scope="col">Start</th>
+      <th scope="col">End</th>
+      <th scope="col">Client</th>
+      <th scope="col">Service</th>
+      <th scope="col">Location</th>
+      <th scope="col">Dogs</th>
+      <th scope="col">Status</th>
+      <th scope="col" class="text-end">Price (AUD)</th>
+      <th scope="col" class="text-end">Actions</th>
     </tr>
   </thead>
   <tbody>
@@ -73,9 +74,7 @@
         <td>{{ b.location }}</td>
         <td>{{ b.dogs }}</td>
         <td>{{ b.status }}</td>
-        <td class="text-end">
-          {% if b.price_cents %}{{ b.price_cents|money_format_no_symbol }}{% else %}—{% endif %}
-        </td>
+        <td class="text-end">{{ b.price_cents|cents_to_dollars }}</td>
         <td class="text-end">
           {% if b.stripe_invoice_id %}
             <a class="btn btn-sm btn-outline-primary"
