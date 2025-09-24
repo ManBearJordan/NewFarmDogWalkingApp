@@ -1,7 +1,14 @@
 {% extends "core/base.html" %}
 {% load money_filters %}
 {% block content %}
-<h2 class="mb-3">My Bookings</h2>
+<div class="d-flex align-items-center mb-3">
+  <h2 class="mb-0">Your bookings</h2>
+  <div class="ms-auto">
+    <span class="badge text-bg-secondary" title="Remaining credit">
+      Credit: {{ client_credit_cents|cents_to_dollars }}
+    </span>
+  </div>
+</div>
 
 {% if note %}
   <div class="alert alert-warning">{{ note }}</div>
