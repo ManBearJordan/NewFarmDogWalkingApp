@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+addopts = "-q"
+markers = [
+  "webhook: tests that require webhook module",
+]
