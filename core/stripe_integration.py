@@ -441,7 +441,7 @@ def ensure_customer(client) -> str:
     return created["id"]
 
 
-def create_payment_intent(amount_cents, customer_id=None, metadata=None):
+def create_payment_intent(amount_cents, customer_id=None, metadata=None, receipt_email=None):
     """Create a PaymentIntent for portal pre-pay checkout."""
     _init_stripe()
     return stripe.PaymentIntent.create(
@@ -450,6 +450,7 @@ def create_payment_intent(amount_cents, customer_id=None, metadata=None):
         customer=customer_id,
         metadata=metadata or {},
         automatic_payment_methods={"enabled": True},
+        receipt_email=receipt_email,
     )
 
 
@@ -463,3 +464,17 @@ def retrieve_payment_intent(pi_id):
     """Retrieve a PaymentIntent."""
     _init_stripe()
     return stripe.PaymentIntent.retrieve(pi_id)
+
+
+def payment_intent_dashboard_url(pi_id: str) -> str:
+    """
+    Compute the correct Stripe Dashboard URL for this PaymentIntent,
+    honoring test vs live based on the configured key.
+    """
+    from .stripe_key_manager import get_key_status
+    status = get_key_status()
+    mode = (status.get('test_or_live') or 'test').lower()
+    base = "https://dashboard.stripe.com"
+    if mode == 'test':
+        return f"{base}/test/payments/{pi_id}"
+    return f"{base}/payments/{pi_id}"

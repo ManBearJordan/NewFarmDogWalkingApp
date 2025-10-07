@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.utils import timezone
+from django.conf import settings
 from datetime import datetime, timedelta
 from .models import Client, Booking, TimetableBlock
 from .capacity_helpers import (
@@ -27,7 +28,14 @@ def portal_booking_new(request):
         return redirect("portal_home")
     
     if request.method == "GET":
-        return render(request, "core/portal_booking_form.html", {"client": client})
+        return render(
+            request,
+            "core/portal_booking_form.html",
+            {
+                "client": client,
+                "STRIPE_PUBLISHABLE_KEY": getattr(settings, "STRIPE_PUBLISHABLE_KEY", None),
+            },
+        )
     return HttpResponseBadRequest("Method not allowed")
 
 
@@ -92,6 +100,7 @@ def portal_checkout_start(request):
             "block_id": blk.id,
             "hold": str(hold.token)
         },
+        receipt_email=client.email or None,
     )
     
     return JsonResponse({
@@ -127,6 +136,12 @@ def portal_checkout_finalize(request):
         cancel_payment_intent(pi_id)
         return JsonResponse({"error": "Capacity just ran out. Your payment was not captured."}, status=409)
     
+    # Fetch PaymentIntent to get the Charge id (for admin linking / refunds)
+    pi = retrieve_payment_intent(pi_id)
+    charge_id = None
+    if getattr(pi, "latest_charge", None):
+        charge_id = pi.latest_charge
+    
     # Create booking now (no Stripe invoice for portal path)
     # Compute start/end from block + default duration
     tz = timezone.get_current_timezone()
@@ -146,7 +161,9 @@ def portal_checkout_finalize(request):
         price_cents=price_cents,
         status="active",
         deleted=False,
-        stripe_invoice_id=None,  # important: portal flow does NOT create invoices
+        stripe_invoice_id=None,  # portal flow does NOT create invoices
+        payment_intent_id=pi_id,
+        charge_id=charge_id,
         location="",
         notes="",
     )
