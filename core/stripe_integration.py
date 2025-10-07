@@ -439,3 +439,27 @@ def ensure_customer(client) -> str:
         address=None,
     )
     return created["id"]
+
+
+def create_payment_intent(amount_cents, customer_id=None, metadata=None):
+    """Create a PaymentIntent for portal pre-pay checkout."""
+    _init_stripe()
+    return stripe.PaymentIntent.create(
+        amount=amount_cents,
+        currency="aud",
+        customer=customer_id,
+        metadata=metadata or {},
+        automatic_payment_methods={"enabled": True},
+    )
+
+
+def cancel_payment_intent(pi_id):
+    """Cancel a PaymentIntent."""
+    _init_stripe()
+    return stripe.PaymentIntent.cancel(pi_id)
+
+
+def retrieve_payment_intent(pi_id):
+    """Retrieve a PaymentIntent."""
+    _init_stripe()
+    return stripe.PaymentIntent.retrieve(pi_id)

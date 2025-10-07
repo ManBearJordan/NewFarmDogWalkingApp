@@ -4,7 +4,7 @@ URL configuration for the core app.
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views
+from . import views, views_admin_capacity, views_portal
 
 urlpatterns = [
     path('', views.client_list, name='home'),
@@ -48,6 +48,11 @@ urlpatterns = [
     path("portal/", views.portal_home, name="portal_home"),
     path("portal/bookings/new/", views.portal_booking_create, name="portal_booking_create"),
     path("portal/bookings/confirm/", views.portal_booking_confirm, name="portal_booking_confirm"),
+    # Portal (pre-pay flow with flexible capacity)
+    path("portal/bookings/new-prepay/", views_portal.portal_booking_new, name="portal_booking_new_prepay"),
+    path("portal/blocks/", views_portal.portal_blocks_for_date, name="portal_blocks_for_date"),
+    path("portal/checkout/start/", views_portal.portal_checkout_start, name="portal_checkout_start"),
+    path("portal/checkout/finalize/", views_portal.portal_checkout_finalize, name="portal_checkout_finalize"),
     # --- Calendar: troubleshoot sync ---
     path("calendar/troubleshoot-sync/", views.calendar_troubleshoot_sync, name="calendar_troubleshoot_sync"),
     # Admin Tasks (AdminEvent CRUD)
@@ -60,4 +65,6 @@ urlpatterns = [
     path("crm/tags/new/", views.tag_create, name="tag_create"),
     path("crm/tags/<int:pk>/edit/", views.tag_edit, name="tag_edit"),
     path("crm/tags/<int:pk>/delete/", views.tag_delete, name="tag_delete"),
+    # Admin capacity editor
+    path("admin/capacity/", views_admin_capacity.capacity_edit, name="admin_capacity_edit"),
 ]

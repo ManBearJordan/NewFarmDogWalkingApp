@@ -1,0 +1,187 @@
+{% extends "core/base.html" %}
+{% block content %}
+<div class="container my-4">
+  <h2 class="mb-3">New Booking (Pre-pay)</h2>
+
+  <form id="portal-booking" class="vstack gap-3">
+    {% csrf_token %}
+    
+    <div>
+      <label class="form-label">Service</label>
+      <select class="form-select" name="service_code" id="service_code" required>
+        <option value="">Select a service…</option>
+      </select>
+    </div>
+    
+    <div>
+      <label class="form-label">Date</label>
+      <input class="form-control" type="date" name="date" id="date" required>
+    </div>
+    
+    <div>
+      <label class="form-label">Available time blocks (live capacity)</label>
+      <select class="form-select" name="block_id" id="block_id" required>
+        <option value="">Select date and service first…</option>
+      </select>
+      <div class="form-text" id="block_hint"></div>
+    </div>
+    
+    <div>
+      <label class="form-label">Location</label>
+      <input class="form-control" type="text" name="location" id="location">
+    </div>
+    
+    <div>
+      <label class="form-label">Notes</label>
+      <textarea class="form-control" name="notes" id="notes"></textarea>
+    </div>
+    
+    <div>
+      <label class="form-label">Price (AUD cents)</label>
+      <input class="form-control" type="number" name="price_cents" id="price_cents" min="0" step="50" required>
+    </div>
+    
+    <button class="btn btn-primary" id="paybtn" type="button">Pay & Confirm</button>
+  </form>
+</div>
+
+<script>
+// Fetch services (existing catalog)
+async function loadServices() {
+  try {
+    const resp = await fetch('/api/service-info/');
+    const data = await resp.json();
+    const sel = document.getElementById('service_code');
+    sel.innerHTML = '<option value="">Select a service…</option>';
+    
+    if (data.services) {
+      for (const svc of data.services) {
+        const opt = document.createElement('option');
+        opt.value = svc.service_code || svc.price_id;
+        opt.textContent = `${svc.display_name || svc.service_code} — $${((svc.amount_cents || 0) / 100).toFixed(2)}`;
+        opt.dataset.price = svc.amount_cents || 0;
+        sel.appendChild(opt);
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load services:', e);
+  }
+}
+
+// Load blocks when date or service changes
+async function loadBlocks() {
+  const svc = document.getElementById('service_code').value;
+  const d = document.getElementById('date').value;
+  const sel = document.getElementById('block_id');
+  const hint = document.getElementById('block_hint');
+  
+  sel.innerHTML = '<option value="">Loading…</option>';
+  hint.textContent = '';
+  
+  if (!svc || !d) {
+    sel.innerHTML = '<option value="">Select date and service first…</option>';
+    return;
+  }
+  
+  try {
+    const resp = await fetch(`/portal/blocks/?service_code=${encodeURIComponent(svc)}&date=${encodeURIComponent(d)}`);
+    const data = await resp.json();
+    
+    sel.innerHTML = '';
+    if (data.blocks && data.blocks.length > 0) {
+      for (const b of data.blocks) {
+        const opt = document.createElement('option');
+        opt.value = b.id;
+        opt.textContent = `${b.label} — remaining ${b.remaining}`;
+        opt.disabled = b.remaining <= 0;
+        sel.appendChild(opt);
+      }
+      hint.textContent = 'Select a block with remaining capacity.';
+    } else {
+      sel.innerHTML = '<option value="">No blocks available</option>';
+      hint.textContent = 'No blocks defined for this date.';
+    }
+  } catch (e) {
+    console.error('Failed to load blocks:', e);
+    sel.innerHTML = '<option value="">Error loading blocks</option>';
+  }
+}
+
+// Update price when service changes
+document.getElementById('service_code').addEventListener('change', function(e) {
+  const sel = e.target;
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.dataset.price) {
+    document.getElementById('price_cents').value = opt.dataset.price;
+  }
+  loadBlocks();
+});
+
+document.getElementById('date').addEventListener('change', loadBlocks);
+
+// Stripe pre-pay flow
+document.getElementById('paybtn').addEventListener('click', async () => {
+  const svc = document.getElementById('service_code').value;
+  const blockId = document.getElementById('block_id').value;
+  const priceCents = document.getElementById('price_cents').value;
+  
+  if (!svc || !blockId || !priceCents) {
+    alert('Please complete the form.');
+    return;
+  }
+  
+  const fd = new FormData();
+  fd.append('service_code', svc);
+  fd.append('block_id', blockId);
+  fd.append('price_cents', priceCents);
+  fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+  try {
+    const startResp = await fetch('/portal/checkout/start/', { method: 'POST', body: fd });
+    const startData = await startResp.json();
+    
+    if (startResp.status !== 200) {
+      alert(startData.error || 'Could not start checkout.');
+      return;
+    }
+
+    const clientSecret = startData.client_secret;
+    const holdToken = startData.hold_token;
+
+    // TODO: Use Stripe.js to confirm the PaymentIntent with a card element
+    // const stripe = Stripe("{{ STRIPE_PUBLISHABLE_KEY }}");
+    // const {error} = await stripe.confirmPayment({clientSecret, elements, confirmParams: {...}});
+    // For now we assume client-side confirmation happens and we have the PI id:
+    // This is a placeholder - in production you'd use Stripe.js here
+    alert('Payment flow placeholder: In production, Stripe.js would handle payment here.\n\nFor testing, we\'ll simulate a successful payment.');
+    
+    // Simulate payment intent ID (in real app, this comes from Stripe.js)
+    const paymentIntentId = "pi_test_" + Math.random().toString(36).substr(2, 9);
+
+    const fin = new FormData();
+    fin.append('service_code', svc);
+    fin.append('block_id', blockId);
+    fin.append('price_cents', priceCents);
+    fin.append('hold_token', holdToken);
+    fin.append('payment_intent_id', paymentIntentId);
+    fin.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+    const finResp = await fetch('/portal/checkout/finalize/', { method: 'POST', body: fin });
+    const finData = await finResp.json();
+    
+    if (finResp.status !== 200) {
+      alert(finData.error || 'Payment could not be confirmed.');
+      return;
+    }
+    
+    window.location.href = finData.redirect;
+  } catch (e) {
+    console.error('Checkout error:', e);
+    alert('An error occurred during checkout.');
+  }
+});
+
+// Load services on page load
+loadServices();
+</script>
+{% endblock %}
