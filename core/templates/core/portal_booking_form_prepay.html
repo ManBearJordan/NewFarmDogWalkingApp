@@ -43,9 +43,27 @@
     
     <button class="btn btn-primary" id="paybtn" type="button">Pay & Confirm</button>
   </form>
+  
+  <!-- Stripe.js -->
+  <script src="https://js.stripe.com/v3/"></script>
+  <div id="payment-element" class="my-3"></div>
+  <div id="payment-errors" class="text-danger small my-2"></div>
 </div>
 
 <script>
+let stripe, elements, paymentElement;
+function ensureStripe() {
+  if (!stripe) {
+    const pk = "{{ STRIPE_PUBLISHABLE_KEY|default:'' }}";
+    if (!pk) {
+      document.getElementById('payment-errors').textContent = "Stripe publishable key is not configured.";
+      return false;
+    }
+    stripe = Stripe(pk);
+  }
+  return true;
+}
+
 // Fetch services (existing catalog)
 async function loadServices() {
   try {
@@ -121,6 +139,8 @@ document.getElementById('date').addEventListener('change', loadBlocks);
 
 // Stripe pre-pay flow
 document.getElementById('paybtn').addEventListener('click', async () => {
+  if (!ensureStripe()) return;
+  
   const svc = document.getElementById('service_code').value;
   const blockId = document.getElementById('block_id').value;
   const priceCents = document.getElementById('price_cents').value;
@@ -148,15 +168,35 @@ document.getElementById('paybtn').addEventListener('click', async () => {
     const clientSecret = startData.client_secret;
     const holdToken = startData.hold_token;
 
-    // TODO: Use Stripe.js to confirm the PaymentIntent with a card element
-    // const stripe = Stripe("{{ STRIPE_PUBLISHABLE_KEY }}");
-    // const {error} = await stripe.confirmPayment({clientSecret, elements, confirmParams: {...}});
-    // For now we assume client-side confirmation happens and we have the PI id:
-    // This is a placeholder - in production you'd use Stripe.js here
-    alert('Payment flow placeholder: In production, Stripe.js would handle payment here.\n\nFor testing, we\'ll simulate a successful payment.');
-    
-    // Simulate payment intent ID (in real app, this comes from Stripe.js)
-    const paymentIntentId = "pi_test_" + Math.random().toString(36).substr(2, 9);
+    // Build Payment Element once per attempt
+    if (!elements) {
+      elements = stripe.elements({ clientSecret });
+      paymentElement = elements.create('payment');
+      paymentElement.mount('#payment-element');
+    }
+
+    // Confirm payment with Stripe.js (handles 3DS, errors, etc.)
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      clientSecret,
+      confirmParams: {
+        // Optionally set a return_url if you want Stripe-hosted redirect handling.
+        // return_url: window.location.origin + '/portal/confirm/',
+      },
+      redirect: 'if_required',
+    });
+
+    if (error) {
+      document.getElementById('payment-errors').textContent = error.message || 'Payment failed. Please try another method.';
+      return;
+    }
+
+    if (!paymentIntent || (paymentIntent.status !== 'succeeded' && paymentIntent.status !== 'processing')) {
+      document.getElementById('payment-errors').textContent = 'Payment not completed.';
+      return;
+    }
+
+    const paymentIntentId = paymentIntent.id;
 
     const fin = new FormData();
     fin.append('service_code', svc);
