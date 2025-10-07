@@ -2,4 +2,6 @@ Django>=4.2
 stripe>=5.0
 keyring>=23.0
 pytest
+pytest-cov
+pytest-django
 python-dotenv
