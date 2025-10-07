@@ -16,6 +16,11 @@ app.db
 subscription_error_log.txt
 subscription_sync_log.txt
 
+# Test coverage
+.coverage
+coverage.xml
+htmlcov/
+
 # Editor / OS
 .DS_Store
 .vscode/
