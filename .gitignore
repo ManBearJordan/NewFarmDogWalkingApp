@@ -1,16 +1,24 @@
-# Python
-__pycache__/
-*.py[cod]
-*.sqlite3
+# Env & secrets
 .env
-.env.local
-.env.development
-.env.test
-.env.production
+*.env
+
+# Local DBs
+*.sqlite3
+app.db
+
+# Virtual environments
 .venv/
 venv/
-.venv/
-app.db
+
+# Bytecode / caches
+__pycache__/
+*.py[cod]
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
 
 # Application logs
 subscription_error_log.txt
@@ -20,11 +28,6 @@ subscription_sync_log.txt
 .coverage
 coverage.xml
 htmlcov/
-
-# Editor / OS
-.DS_Store
-.vscode/
-.idea/
 
 # Node
 node_modules/
