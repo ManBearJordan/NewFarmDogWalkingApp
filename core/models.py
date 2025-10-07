@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+import uuid
 
 
 class StripeSettings(models.Model):
@@ -51,6 +52,8 @@ class Client(models.Model):
         on_delete=models.SET_NULL,
         related_name="client_profile",
     )
+    # Portal account controls
+    can_self_reschedule = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
@@ -94,6 +97,8 @@ class Booking(models.Model):
     service_code = models.CharField(max_length=50)
     service_name = models.CharField(max_length=200)
     service_label = models.CharField(max_length=200)
+    # Optional, to reflect the chosen block in the flexible timetable
+    block_label = models.CharField(max_length=128, blank=True, null=True)
     start_dt = models.DateTimeField()
     end_dt = models.DateTimeField()
     location = models.CharField(max_length=200)
@@ -149,3 +154,74 @@ class Tag(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ServiceDefaults(models.Model):
+    """
+    Lets you declare default duration per service_code, to prefill end time.
+    """
+    service_code = models.CharField(max_length=64, unique=True)
+    duration_minutes = models.PositiveIntegerField(default=60)
+    notes = models.CharField(max_length=255, blank=True, null=True)
+
+    class Meta:
+        verbose_name_plural = "Service defaults"
+
+    def __str__(self):
+        return f"{self.service_code} ({self.duration_minutes}min)"
+
+
+class TimetableBlock(models.Model):
+    """
+    Arbitrary daily time blocks you define (no fixed windows).
+    e.g., 07:00–10:30 "Morning Run", 11:00–14:00 "Midday", etc.
+    """
+    date = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    label = models.CharField(max_length=128, blank=True, null=True)
+
+    class Meta:
+        ordering = ["date", "start_time"]
+        unique_together = ("date", "start_time", "end_time", "label")
+
+    def __str__(self):
+        return f"{self.date} {self.start_time}–{self.end_time} {self.label or ''}"
+
+
+class BlockCapacity(models.Model):
+    """
+    Capacity per service within a block (you set this in Admin).
+    """
+    block = models.ForeignKey(TimetableBlock, on_delete=models.CASCADE, related_name="capacities")
+    service_code = models.CharField(max_length=64)
+    capacity = models.PositiveIntegerField(default=0)
+    allow_overlap = models.BooleanField(default=False)  # if this service can overlap with other services in the block
+
+    class Meta:
+        unique_together = ("block", "service_code")
+        verbose_name_plural = "Block capacities"
+
+    def __str__(self):
+        return f"{self.block} - {self.service_code}: {self.capacity}"
+
+
+class CapacityHold(models.Model):
+    """
+    Short-lived hold to avoid race conditions during PaymentIntent confirmation.
+    """
+    token = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    block = models.ForeignKey(TimetableBlock, on_delete=models.CASCADE)
+    service_code = models.CharField(max_length=64)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        verbose_name_plural = "Capacity holds"
+
+    def __str__(self):
+        return f"Hold {self.token} for {self.block}"
+
+    @classmethod
+    def purge_expired(cls):
+        cls.objects.filter(expires_at__lt=timezone.now()).delete()

@@ -1,6 +1,8 @@
 from django.contrib import admin
-from .models import StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence, Tag
-from .models import StripeKeyAudit
+from .models import (
+    StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence, Tag,
+    StripeKeyAudit, ServiceDefaults, TimetableBlock, BlockCapacity, CapacityHold
+)
 
 
 @admin.register(StripeKeyAudit)
@@ -18,9 +20,33 @@ class StripeSettingsAdmin(admin.ModelAdmin):
 
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
-    list_display = ['name', 'email', 'phone', 'status', 'credit_cents']
-    list_filter = ['status']
+    list_display = ['name', 'email', 'phone', 'status', 'credit_cents', 'can_self_reschedule', 'user_link']
+    list_filter = ['status', 'can_self_reschedule']
     search_fields = ['name', 'email', 'phone']
+    actions = ['disable_portal_login', 'remove_portal_login']
+
+    def user_link(self, obj):
+        return obj.user.username if obj.user else "—"
+    user_link.short_description = "Portal user"
+
+    def disable_portal_login(self, request, queryset):
+        for cl in queryset:
+            if cl.user:
+                cl.user.is_active = False
+                cl.user.save()
+        self.message_user(request, "Selected clients' logins disabled.")
+    disable_portal_login.short_description = "Disable portal login"
+
+    def remove_portal_login(self, request, queryset):
+        for cl in queryset:
+            if cl.user:
+                u = cl.user
+                cl.user = None
+                cl.save()
+                # If you prefer to fully delete the user, uncomment:
+                # u.delete()
+        self.message_user(request, "Selected clients' portal user unlinked.")
+    remove_portal_login.short_description = "Remove portal login"
 
 
 @admin.register(Pet)
@@ -64,3 +90,29 @@ class SubOccurrenceAdmin(admin.ModelAdmin):
 class TagAdmin(admin.ModelAdmin):
     list_display = ("name", "color", "created_at")
     search_fields = ("name",)
+
+
+@admin.register(ServiceDefaults)
+class ServiceDefaultsAdmin(admin.ModelAdmin):
+    list_display = ("service_code", "duration_minutes", "notes")
+    search_fields = ("service_code",)
+
+
+@admin.register(TimetableBlock)
+class TimetableBlockAdmin(admin.ModelAdmin):
+    list_display = ("date", "start_time", "end_time", "label")
+    list_filter = ("date",)
+    date_hierarchy = "date"
+
+
+@admin.register(BlockCapacity)
+class BlockCapacityAdmin(admin.ModelAdmin):
+    list_display = ("block", "service_code", "capacity", "allow_overlap")
+    list_filter = ("service_code",)
+
+
+@admin.register(CapacityHold)
+class CapacityHoldAdmin(admin.ModelAdmin):
+    list_display = ("token", "block", "service_code", "client", "expires_at")
+    list_filter = ("service_code",)
+    date_hierarchy = "expires_at"
