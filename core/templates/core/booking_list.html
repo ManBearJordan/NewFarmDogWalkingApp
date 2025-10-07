@@ -1,5 +1,6 @@
 {% extends "core/base.html" %}
 {% load money_filters %}
+{% load stripe_filters %}
 {% block content %}
 <h2 class="mb-3">Bookings</h2>
 
@@ -79,8 +80,13 @@
           {% if b.stripe_invoice_id %}
             <a class="btn btn-sm btn-outline-primary"
                href="{% url 'booking_open_invoice' b.id %}?range={{ range_label }}">Open invoice</a>
+          {% elif b.payment_intent_id %}
+            <a class="btn btn-sm btn-outline-dark"
+               href="{{ b.payment_intent_id|stripe_payment_url }}"
+               target="_blank" rel="noopener"
+               title="View payment in Stripe Dashboard">Open in Stripe</a>
           {% else %}
-            <span class="text-muted small">No invoice</span>
+            <span class="text-muted small">No invoice/payment</span>
           {% endif %}
           <a class="btn btn-sm btn-outline-danger"
              href="{% url 'booking_soft_delete' b.id %}?range={{ range_label }}"
