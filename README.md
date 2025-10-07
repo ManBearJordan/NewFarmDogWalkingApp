@@ -1,5 +1,7 @@
 # New Farm Dog Walking App
 
+[➡️ Release/deploy checklist](docs/release.md)
+
 [![Tests](https://github.com/ManBearJordan/NewFarmDogWalkingApp/actions/workflows/tests.yml/badge.svg)](https://github.com/ManBearJordan/NewFarmDogWalkingApp/actions/workflows/tests.yml)
 
 A Django-based desktop application that syncs Stripe subscriptions and invoices into bookings and calendar entries. The app provides both a web interface and can be packaged as a desktop application using PyWebView.
