@@ -90,6 +90,19 @@ KEYRING_SERVICE_NAME = os.getenv("KEYRING_SERVICE_NAME", "NewFarmDogWalking")
 # Contact for non-staff support (used in templates)
 SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "support@newfarmdogwalking.example")
 
+# --- Production security toggles ---
+PRODUCTION = os.getenv("PRODUCTION", "0") == "1"
+SECURE_SSL_REDIRECT = PRODUCTION
+SESSION_COOKIE_SECURE = PRODUCTION
+CSRF_COOKIE_SECURE = PRODUCTION
+SECURE_HSTS_SECONDS = 31536000 if PRODUCTION else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = PRODUCTION
+SECURE_HSTS_PRELOAD = PRODUCTION
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if PRODUCTION else None
+CSRF_TRUSTED_ORIGINS = [
+    d.strip() for d in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if d.strip()
+]
+
 # --- Client portal auth ---
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/portal/"
