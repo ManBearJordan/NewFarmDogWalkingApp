@@ -15,6 +15,7 @@ from .capacity_helpers import (
     get_default_duration_minutes
 )
 from .stripe_integration import create_payment_intent, retrieve_payment_intent, cancel_payment_intent
+from .tasks import send_booking_confirmation_email
 
 
 @login_required
@@ -167,5 +168,12 @@ def portal_checkout_finalize(request):
         location="",
         notes="",
     )
+    
+    # Fire-and-forget confirmation email (runs on Celery worker if available)
+    try:
+        send_booking_confirmation_email.delay(b.id)
+    except Exception:
+        # If Celery isn't running, don't block the request; you can still send later or rely on Stripe receipt
+        pass
     
     return JsonResponse({"ok": True, "booking_id": b.id, "redirect": "/portal/bookings/confirm/"})

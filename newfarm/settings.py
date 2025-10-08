@@ -66,22 +66,24 @@ STRIPE_CATALOG_TTL_SECONDS = int(os.getenv("STRIPE_CATALOG_TTL_SECONDS", "300"))
 # Trigger one-off subscription sync in AppConfig.ready() when set
 STARTUP_SYNC = os.getenv("STARTUP_SYNC", "0") == "1"
 
-# Celery (optional). If you don't run Celery, leave these blank.
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "")
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "")
+# ---------------------------
+# Celery (background jobs)
+# ---------------------------
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_ALWAYS_EAGER = False  # set True in tests if you want sync execution
 
-# Enable Celery beat schedule if broker is configured AND BEAT flag is on
+# Optional daily scheduler (Beat)
 START_CELERY_BEAT = os.getenv("START_CELERY_BEAT", "0") == "1"
-
-if CELERY_BROKER_URL and START_CELERY_BEAT:
-    from celery.schedules import crontab
+if START_CELERY_BEAT:
+    from datetime import timedelta
     CELERY_BEAT_SCHEDULE = {
-        # Daily refresh of future occurrences at 02:15 local time
         "daily-subscription-sync": {
-            "task": "core.tasks.daily_subscription_sync",
-            "schedule": crontab(hour=2, minute=15),
-        },
+            "task": "core.tasks.sync_subscriptions_daily",
+            "schedule": timedelta(days=1),
+            "options": {"expires": 60 * 60},  # 1 hour
+        }
     }
 
 # --- Stripe key storage ---
