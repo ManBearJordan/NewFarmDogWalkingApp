@@ -1,6 +1,9 @@
-# Env & secrets
+# env and secrets
 .env
 *.env
+
+# collected static
+/staticfiles/
 
 # Local DBs
 *.sqlite3

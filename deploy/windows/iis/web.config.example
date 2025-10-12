@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <system.webServer>
+    <!-- Explicitly enable ARR proxy and keep original host -->
+    <proxy enabled="true" preserveHostHeader="true" reverseRewriteHostInResponseHeaders="true" />
+
+    <rewrite>
+      <rules>
+        <!-- Bypass ACME and /static so IIS serves them locally -->
+        <rule name="NFDW-ReverseProxy" stopProcessing="true">
+          <match url="(.*)" />
+          <conditions logicalGrouping="MatchAll" trackAllCaptures="false">
+            <add input="{REQUEST_URI}" pattern="^/\.well-known/acme-challenge/" negate="true" />
+            <add input="{REQUEST_URI}" pattern="^/static/" negate="true" />
+          </conditions>
+          <action type="Rewrite" url="http://127.0.0.1:8000/{R:1}" appendQueryString="true" />
+          <serverVariables>
+            <set name="HTTP_X_FORWARDED_PROTO" value="https" />
+          </serverVariables>
+        </rule>
+      </rules>
+      <allowedServerVariables>
+        <add name="HTTP_X_FORWARDED_PROTO" />
+      </allowedServerVariables>
+    </rewrite>
+
+    <!-- Static files & permissive anonymous auth at site level -->
+    <handlers>
+      <add name="StaticFile" path="*" verb="GET,HEAD" modules="StaticFileModule"
+           resourceType="Either" requireAccess="Read" />
+    </handlers>
+    <security>
+      <authorization>
+        <clear />
+        <add accessType="Allow" users="*" />
+      </authorization>
+    </security>
+  </system.webServer>
+</configuration>
