@@ -1,0 +1,17 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h3>Set schedule for {{ link.client.name }} — {{ link.service_code }}</h3>
+<form method="post" class="vstack gap-2">
+  {% csrf_token %}
+  <label>Weekdays (comma-separated, e.g. mon,wed,fri)</label>
+  <input class="form-control" name="weekdays_csv" required>
+  <label>Default time (HH:MM)</label>
+  <input class="form-control" name="default_time" placeholder="09:30" required>
+  <label>Default duration (minutes)</label>
+  <input class="form-control" type="number" name="duration" value="60" min="15" step="5" required>
+  <label>Default block label (optional)</label>
+  <input class="form-control" name="block_label" placeholder="Morning Run">
+  <button class="btn btn-primary mt-2">Save & Materialize</button>
+  <a class="btn btn-link" href="{% url 'admin_subs_dashboard' %}">Back</a>
+</form>
+{% endblock %}
