@@ -33,6 +33,21 @@ class CoreConfig(AppConfig):
                     log.info("Startup subscription sync complete: %s", stats)
                 except Exception as e:
                     log.exception("Startup subscription sync failed: %s", e)
+                
+                # NEW: discover Stripe subs (Stripe-owned) and create/update links
+                try:
+                    from . import stripe_subscriptions
+                    stripe_subscriptions.ensure_links_for_client_stripe_subs()
+                    log.info("Stripe subscription links synced")
+                    # For links that already have a schedule, materialize next 30 days
+                    from .models import StripeSubscriptionLink
+                    for link in StripeSubscriptionLink.objects.all():
+                        try:
+                            stripe_subscriptions.materialize_future_holds(link, horizon_days=30)
+                        except Exception:
+                            pass
+                except Exception as e:
+                    log.exception("Stripe subscription sync failed: %s", e)
 
             # Nudge a few seconds after boot so migrations/admin are ready
             threading.Timer(3.0, _do_sync).start()

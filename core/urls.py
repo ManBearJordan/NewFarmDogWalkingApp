@@ -4,7 +4,7 @@ URL configuration for the core app.
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views, views_admin_capacity, views_portal
+from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks
 
 urlpatterns = [
     path('', views.client_list, name='home'),
@@ -67,4 +67,10 @@ urlpatterns = [
     path("crm/tags/<int:pk>/delete/", views.tag_delete, name="tag_delete"),
     # Admin capacity editor
     path("admin/capacity/", views_admin_capacity.capacity_edit, name="admin_capacity_edit"),
+    # Admin subscriptions dashboard
+    path("admin/subs/", views_admin_subs.subs_dashboard, name="admin_subs_dashboard"),
+    path("admin/subs/<str:sub_id>/schedule/", views_admin_subs.subs_set_schedule, name="admin_subs_set_schedule"),
+    path("admin/subs/occ/<int:occ_id>/finalize/", views_admin_subs.subs_finalize_occurrence, name="admin_subs_finalize_occurrence"),
+    # Stripe webhook
+    path("stripe/webhooks/", views_webhooks.stripe_webhook, name="stripe_webhook"),
 ]

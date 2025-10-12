@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 import uuid
+from django.core.validators import RegexValidator
 
 
 class StripeSettings(models.Model):
@@ -137,13 +138,51 @@ class AdminEvent(models.Model):
 
 
 class SubOccurrence(models.Model):
-    stripe_subscription_id = models.CharField(max_length=200)
+    id = models.AutoField(primary_key=True)
+    stripe_subscription_id = models.CharField(max_length=64)
     start_dt = models.DateTimeField()
     end_dt = models.DateTimeField()
     active = models.BooleanField(default=True)
 
     def __str__(self):
         return f"Sub {self.stripe_subscription_id} ({self.start_dt.date()} - {self.end_dt.date()})"
+
+
+class StripeSubscriptionLink(models.Model):
+    """
+    Links a Stripe subscription to a client & service in our system.
+    Discovered via API/webhook. One Link per Stripe subscription id.
+    """
+    stripe_subscription_id = models.CharField(max_length=64, unique=True)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="stripe_subs")
+    service_code = models.CharField(max_length=64)  # mapped from product/price nickname/metadata
+    status = models.CharField(max_length=32, default="active")  # active, canceled, paused
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Sub {self.stripe_subscription_id} - {self.client.name} - {self.service_code}"
+
+
+class StripeSubscriptionSchedule(models.Model):
+    """
+    One-time setup per Stripe subscription: which weekdays and a default time/block label.
+    Weekdays stored as csv: 'mon,tue,fri'
+    default_time in HH:MM 24h (local AEST)
+    """
+    sub = models.OneToOneField(StripeSubscriptionLink, on_delete=models.CASCADE, related_name="schedule")
+    weekdays_csv = models.CharField(max_length=64, help_text="e.g. mon,tue,wed")
+    default_time = models.CharField(
+        max_length=5,
+        validators=[RegexValidator(r"^\d{2}:\d{2}$")],
+        help_text="HH:MM local time (AEST)."
+    )
+    default_duration_minutes = models.PositiveIntegerField(default=60)
+    default_block_label = models.CharField(max_length=128, blank=True, null=True)
+    last_materialized_until = models.DateField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Schedule for {self.sub.stripe_subscription_id} - {self.weekdays_csv} @ {self.default_time}"
 
 
 class Tag(models.Model):

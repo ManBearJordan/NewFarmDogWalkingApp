@@ -1,0 +1,18 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h2>Subscriptions — Dashboard</h2>
+
+<h4>Subscriptions needing schedule</h4>
+<ul>
+  {% for l in no_sched %}
+    <li>{{ l.client.name }} — {{ l.service_code }} — <a href="{% url 'admin_subs_set_schedule' l.stripe_subscription_id %}">Set schedule</a></li>
+  {% empty %}<li>None</li>{% endfor %}
+</ul>
+
+<h4>Upcoming occurrences (finalize time)</h4>
+<ul>
+  {% for o in upcoming %}
+    <li>{{ o.start_dt|date:"D d M" }} — {{ o.stripe_subscription_id }} — <a href="{% url 'admin_subs_finalize_occurrence' o.id %}">Assign time</a></li>
+  {% empty %}<li>None</li>{% endfor %}
+</ul>
+{% endblock %}
