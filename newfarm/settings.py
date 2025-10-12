@@ -1,13 +1,23 @@
 import os
 from pathlib import Path
+from typing import Tuple, Optional
 from dotenv import load_dotenv
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# -----------------------------------------------------------------------------
+# Core toggles from environment (fallbacks preserve local dev)
+# -----------------------------------------------------------------------------
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-secret')
-DEBUG = True
-ALLOWED_HOSTS = ['testserver', 'localhost', '127.0.0.1']
+DEBUG = os.getenv("DEBUG", "0") == "1"
+
+_allowed = os.getenv("ALLOWED_HOSTS", "testserver,localhost,127.0.0.1").strip()
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",") if h.strip()]
+
+_csrf = os.getenv("CSRF_TRUSTED_ORIGINS", "").strip()
+CSRF_TRUSTED_ORIGINS = [u.strip() for u in _csrf.split(",") if u.strip()]
 
 INSTALLED_APPS = [
     "core.apps.CoreConfig",
@@ -53,7 +63,14 @@ TEMPLATES = [
     },
 ]
 
-STATIC_URL = '/static/'
+# -----------------------------------------------------------------------------
+# Static files
+# -----------------------------------------------------------------------------
+# Serve static via IIS: collect to /staticfiles
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# If you have extra local static dirs during dev, uncomment:
+# STATICFILES_DIRS = [BASE_DIR / "static"]
 
 # Stripe / App settings
 STRIPE_API_KEY = os.getenv("STRIPE_API_KEY", "")
@@ -95,16 +112,34 @@ SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "support@newfarmdogwalking.example")
 
 # --- Production security toggles ---
 PRODUCTION = os.getenv("PRODUCTION", "0") == "1"
-SECURE_SSL_REDIRECT = PRODUCTION
-SESSION_COOKIE_SECURE = PRODUCTION
-CSRF_COOKIE_SECURE = PRODUCTION
-SECURE_HSTS_SECONDS = 31536000 if PRODUCTION else 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = PRODUCTION
-SECURE_HSTS_PRELOAD = PRODUCTION
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if PRODUCTION else None
-CSRF_TRUSTED_ORIGINS = [
-    d.strip() for d in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if d.strip()
-]
+
+# -----------------------------------------------------------------------------
+# Reverse-proxy / security
+# -----------------------------------------------------------------------------
+_sp = os.getenv("SECURE_PROXY_SSL_HEADER")
+if _sp and "," in _sp:
+    name, val = _sp.split(",", 1)
+    SECURE_PROXY_SSL_HEADER: Optional[Tuple[str, str]] = (name.strip(), val.strip())
+elif PRODUCTION:
+    SECURE_PROXY_SSL_HEADER: Optional[Tuple[str, str]] = ("HTTP_X_FORWARDED_PROTO", "https")
+else:
+    SECURE_PROXY_SSL_HEADER: Optional[Tuple[str, str]] = None
+
+USE_X_FORWARDED_HOST = os.getenv("USE_X_FORWARDED_HOST", "1" if PRODUCTION else "0") == "1"
+if PRODUCTION:
+    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "1") == "1"
+    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "1") == "1"
+    CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "1") == "1"
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+else:
+    SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_HSTS_SECONDS = 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
 
 # --- Client portal auth ---
 LOGIN_URL = "/accounts/login/"
