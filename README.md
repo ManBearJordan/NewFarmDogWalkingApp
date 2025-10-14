@@ -129,6 +129,37 @@ python manage.py createsuperuser
 - `scripts/run_dev.ps1` (Windows PowerShell) - Load .env and start server
 - Check `docs/` folder for detailed documentation
 
+## Periodic Stripe Sync (Windows, no Celery)
+
+This project supports automatic Stripe synchronization without Celery by using a Windows Scheduled Task.
+
+**Prerequisites**
+- `.env` contains:
+  ```
+  STARTUP_SYNC=1
+  ```
+
+**One-time setup**
+1. Open PowerShell **as Administrator**.
+2. Run:
+   ```powershell
+   cd C:\NewFarmDogWalkingApp\scripts
+   .\schedule-sync.ps1
+   ```
+   This registers a task named **NFDW-Stripe-Sync** which:
+   - runs once in ~1 minute
+   - repeats every 15 minutes
+
+**What it runs**
+```
+scripts/sync-stripe.bat
+```
+This activates the project virtualenv and runs:
+```
+python manage.py sync_subscriptions
+```
+so the app stays in sync with Stripe periodically.
+
 ## Documentation
 
 - `docs/ARCHITECTURE.md` - System architecture and design decisions
