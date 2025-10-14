@@ -59,11 +59,11 @@ def test_security_settings_enabled_in_production(monkeypatch):
 
 
 def test_csrf_trusted_origins_empty_by_default(monkeypatch):
-    """Test that CSRF_TRUSTED_ORIGINS is empty when env var is not set."""
+    """Test that CSRF_TRUSTED_ORIGINS includes production domain by default."""
     monkeypatch.delenv("CSRF_TRUSTED_ORIGINS", raising=False)
     import newfarm.settings as settings_module
     reload(settings_module)
-    assert settings_module.CSRF_TRUSTED_ORIGINS == []
+    assert settings_module.CSRF_TRUSTED_ORIGINS == ["https://app.newfarmdogwalking.com.au"]
 
 
 def test_csrf_trusted_origins_parses_comma_separated(monkeypatch):
