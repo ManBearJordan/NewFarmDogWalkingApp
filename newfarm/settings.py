@@ -20,6 +20,7 @@ _csrf = os.getenv("CSRF_TRUSTED_ORIGINS", "https://app.newfarmdogwalking.com.au"
 CSRF_TRUSTED_ORIGINS = [u.strip() for u in _csrf.split(",") if u.strip()]
 
 INSTALLED_APPS = [
+    "newfarm.apps.NewfarmConfig",
     "core.apps.CoreConfig",
     'django.contrib.admin',
     'django.contrib.auth',

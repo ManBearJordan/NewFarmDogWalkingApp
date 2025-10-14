@@ -6,6 +6,29 @@
 
 A Django-based desktop application that syncs Stripe subscriptions and invoices into bookings and calendar entries. The app provides both a web interface and can be packaged as a desktop application using PyWebView.
 
+## Periodic Stripe Sync (built-in, no Celery/Windows Task Scheduler)
+
+The app now syncs Stripe data automatically:
+
+**Env flags**
+```
+STARTUP_SYNC=1           # one-off sync a few seconds after boot
+PERIODIC_SYNC=1          # enable periodic sync
+SYNC_INTERVAL_MINUTES=15 # optional; default 15 (min 5)
+```
+
+**How it works**
+- A lightweight in-process scheduler (APScheduler) runs `manage.py sync_subscriptions`
+- No external scheduler (Windows Task Scheduler), no Celery/Redis required
+- Starts automatically when the app boots (see `newfarm/apps.py`)
+
+**Deploy**
+1. Add env flags above to your `.env`
+2. `pip install -r requirements.txt`
+3. Restart your app (e.g., `start-nfdw.bat`)
+
+---
+
 ## Quick Start
 
 ### Prerequisites
