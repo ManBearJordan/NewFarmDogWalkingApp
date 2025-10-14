@@ -22,7 +22,8 @@ def test_key_update_requires_staff(client):
     resp = client.post(reverse("stripe_key_update"), {"stripe_api_key":"sk_test_x"})
     # staff_member_required redirects to admin login by default
     assert resp.status_code in (302, 301)
-    assert "/admin/login" in resp.url or "/accounts/login" in resp.url
+    # Admin URL is now configurable via DJANGO_ADMIN_URL env var (default: django-admin/)
+    assert "/django-admin/login" in resp.url or "/admin/login" in resp.url or "/accounts/login" in resp.url
 
 @pytest.mark.django_db
 def test_key_update_allows_staff(client):

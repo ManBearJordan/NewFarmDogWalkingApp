@@ -11,7 +11,7 @@
 
 #### Key Update Process
 1. **Admin Interface Method** (Recommended for Development):
-   - Navigate to `/admin/` and log in as a staff user
+   - Navigate to the admin URL (default: `/django-admin/`, configurable via `DJANGO_ADMIN_URL`) and log in as a staff user
    - Go to the Stripe configuration section at `/stripe/`
    - Enter the new API key in the secure form
    - Click "Update Key" to save
@@ -33,6 +33,18 @@
 - Test/Live mode is automatically detected and displayed in the admin interface
 
 ### Administrative Access
+
+#### Admin URL Security
+- The Django admin interface is **not** at the default `/admin/` path for security
+- The admin URL is configurable via the `DJANGO_ADMIN_URL` environment variable
+- Default path is `/django-admin/` (safer than the common `/admin/`)
+- **Production Recommendation**: Set `DJANGO_ADMIN_URL` to a secret, random path in your `.env` file:
+  ```bash
+  DJANGO_ADMIN_URL=sk-hd7a4v0-admin/
+  ```
+  (Keep the trailing slash)
+- This obscurity provides additional protection against automated admin login attacks
+- Consider adding IP whitelisting or additional authentication (e.g., Cloudflare Zero Trust) for the admin path
 
 #### Staff User Requirements
 - Staff users must have strong passwords (Django's built-in password validation)
@@ -177,6 +189,7 @@ If you discover a security vulnerability, please:
 
 - [ ] Enable HTTPS with valid SSL certificate
 - [ ] Set secure cookie flags (`SECURE=True`)
+- [ ] **Set `DJANGO_ADMIN_URL` to a secret, random path** (not the default)
 - [ ] Configure proper file permissions on application directories
 - [ ] Enable Django security middleware settings
 - [ ] Set up proper logging and monitoring
@@ -190,3 +203,4 @@ If you discover a security vulnerability, please:
 - [ ] Configure database connection encryption
 - [ ] Set up dependency vulnerability scanning
 - [ ] Implement access audit procedures
+- [ ] Consider additional admin path protection (IP whitelisting, Cloudflare Access, etc.)
