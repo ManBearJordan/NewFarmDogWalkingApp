@@ -3,10 +3,11 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 
 @pytest.mark.django_db
-def test_client_list_allows_anonymous(client):
-    # Test that client_list allows anonymous access
+def test_client_list_requires_auth(client):
+    # Test that client_list redirects anonymous users to login
     resp = client.get(reverse("client_list"))
-    assert resp.status_code == 200
+    assert resp.status_code == 302
+    assert '/login' in resp.url or 'accounts/login' in resp.url
 
 @pytest.mark.django_db 
 def test_client_list_authenticated(client):

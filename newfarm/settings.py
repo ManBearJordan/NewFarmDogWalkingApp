@@ -13,10 +13,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-secret')
 DEBUG = os.getenv("DEBUG", "0") == "1"
 
-_allowed = os.getenv("ALLOWED_HOSTS", "testserver,localhost,127.0.0.1").strip()
+_allowed = os.getenv("ALLOWED_HOSTS", "testserver,localhost,127.0.0.1,app.newfarmdogwalking.com.au").strip()
 ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",") if h.strip()]
 
-_csrf = os.getenv("CSRF_TRUSTED_ORIGINS", "").strip()
+_csrf = os.getenv("CSRF_TRUSTED_ORIGINS", "https://app.newfarmdogwalking.com.au").strip()
 CSRF_TRUSTED_ORIGINS = [u.strip() for u in _csrf.split(",") if u.strip()]
 
 INSTALLED_APPS = [
@@ -31,11 +31,15 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serve static files in production directly from Django (behind Cloudflare)
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    # Redirect all anonymous requests to login unless whitelisted
+    'newfarm.middleware.RedirectAnonymousToLoginMiddleware',
 ]
 
 ROOT_URLCONF = 'newfarm.urls'
@@ -69,6 +73,12 @@ TEMPLATES = [
 # Serve static via IIS: collect to /staticfiles
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Compressed, cache-busted files for admin + your app
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# MEDIA (only if you use it; otherwise remove)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 # If you have extra local static dirs during dev, uncomment:
 # STATICFILES_DIRS = [BASE_DIR / "static"]
 
@@ -142,6 +152,6 @@ else:
     SECURE_HSTS_PRELOAD = False
 
 # --- Client portal auth ---
-LOGIN_URL = "/accounts/login/"
-LOGIN_REDIRECT_URL = "/portal/"
-LOGOUT_REDIRECT_URL = "/accounts/login/"
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "portal_home"
+LOGOUT_REDIRECT_URL = "login"
