@@ -98,14 +98,37 @@ def test_appconfig_ready_skips_in_reloader(monkeypatch):
 
 @pytest.mark.django_db
 def test_run_sync_job_calls_command(monkeypatch):
-    """Test that _run_sync_job calls the full sync pipeline"""
-    with patch('newfarm.scheduler.call_command') as mock_call:
+    """Test that _run_sync_job calls sync_all if available"""
+    with patch('newfarm.scheduler.call_command') as mock_call, \
+         patch('newfarm.scheduler.get_commands') as mock_get_commands:
+        # Mock get_commands to return sync_all as available
+        mock_get_commands.return_value = {"sync_all": "core.management.commands.sync_all"}
+        
         from newfarm.scheduler import _run_sync_job
         _run_sync_job()
         
-        # Should call customers, subscriptions, and bookings commands
+        # Should call sync_all once (the new behavior)
+        assert mock_call.call_count == 1
+        mock_call.assert_called_once_with("sync_all")
+
+
+@pytest.mark.django_db
+def test_run_sync_job_fallback_without_sync_all(monkeypatch):
+    """Test that _run_sync_job falls back to individual commands if sync_all is not available"""
+    with patch('newfarm.scheduler.call_command') as mock_call, \
+         patch('newfarm.scheduler.get_commands') as mock_get_commands:
+        # Mock get_commands to return commands but NOT sync_all
+        mock_get_commands.return_value = {
+            "sync_customers": "core.management.commands.sync_customers",
+            "sync_subscriptions": "core.management.commands.sync_subscriptions",
+            "build_bookings_from_invoices": "core.management.commands.build_bookings_from_invoices"
+        }
+        
+        from newfarm.scheduler import _run_sync_job
+        _run_sync_job()
+        
+        # Should call individual commands (fallback behavior)
         assert mock_call.call_count == 3
-        # Check that it tried to call these commands (order matters)
         calls = [str(c) for c in mock_call.call_args_list]
         assert any("sync_customers" in c for c in calls)
         assert any("sync_subscriptions" in c for c in calls)
