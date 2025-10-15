@@ -5,15 +5,17 @@ from core.models import Client
 
 @pytest.mark.django_db
 def test_admin_pages_not_visible_to_client_user(client):
-    # Client user logs in; shouldn't access admin-only routes we expose
+    # Client user logs in; can view stripe status but not change the key
     u = User.objects.create_user(username="cli", password="p")
     Client.objects.create(name="X", user=u)
     client.login(username="cli", password="p")
-    # Example: stripe status page (admin area)
+    # Example: stripe status page - visible to all but form hidden from non-staff
     resp = client.get(reverse("stripe_status"))
-    # App currently doesn't hard-gate by staff flag; assert it loads but doesn't leak key value
-    assert resp.status_code in (200, 302)
-    assert b"Change Stripe Key" in resp.content
+    assert resp.status_code == 200
+    # Non-staff should NOT see the Change Stripe Key form
+    assert b"Change Stripe Key" not in resp.content
+    # But should see message that only staff can change
+    assert b"Only staff can change the Stripe key" in resp.content
 
 @pytest.mark.django_db
 def test_portal_requires_linked_client(client):

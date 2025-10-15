@@ -98,9 +98,15 @@ def test_appconfig_ready_skips_in_reloader(monkeypatch):
 
 @pytest.mark.django_db
 def test_run_sync_job_calls_command(monkeypatch):
-    """Test that _run_sync_job calls the management command"""
+    """Test that _run_sync_job calls the full sync pipeline"""
     with patch('newfarm.scheduler.call_command') as mock_call:
         from newfarm.scheduler import _run_sync_job
         _run_sync_job()
         
-        mock_call.assert_called_once_with("sync_subscriptions")
+        # Should call customers, subscriptions, and bookings commands
+        assert mock_call.call_count == 3
+        # Check that it tried to call these commands (order matters)
+        calls = [str(c) for c in mock_call.call_args_list]
+        assert any("sync_customers" in c for c in calls)
+        assert any("sync_subscriptions" in c for c in calls)
+        assert any("build_bookings" in c for c in calls)

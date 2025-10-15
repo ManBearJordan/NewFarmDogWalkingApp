@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
 from django.core.management import call_command
+from django.core.management.base import CommandError
 
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -28,14 +29,40 @@ _scheduler_lock = threading.Lock()
 _scheduler: BackgroundScheduler | None = None
 
 
-def _run_sync_job():
-    """Invoke the existing management command to sync from Stripe."""
+def _safe_call(cmd_name: str, **kwargs):
+    """Call a management command if present; otherwise log and continue."""
     try:
-        log.info("Stripe sync job: starting")
-        call_command("sync_subscriptions")
-        log.info("Stripe sync job: complete")
+        log.info("Running management command: %s", cmd_name)
+        call_command(cmd_name, **kwargs)
+    except CommandError as ce:
+        # Command not found or bad usage – skip but log
+        log.warning("Command '%s' skipped: %s", cmd_name, ce)
     except Exception as exc:  # pragma: no cover
-        log.exception("Stripe sync job failed: %s", exc)
+        log.exception("Command '%s' failed: %s", cmd_name, exc)
+
+
+def _run_sync_job():
+    """
+    Full sync pipeline. This keeps the instance self-contained:
+      1) customers            -> internal Customer table
+      2) subscriptions        -> internal Subscription table
+      3) bookings generation  -> derive bookings from invoices/subs
+    Commands are optional; if a command is missing, we just skip it.
+    """
+    log.info("Stripe sync job: starting")
+    # Some repos use these names; we call defensively:
+    # - sync_customers / sync_stripe_customers / sync_stripe
+    for name in ("sync_customers", "sync_stripe_customers", "sync_stripe"):
+        _safe_call(name)
+        break
+    # Subscriptions
+    for name in ("sync_subscriptions",):
+        _safe_call(name)
+    # Build bookings (from invoices or subs)
+    for name in ("build_bookings_from_invoices", "build_bookings"):
+        _safe_call(name)
+        break
+    log.info("Stripe sync job: complete")
 
 
 def start_scheduler():
