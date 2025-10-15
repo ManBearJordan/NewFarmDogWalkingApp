@@ -9,5 +9,10 @@ urlpatterns = [
 
     # Customer auth/portal
     path('accounts/', include('django.contrib.auth.urls')),
+    
+    # Your app
     path('', include('core.urls')),
+    
+    # Default landing -> client login
+    # Note: This may not take effect if core.urls has a '' path, but middleware will redirect anyway
 ]
