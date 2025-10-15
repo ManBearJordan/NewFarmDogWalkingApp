@@ -7,17 +7,19 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
 from django.core.management import call_command
 
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.date import DateTrigger
     from apscheduler.triggers.interval import IntervalTrigger
 except Exception:  # pragma: no cover
     BackgroundScheduler = None  # type: ignore[assignment]
-    IntervalTrigger = None  # type: ignore[assignment]
+    DateTrigger = None          # type: ignore[assignment]
+    IntervalTrigger = None      # type: ignore[assignment]
 
 log = logging.getLogger(__name__)
 
@@ -38,9 +40,9 @@ def _run_sync_job():
 
 def start_scheduler():
     """
-    Start the in-process scheduler once per process.
-    - Honors STARTUP_SYNC=1: run one-time sync ~5s after boot.
-    - Honors PERIODIC_SYNC=1: run every SYNC_INTERVAL_MINUTES (default 15).
+    Start the in-process scheduler exactly once per process.
+    - STARTUP_SYNC=1: run a single sync ~5s after boot
+    - PERIODIC_SYNC=1: run every SYNC_INTERVAL_MINUTES (default 15, min 5)
     """
     global _scheduler_started, _scheduler
     if BackgroundScheduler is None:
@@ -52,35 +54,38 @@ def start_scheduler():
             return
 
         _scheduler_started = True
-        _scheduler = BackgroundScheduler(timezone=str(getattr(settings, "TIME_ZONE", "UTC")))
+
+        tz = getattr(settings, "TIME_ZONE", "UTC")
+        _scheduler = BackgroundScheduler(timezone=tz)
         _scheduler.start(paused=True)
 
-        # Startup sync (optional, default off unless env set)
-        if str(os.environ.get("STARTUP_SYNC", "0")).strip() in ("1", "true", "True"):
-            # run once, shortly after boot
+        # One-off startup sync (optional)
+        if str(os.environ.get("STARTUP_SYNC", "0")).strip().lower() in ("1", "true"):
+            run_at = datetime.now(timezone.utc) + timedelta(seconds=5)
             _scheduler.add_job(
                 _run_sync_job,
-                trigger=IntervalTrigger(seconds=5),
+                trigger=DateTrigger(run_date=run_at),
                 id="nfdw-startup-sync",
-                max_instances=1,
                 replace_existing=True,
-                next_run_time=None,  # first tick after interval
+                max_instances=1,
+                coalesce=True,
             )
-            log.info("Startup sync scheduled (in ~5s)")
+            log.info("Startup sync scheduled (~5s)")
 
-        # Periodic sync (optional, default off unless env set)
-        if str(os.environ.get("PERIODIC_SYNC", "0")).strip() in ("1", "true", "True"):
+        # Periodic sync (optional)
+        if str(os.environ.get("PERIODIC_SYNC", "0")).strip().lower() in ("1", "true"):
             try:
                 minutes = int(os.environ.get("SYNC_INTERVAL_MINUTES", "15"))
-                minutes = max(5, minutes)  # safety floor
             except ValueError:
                 minutes = 15
+            minutes = max(5, minutes)
             _scheduler.add_job(
                 _run_sync_job,
                 trigger=IntervalTrigger(minutes=minutes),
                 id="nfdw-periodic-sync",
-                max_instances=1,
                 replace_existing=True,
+                max_instances=1,
+                coalesce=True,
             )
             log.info("Periodic sync scheduled every %s minute(s)", minutes)
 
@@ -89,6 +94,7 @@ def start_scheduler():
 
 
 def shutdown_scheduler():
+    """Optional: call on graceful shutdown if you wire signals."""
     global _scheduler
     if _scheduler:
         try:
