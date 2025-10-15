@@ -50,18 +50,25 @@ def _run_sync_job():
     Commands are optional; if a command is missing, we just skip it.
     """
     log.info("Stripe sync job: starting")
-    # Some repos use these names; we call defensively:
-    # - sync_customers / sync_stripe_customers / sync_stripe
-    for name in ("sync_customers", "sync_stripe_customers", "sync_stripe"):
-        _safe_call(name)
-        break
-    # Subscriptions
-    for name in ("sync_subscriptions",):
-        _safe_call(name)
-    # Build bookings (from invoices or subs)
-    for name in ("build_bookings_from_invoices", "build_bookings"):
-        _safe_call(name)
-        break
+    
+    # Prefer sync_all if available, as it runs all sync steps in proper order
+    if "sync_all" in get_commands():
+        _safe_call("sync_all")
+    else:
+        # Fallback: call individual commands
+        # Some repos use these names; we call defensively:
+        # - sync_customers / sync_stripe_customers / sync_stripe
+        for name in ("sync_customers", "sync_stripe_customers", "sync_stripe"):
+            _safe_call(name)
+            break
+        # Subscriptions
+        for name in ("sync_subscriptions",):
+            _safe_call(name)
+        # Build bookings (from invoices or subs)
+        for name in ("build_bookings_from_invoices", "build_bookings"):
+            _safe_call(name)
+            break
+    
     log.info("Stripe sync job: complete")
 
 
