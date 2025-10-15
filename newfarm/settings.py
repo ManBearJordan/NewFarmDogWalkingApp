@@ -30,6 +30,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 ]
 
+# Auth / login config
+LOGIN_URL = '/accounts/login/'
+# extra per-project exemptions (regex); core exemptions are in middleware
+LOGIN_EXEMPT_URLS = [
+    # add project-specific regexes here if needed
+]
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     # Serve static files in production directly from Django (behind Cloudflare)
@@ -39,7 +46,8 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    # Redirect all anonymous requests to login unless whitelisted
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Force-login middleware MUST come after AuthenticationMiddleware
     'newfarm.middleware.RedirectAnonymousToLoginMiddleware',
 ]
 
@@ -177,6 +185,6 @@ else:
     SECURE_HSTS_PRELOAD = False
 
 # --- Client portal auth ---
-LOGIN_URL = "login"
+# LOGIN_URL is defined earlier in the file
 LOGIN_REDIRECT_URL = "portal_home"
 LOGOUT_REDIRECT_URL = "login"
