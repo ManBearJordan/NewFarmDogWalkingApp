@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from typing import Tuple, Optional
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -13,11 +14,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-secret')
 DEBUG = os.getenv("DEBUG", "0") == "1"
 
-_allowed = os.getenv("ALLOWED_HOSTS", "testserver,localhost,127.0.0.1,app.newfarmdogwalking.com.au").strip()
-ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",") if h.strip()]
+# Secret admin URL from .env (e.g., DJANGO_ADMIN_URL=sk-hd7a4v0-admin/)
+DJANGO_ADMIN_URL = os.getenv('DJANGO_ADMIN_URL', 'django-admin/')
 
-_csrf = os.getenv("CSRF_TRUSTED_ORIGINS", "https://app.newfarmdogwalking.com.au").strip()
-CSRF_TRUSTED_ORIGINS = [u.strip() for u in _csrf.split(",") if u.strip()]
+# Moved to after proxy settings section for consistency with PR
 
 INSTALLED_APPS = [
     "newfarm.apps.NewfarmConfig",
@@ -127,25 +127,49 @@ PRODUCTION = os.getenv("PRODUCTION", "0") == "1"
 # -----------------------------------------------------------------------------
 # Reverse-proxy / security
 # -----------------------------------------------------------------------------
-_sp = os.getenv("SECURE_PROXY_SSL_HEADER")
-if _sp and "," in _sp:
-    name, val = _sp.split(",", 1)
-    SECURE_PROXY_SSL_HEADER: Optional[Tuple[str, str]] = (name.strip(), val.strip())
+# --- Proxy/HTTPS awareness (Cloudflare Tunnel) ---
+# Trust X-Forwarded-Proto from our reverse-proxy (cloudflared)
+USE_X_FORWARDED_HOST = os.getenv('USE_X_FORWARDED_HOST', '1' if PRODUCTION else '0') in ('1','true','True')
+SECURE_PROXY_SSL_HEADER = None
+_h = os.getenv('SECURE_PROXY_SSL_HEADER')
+if _h:
+    try:
+        # env format: "HTTP_X_FORWARDED_PROTO,https"
+        name, val = [p.strip() for p in _h.split(',', 1)]
+        SECURE_PROXY_SSL_HEADER = (name, val)
+    except Exception:
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO','https')
 elif PRODUCTION:
-    SECURE_PROXY_SSL_HEADER: Optional[Tuple[str, str]] = ("HTTP_X_FORWARDED_PROTO", "https")
-else:
-    SECURE_PROXY_SSL_HEADER: Optional[Tuple[str, str]] = None
+    # Default to standard proxy header in production if not explicitly set
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO','https')
 
-USE_X_FORWARDED_HOST = os.getenv("USE_X_FORWARDED_HOST", "1" if PRODUCTION else "0") == "1"
+SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', '1' if PRODUCTION else '0') in ('1','true','True')
+
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS','testserver,localhost,127.0.0.1,app.newfarmdogwalking.com.au').split(',') if h.strip()]
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS','https://app.newfarmdogwalking.com.au').split(',') if o.strip()]
+
+# Extra safety when Cloudflare sends CF-Visitor instead of XFP
+def SECURE_PROXY_SSL_HEADER_FALLBACK(get_response):
+    def middleware(request):
+        # CF-Visitor: {"scheme":"https"}
+        cfv = request.META.get('HTTP_CF_VISITOR')
+        if cfv and 'https' in cfv:
+            request.META['wsgi.url_scheme'] = 'https'
+            request.is_secure = lambda: True  # type: ignore
+        return get_response(request)
+    return middleware
+
+# insert fallback right after SecurityMiddleware if active
+MIDDLEWARE.insert(1, 'newfarm.settings.SECURE_PROXY_SSL_HEADER_FALLBACK')
+
+# Keep PRODUCTION-based settings for cookie security
 if PRODUCTION:
-    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "1") == "1"
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "1") == "1"
     CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "1") == "1"
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 else:
-    SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     SECURE_HSTS_SECONDS = 0
