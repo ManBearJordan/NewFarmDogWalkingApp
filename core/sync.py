@@ -28,7 +28,8 @@ def _set_if_has(obj, field: str, value: Any):
 def _dt(ts: Optional[int]) -> Optional[datetime]:
     if not ts:
         return None
-    return make_aware(datetime.fromtimestamp(ts, tz=timezone.utc))
+    # fromtimestamp with tz already returns aware datetime
+    return datetime.fromtimestamp(ts, tz=timezone.utc)
 
 def _ensure_stripe():
     # Try multiple environment variable names
@@ -59,16 +60,17 @@ def _find_or_create_client(stripe_cust: Dict[str, Any], Client):
         created = True
         obj = Client()
         _set_if_has(obj, "stripe_customer_id", sid)
+        _set_if_has(obj, "status", "active")  # default status for new clients
 
     # map common fields if they exist
     _set_if_has(obj, "name", name or (email or sid))
     _set_if_has(obj, "email", email)
     # Phone/address live in customer['address'] or customer['phone']
     addr = stripe_cust.get("address") or {}
-    phone = stripe_cust.get("phone") or None
+    phone = stripe_cust.get("phone") or ""
     full_addr = ", ".join([str(addr.get(k)) for k in ("line1","line2","city","state","postal_code") if addr.get(k)])
     _set_if_has(obj, "phone", phone)
-    _set_if_has(obj, "address", full_addr if full_addr else None)
+    _set_if_has(obj, "address", full_addr if full_addr else "")
     obj.save()
     return obj, created
 
@@ -84,8 +86,8 @@ def _find_or_create_booking(source_key: str, client, Booking, start_at: datetime
         bk = Booking()
         _set_if_has(bk, "external_key", source_key)
     # required associations/timestamps
-    if hasattr(bk, "client") and client:
-        setattr(bk, "client", client)
+    if client:
+        bk.client = client
     _set_if_has(bk, "start_dt", start_at)
     _set_if_has(bk, "end_dt", end_at or start_at)
     # sensible defaults for status/service/price if present
