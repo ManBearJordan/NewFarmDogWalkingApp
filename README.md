@@ -6,28 +6,25 @@
 
 A Django-based desktop application that syncs Stripe subscriptions and invoices into bookings and calendar entries. The app provides both a web interface and can be packaged as a desktop application using PyWebView.
 
-## Periodic Stripe Sync (built-in, no Celery/Windows Task Scheduler)
+## Built-in periodic Stripe sync (no external scheduler)
 
-The app now syncs Stripe data automatically:
+The app can keep Stripe data fresh **by itself** using a lightweight in-process scheduler.
 
-**Env flags**
+**Environment**
 ```
-STARTUP_SYNC=1           # one-off sync a few seconds after boot
-PERIODIC_SYNC=1          # enable periodic sync
-SYNC_INTERVAL_MINUTES=15 # optional; default 15 (min 5)
+STARTUP_SYNC=1
+PERIODIC_SYNC=1
+SYNC_INTERVAL_MINUTES=15
 ```
-
-**How it works**
-- A lightweight in-process scheduler (APScheduler) runs `manage.py sync_subscriptions`
-- No external scheduler (Windows Task Scheduler), no Celery/Redis required
-- Starts automatically when the app boots (see `newfarm/apps.py`)
 
 **Deploy**
-1. Add env flags above to your `.env`
-2. `pip install -r requirements.txt`
-3. Restart your app (e.g., `start-nfdw.bat`)
+1) Add the env flags above to your `.env` (not committed).
+2) `pip install -r requirements.txt`
+3) Restart your normal launcher (Waitress, etc.). The app will:
+   - run a one-off sync shortly after boot (if `STARTUP_SYNC=1`)
+   - run a periodic sync every N minutes (if `PERIODIC_SYNC=1`)
 
----
+
 
 ## Quick Start
 
@@ -152,36 +149,7 @@ python manage.py createsuperuser
 - `scripts/run_dev.ps1` (Windows PowerShell) - Load .env and start server
 - Check `docs/` folder for detailed documentation
 
-## Periodic Stripe Sync (Windows, no Celery)
 
-This project supports automatic Stripe synchronization without Celery by using a Windows Scheduled Task.
-
-**Prerequisites**
-- `.env` contains:
-  ```
-  STARTUP_SYNC=1
-  ```
-
-**One-time setup**
-1. Open PowerShell **as Administrator**.
-2. Run:
-   ```powershell
-   cd C:\NewFarmDogWalkingApp\scripts
-   .\schedule-sync.ps1
-   ```
-   This registers a task named **NFDW-Stripe-Sync** which:
-   - runs once in ~1 minute
-   - repeats every 15 minutes
-
-**What it runs**
-```
-scripts/sync-stripe.bat
-```
-This activates the project virtualenv and runs:
-```
-python manage.py sync_subscriptions
-```
-so the app stays in sync with Stripe periodically.
 
 ## Documentation
 
