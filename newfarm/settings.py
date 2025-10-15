@@ -186,5 +186,5 @@ else:
 
 # --- Client portal auth ---
 # LOGIN_URL is defined earlier in the file
-LOGIN_REDIRECT_URL = "portal_home"
+LOGIN_REDIRECT_URL = '/calendar/'
 LOGOUT_REDIRECT_URL = "login"

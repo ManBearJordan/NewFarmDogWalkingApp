@@ -1,10 +1,9 @@
 <!doctype html>
 <html lang="en" data-bs-theme="auto">
-{% comment %} Navbar visibility hardened: staff-only items are hidden from clients {% endcomment %}
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}NewFarmDogWalking{% endblock %}</title>
+  <title>{% block title %}NewFarm Dog Walking • Sign in{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     /* Global spinner overlay */
@@ -24,7 +23,7 @@
   </style>
 </head>
 <body>
-  <!-- Top bar with theme toggle -->
+  <!-- Minimal top bar with theme toggle only -->
   <nav class="navbar navbar-expand-lg border-bottom" aria-label="Top navigation">
     <div class="container">
       <a class="navbar-brand" href="/">NFDW</a>
@@ -45,65 +44,8 @@
   <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080">
     <div id="toast-stack" class="toast-container"></div>
   </div>
-  
-  {# Only show main navbar if user is authenticated #}
-  {% if request.user.is_authenticated %}
-  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-      <div class="container">
-          <a class="navbar-brand" href="/">NewFarm Dog Walking</a>
-          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-              <span class="navbar-toggler-icon"></span>
-          </button>
-          <div class="collapse navbar-collapse" id="navbarNav">
-              <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                  {# Basic links that regular users may see #}
-                  <li class="nav-item">
-                      <a class="nav-link" href="{% url 'booking_list' %}">Bookings</a>
-                  </li>
-                  <li class="nav-item">
-                      <a class="nav-link" href="{% url 'calendar_view' %}">Calendar</a>
-                  </li>
 
-                  {# Admin/staff-only items #}
-                  {% if request.user.is_staff %}
-                      <li class="nav-item">
-                          <a class="nav-link" href="{% url 'subscriptions_list' %}">Subscriptions</a>
-                      </li>
-                      <li class="nav-item">
-                          <a class="nav-link" href="{% url 'client_list' %}">Clients</a>
-                      </li>
-                      <li class="nav-item">
-                          <a class="nav-link" href="{% url 'pet_list' %}">Pets</a>
-                      </li>
-                      <li class="nav-item">
-                          <a class="nav-link" href="{% url 'tags_list' %}">Tags</a>
-                      </li>
-                      <li class="nav-item dropdown">
-                          <a class="nav-link dropdown-toggle" href="#" id="adminMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                              Admin
-                          </a>
-                          <ul class="dropdown-menu" aria-labelledby="adminMenu">
-                              <li><a class="dropdown-item" href="{% url 'admin_tasks_list' %}">Tasks</a></li>
-                              <li><a class="dropdown-item" href="{% url 'reports_invoices_list' %}">Reports</a></li>
-                              <li><a class="dropdown-item" href="{% url 'stripe_status' %}">Stripe Status</a></li>
-                              <li><a class="dropdown-item" href="{% url 'stripe_diagnostics' %}">Stripe Diagnostics</a></li>
-                              <li><hr class="dropdown-divider"></li>
-                              <li><a class="dropdown-item" href="/{{ DJANGO_ADMIN_URL|default:'admin/' }}">Django Admin</a></li>
-                          </ul>
-                      </li>
-                  {% endif %}
-              </ul>
-              <ul class="navbar-nav">
-                  <li class="nav-item">
-                      <a class="nav-link" href="{% url 'logout' %}">Logout</a>
-                  </li>
-              </ul>
-          </div>
-      </div>
-  </nav>
-  {% endif %}
-  
-  <div class="container py-3">
+  <div class="container py-5">
       {% block content %}{% endblock %}
   </div>
 
@@ -176,7 +118,7 @@
         const msgs = [
           {% if messages %}
             {% for m in messages %}
-              { level: "{{ m.tags|default:'info' }}", text: {{ m|safe|escapejs }} },
+              { level: "{{ m.tags|default:'info' }}", text: "{{ m|safe|escapejs }}" },
             {% endfor %}
           {% endif %}
         ];
