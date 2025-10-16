@@ -64,16 +64,20 @@ def _safe_email(stripe_id: str, email: Optional[str], Client) -> str:
 
     # If model enforces unique email, avoid collisions.
     if hasattr(Client, "_meta"):
-        email_field = Client._meta.get_field("email")
-        if getattr(email_field, "unique", False):
-            # Determine which stripe ID field to use
-            stripe_field = "stripe_id" if hasattr(Client, "stripe_id") else "stripe_customer_id"
-            # If exists with different stripe_id, disambiguate
-            exists = Client.objects.filter(email=candidate)
-            filter_kwargs = {stripe_field: stripe_id}
-            if exists.exists() and not exists.filter(**filter_kwargs).exists():
-                local, at, dom = candidate.partition("@")
-                candidate = f"{local}+{stripe_id}{at}{dom}"
+        try:
+            email_field = Client._meta.get_field("email")
+            if getattr(email_field, "unique", False):
+                # Determine which stripe ID field to use
+                stripe_field = "stripe_id" if hasattr(Client, "stripe_id") else "stripe_customer_id"
+                # If exists with different stripe_id, disambiguate
+                filter_kwargs = {stripe_field: stripe_id}
+                exists = Client.objects.filter(email=candidate).exclude(**filter_kwargs)
+                if exists.exists():
+                    local, at, dom = candidate.partition("@")
+                    candidate = f"{local}+{stripe_id}{at}{dom}"
+        except Exception:
+            # If email field doesn't exist or other error, just use the candidate as-is
+            pass
     return candidate
 
 
@@ -106,7 +110,13 @@ def _find_or_create_client(stripe_cust: Dict[str, Any], Client):
     _set_if_has(obj, "email", email)
     addr = stripe_cust.get("address") or {}
     phone = _norm(stripe_cust.get("phone"))
-    full_addr = ", ".join([str(addr.get(k)) for k in ("line1","line2","city","state","postal_code") if _norm(addr.get(k))])
+    # Build address from normalized components
+    addr_parts = []
+    for k in ("line1", "line2", "city", "state", "postal_code"):
+        part = _norm(addr.get(k))
+        if part:
+            addr_parts.append(part)
+    full_addr = ", ".join(addr_parts)
     _set_if_has(obj, "phone", phone or "")
     _set_if_has(obj, "address", full_addr if full_addr else "")
     obj.save()
