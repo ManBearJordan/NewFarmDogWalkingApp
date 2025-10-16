@@ -9,6 +9,7 @@ import stripe
 from django.db import transaction
 from django.apps import apps
 from django.utils.timezone import make_aware
+from django.core.exceptions import FieldDoesNotExist
 
 log = logging.getLogger(__name__)
 
@@ -71,12 +72,11 @@ def _safe_email(stripe_id: str, email: Optional[str], Client) -> str:
                 stripe_field = "stripe_id" if hasattr(Client, "stripe_id") else "stripe_customer_id"
                 # If exists with different stripe_id, disambiguate
                 filter_kwargs = {stripe_field: stripe_id}
-                exists = Client.objects.filter(email=candidate).exclude(**filter_kwargs)
-                if exists.exists():
+                if Client.objects.filter(email=candidate).exclude(**filter_kwargs).exists():
                     local, at, dom = candidate.partition("@")
                     candidate = f"{local}+{stripe_id}{at}{dom}"
-        except Exception:
-            # If email field doesn't exist or other error, just use the candidate as-is
+        except (FieldDoesNotExist, AttributeError):
+            # If email field doesn't exist or model doesn't support this, use candidate as-is
             pass
     return candidate
 
