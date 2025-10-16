@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any, Dict
 
@@ -19,6 +20,10 @@ def _get_model(app_label: str, model_name: str):
         return apps.get_model(app_label, model_name)
     except Exception:
         return None
+
+def _norm(s: Optional[str]) -> Optional[str]:
+    return (s or "").strip() or None
+
 
 def _set_if_has(obj, field: str, value: Any):
     """Set obj.field only if it exists on the model."""
@@ -42,34 +47,67 @@ def _ensure_stripe():
     # make requests modestly sized
     stripe.default_http_client = stripe.http_client.new_default_http_client(timeout=30)
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+def _safe_email(stripe_id: str, email: Optional[str], Client) -> str:
+    """
+    Ensure we return a NOT NULL, likely-unique email value that satisfies DB constraints.
+    If Stripe provides a valid email -> use it.
+    Otherwise -> synthesize 'customer_<sid>@stripe.local'.
+    If email must be unique and clash occurs, append '+<sid>' before '@'.
+    """
+    base = email or ""
+    if base and _EMAIL_RE.match(base):
+        candidate = base.lower()
+    else:
+        candidate = f"customer_{stripe_id}@stripe.local".lower()
+
+    # If model enforces unique email, avoid collisions.
+    if hasattr(Client, "_meta"):
+        email_field = Client._meta.get_field("email")
+        if getattr(email_field, "unique", False):
+            # Determine which stripe ID field to use
+            stripe_field = "stripe_id" if hasattr(Client, "stripe_id") else "stripe_customer_id"
+            # If exists with different stripe_id, disambiguate
+            exists = Client.objects.filter(email=candidate)
+            filter_kwargs = {stripe_field: stripe_id}
+            if exists.exists() and not exists.filter(**filter_kwargs).exists():
+                local, at, dom = candidate.partition("@")
+                candidate = f"{local}+{stripe_id}{at}{dom}"
+    return candidate
+
+
 def _find_or_create_client(stripe_cust: Dict[str, Any], Client):
-    # We try multiple unique keys in a stable order
-    email = (stripe_cust.get("email") or "").strip().lower() or None
-    sid = stripe_cust.get("id")
-    name = stripe_cust.get("name") or ""
+    # Inputs
+    sid = _norm(stripe_cust.get("id")) or "unknown"
+    name = _norm(stripe_cust.get("name")) or ""
+    email_in = _norm(stripe_cust.get("email"))
+    email = _safe_email(sid, email_in, Client)
 
-    qs = None
-    if hasattr(Client, "stripe_customer_id") and sid:
-        qs = Client.objects.filter(stripe_customer_id=sid)
-    elif hasattr(Client, "email") and email:
-        qs = Client.objects.filter(email=email)
+    # Try stripe_id (or stripe_customer_id) first, then email
+    obj = None
+    if hasattr(Client, "stripe_id"):
+        obj = Client.objects.filter(stripe_id=sid).first()
+    elif hasattr(Client, "stripe_customer_id"):
+        obj = Client.objects.filter(stripe_customer_id=sid).first()
+    if not obj:
+        obj = Client.objects.filter(email=email).first()
 
-    obj = qs.first() if qs is not None else None
     created = False
     if not obj:
         created = True
         obj = Client()
+        # Set stripe_id or stripe_customer_id depending on what exists
+        _set_if_has(obj, "stripe_id", sid)
         _set_if_has(obj, "stripe_customer_id", sid)
-        _set_if_has(obj, "status", "active")  # default status for new clients
 
-    # map common fields if they exist
-    _set_if_has(obj, "name", name or (email or sid))
+    # Map common fields
+    _set_if_has(obj, "name", name or email or sid)
     _set_if_has(obj, "email", email)
-    # Phone/address live in customer['address'] or customer['phone']
     addr = stripe_cust.get("address") or {}
-    phone = stripe_cust.get("phone") or ""
-    full_addr = ", ".join([str(addr.get(k)) for k in ("line1","line2","city","state","postal_code") if addr.get(k)])
-    _set_if_has(obj, "phone", phone)
+    phone = _norm(stripe_cust.get("phone"))
+    full_addr = ", ".join([str(addr.get(k)) for k in ("line1","line2","city","state","postal_code") if _norm(addr.get(k))])
+    _set_if_has(obj, "phone", phone or "")
     _set_if_has(obj, "address", full_addr if full_addr else "")
     obj.save()
     return obj, created
