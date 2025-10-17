@@ -126,12 +126,15 @@ def _find_or_create_booking(source_key: str, client, Booking, start_at: datetime
     """
     source_key is a stable unique key such as 'sub_<sid>_<period_start>' or 'inv_<id>'.
     Booking model is prob. unique on an external key; we store it if the field exists.
+    Returns (booking, created) tuple.
     """
     bk = None
+    created = False
     if hasattr(Booking, "external_key"):
         bk = Booking.objects.filter(external_key=source_key).first()
     if not bk:
         bk = Booking()
+        created = True
         _set_if_has(bk, "external_key", source_key)
     # required associations/timestamps
     if client:
@@ -139,14 +142,20 @@ def _find_or_create_booking(source_key: str, client, Booking, start_at: datetime
     _set_if_has(bk, "start_dt", start_at)
     _set_if_has(bk, "end_dt", end_at or start_at)
     # sensible defaults for status/service/price if present
-    _set_if_has(bk, "status", getattr(Booking, "Status", None).CONFIRMED if hasattr(getattr(Booking, "Status", None), "CONFIRMED") else "confirmed")
-    _set_if_has(bk, "service_code", getattr(bk, "service_code", None) or "stripe")
-    _set_if_has(bk, "service_name", getattr(bk, "service_name", None) or "Stripe")
-    _set_if_has(bk, "service_label", getattr(bk, "service_label", None) or "Stripe")
-    _set_if_has(bk, "price_cents", getattr(bk, "price_cents", None) or 0)
-    _set_if_has(bk, "location", getattr(bk, "location", None) or "")
+    if not getattr(bk, "status", None):
+        _set_if_has(bk, "status", "confirmed")
+    if not getattr(bk, "service_code", None):
+        _set_if_has(bk, "service_code", "stripe")
+    if not getattr(bk, "service_name", None):
+        _set_if_has(bk, "service_name", "Stripe")
+    if not getattr(bk, "service_label", None):
+        _set_if_has(bk, "service_label", "Stripe")
+    if not getattr(bk, "price_cents", None):
+        _set_if_has(bk, "price_cents", 0)
+    if not getattr(bk, "location", None):
+        _set_if_has(bk, "location", "")
     bk.save()
-    return bk
+    return bk, created
 
 # ---------- Public sync API used by management commands & scheduler ----------
 
@@ -217,8 +226,8 @@ def build_bookings_from_subscriptions(window_days: int = 60) -> dict:
 
         # Create/update booking
         key = f"sub_{sub['id']}_{period[0]}"
-        bk = _find_or_create_booking(key, client, Booking, start_at, end_at)
-        if bk._state.adding:  # unlikely here; kept for clarity
+        bk, was_created = _find_or_create_booking(key, client, Booking, start_at, end_at)
+        if was_created:
             created += 1
         else:
             updated += 1
@@ -265,8 +274,8 @@ def build_bookings_from_invoices(window_days: int = 90) -> dict:
             client, _ = _find_or_create_client(cust, Client)
 
         key = f"inv_{inv['id']}"
-        bk = _find_or_create_booking(key, client, Booking, start_at, end_at)
-        if bk._state.adding:
+        bk, was_created = _find_or_create_booking(key, client, Booking, start_at, end_at)
+        if was_created:
             created += 1
         else:
             updated += 1

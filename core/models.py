@@ -112,6 +112,8 @@ class Booking(models.Model):
     # Card payments (portal flow)
     payment_intent_id = models.CharField(max_length=128, blank=True, null=True)
     charge_id = models.CharField(max_length=128, blank=True, null=True)
+    # External key for syncing from Stripe (subscriptions/invoices)
+    external_key = models.CharField(max_length=200, blank=True, null=True, unique=True, db_index=True)
 
     def __str__(self):
         return f"{self.service_name} for {self.client.name} on {self.start_dt.date()}"
