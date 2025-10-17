@@ -36,7 +36,7 @@ The settings are automatically enabled when `PRODUCTION=1`, so you don't need to
 Run the Cloudflare integration tests to verify the setup:
 
 ```bash
-python -m pytest core/tests/test_cloudflare*.py -v
+python -m pytest core/tests/test_cloudflare_*.py -v
 ```
 
 ### Troubleshooting
