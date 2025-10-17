@@ -1,6 +1,56 @@
-# Operations: Subscription Sync
+# Operations Guide
 
-## One-off on server startup
+## Cloudflare Tunnel Deployment
+
+The application is configured to work reliably behind Cloudflare Tunnel with proper SSL/HTTPS detection.
+
+### Required Environment Variables
+
+When deploying behind Cloudflare Tunnel, ensure these settings are in your `.env` file:
+
+```bash
+# Enable production security features
+PRODUCTION=1
+
+# SSL/HTTPS Settings for Cloudflare Tunnel
+SECURE_SSL_REDIRECT=1
+SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+USE_X_FORWARDED_HOST=1
+
+# Your domain
+ALLOWED_HOSTS=app.newfarmdogwalking.com.au
+CSRF_TRUSTED_ORIGINS=https://app.newfarmdogwalking.com.au
+```
+
+### How It Works
+
+1. **SECURE_SSL_REDIRECT=1** - Forces all HTTP traffic to redirect to HTTPS
+2. **SECURE_PROXY_SSL_HEADER** - Trusts the `X-Forwarded-Proto` header from Cloudflare to detect HTTPS
+3. **USE_X_FORWARDED_HOST=1** - Trusts the `X-Forwarded-Host` header for proper hostname detection
+4. **CF-Visitor Fallback** - Middleware automatically detects Cloudflare's `CF-Visitor` header as a fallback
+
+The settings are automatically enabled when `PRODUCTION=1`, so you don't need to manually toggle SSL settings.
+
+### Testing
+
+Run the Cloudflare integration tests to verify the setup:
+
+```bash
+python -m pytest core/tests/test_cloudflare*.py -v
+```
+
+### Troubleshooting
+
+If you experience redirect loops or SSL issues:
+
+1. Verify Cloudflare's SSL/TLS mode is set to "Full" or "Full (strict)" in the Cloudflare dashboard
+2. Ensure `cloudflared` tunnel is properly configured to forward to your app
+3. Check that environment variables are correctly set in your `.env` file
+4. Temporarily disable SSL redirect for debugging: `SECURE_SSL_REDIRECT=0`
+
+## Subscription Sync
+
+### One-off on server startup
 Set `STARTUP_SYNC=1` (in `.env`) and the app will run a background sync a few seconds after boot.
 This is implemented in `core.apps.CoreConfig.ready()` and guarded to avoid double runs with Django's
 autoreloader.
