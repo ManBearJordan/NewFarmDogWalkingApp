@@ -27,6 +27,7 @@ from datetime import datetime, date
 from calendar import Calendar, monthrange
 from django.views.decorators.http import require_http_methods
 import json
+import logging
 
 from .models import Client, Booking, AdminEvent, SubOccurrence, Pet, BookingPet, Tag
 from .forms import PetForm, ClientForm
@@ -59,6 +60,9 @@ from .unified_booking_helpers import create_booking_with_unified_fields
 from .booking_create_service import create_bookings_from_rows
 from .stripe_integration import get_invoice_public_url
 from .admin_views import stripe_diagnostics_view
+
+# Logger for debugging calendar view
+logger = logging.getLogger(__name__)
 
 
 @user_passes_test(lambda u: u.is_staff)
@@ -356,24 +360,56 @@ def calendar_view(request):
     else:
         month_end = date(year, month + 1, 1)
     
+    # Determine client filtering based on user permissions
+    # Admin users (superuser) see all bookings, non-admin staff see only their client's bookings
+    user = request.user
+    client_filter = None
+    if not user.is_superuser:
+        # Non-admin staff: check if they have a linked client profile
+        linked_client = _get_linked_client(user)
+        if linked_client:
+            client_filter = linked_client
+            logger.debug(f"Calendar view for non-admin user {user.username}: filtering by client ID {linked_client.id}")
+        else:
+            # Staff user with no linked client sees all bookings
+            logger.debug(f"Calendar view for staff user {user.username}: no linked client, showing all bookings")
+    else:
+        logger.debug(f"Calendar view for admin user {user.username}: showing all bookings")
+    
     # Count bookings (exclude deleted and cancelled/voided status)
-    bookings = filter_active_bookings(Booking.objects.filter(
+    bookings_qs = Booking.objects.filter(
         start_dt__date__gte=month_start,
         start_dt__date__lt=month_end,
-    ))
+    )
+    if client_filter:
+        bookings_qs = bookings_qs.filter(client=client_filter)
+    bookings = filter_active_bookings(bookings_qs)
+    
+    # Log booking count for debugging
+    booking_count = bookings.count()
+    logger.info(f"Calendar view: found {booking_count} active bookings for {year}-{month:02d}")
     
     # Count SubOccurrences where active=True
-    sub_occurrences = SubOccurrence.objects.filter(
+    sub_occurrences_qs = SubOccurrence.objects.filter(
         start_dt__date__gte=month_start,
         start_dt__date__lt=month_end,
         active=True
     )
+    # TODO: Filter sub occurrences by client if needed
+    # SubOccurrence doesn't have a direct client relationship. To filter by client,
+    # we would need to join through Stripe subscription metadata or create a link table.
+    # For now, all staff users see all subscription occurrences.
+    sub_occurrences = sub_occurrences_qs
+    sub_occurrence_count = sub_occurrences.count()
+    logger.info(f"Calendar view: found {sub_occurrence_count} active subscription occurrences for {year}-{month:02d}")
     
-    # Count AdminEvents
+    # Count AdminEvents - these are not client-specific
     admin_events = AdminEvent.objects.filter(
         due_dt__date__gte=month_start,
         due_dt__date__lt=month_end
     )
+    admin_event_count = admin_events.count()
+    logger.info(f"Calendar view: found {admin_event_count} admin events for {year}-{month:02d}")
     
     # Build day counts
     for booking in bookings:
@@ -402,11 +438,16 @@ def calendar_view(request):
     if selected_date:
         try:
             selected_dt = datetime.strptime(selected_date, '%Y-%m-%d').date()
-            bookings = filter_active_bookings(Booking.objects.filter(
+            bookings_detail_qs = Booking.objects.filter(
                 start_dt__date=selected_dt,
-            )).order_by('start_dt')
-            day_detail = {'bookings': bookings}
+            )
+            if client_filter:
+                bookings_detail_qs = bookings_detail_qs.filter(client=client_filter)
+            bookings_detail = filter_active_bookings(bookings_detail_qs).order_by('start_dt')
+            day_detail = {'bookings': bookings_detail}
+            logger.info(f"Calendar day detail for {selected_date}: found {bookings_detail.count()} bookings")
         except ValueError:
+            logger.warning(f"Calendar view: invalid date format '{selected_date}'")
             pass
     
     # Month navigation
