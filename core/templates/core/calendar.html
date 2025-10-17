@@ -93,7 +93,16 @@
                             {% for booking in day_detail.bookings %}
                                 <div class="list-group-item">
                                     <div class="d-flex w-100 justify-content-between">
-                                        <h6 class="mb-1">{{ booking.service_name }}</h6>
+                                        <h6 class="mb-1">
+                                            {{ booking.service_name }}
+                                            {% if booking.stripe_invoice_id %}
+                                                <span class="badge bg-info text-white ms-1" 
+                                                      title="Booking created from Stripe subscription"
+                                                      data-bs-toggle="tooltip">
+                                                    Stripe
+                                                </span>
+                                            {% endif %}
+                                        </h6>
                                         <small>{{ booking.start_dt|time:"H:i" }}</small>
                                     </div>
                                     <p class="mb-1">{{ booking.client.name }}</p>
@@ -145,7 +154,16 @@
                 <td>{{ b.start_dt|date:"H:i" }}</td>
                 <td>{{ b.end_dt|date:"H:i" }}</td>
                 <td>{{ b.client.name }}</td>
-                <td>{{ b.service_label|default:b.service_name|default:b.service_code }}</td>
+                <td>
+                  {{ b.service_label|default:b.service_name|default:b.service_code }}
+                  {% if b.stripe_invoice_id %}
+                    <span class="badge bg-info text-white ms-1" 
+                          title="Booking created from Stripe subscription"
+                          data-bs-toggle="tooltip">
+                      Stripe
+                    </span>
+                  {% endif %}
+                </td>
                 <td>{{ b.location }}</td>
                 <td class="text-end">{{ b.price_cents|cents_to_dollars }}</td>
               </tr>
@@ -184,6 +202,12 @@
 
 {% block extra_js %}
 <script>
+  // Initialize Bootstrap tooltips
+  (function(){
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+  })();
+
   (function(){
     const btn = document.getElementById('btnTroubleshootSync');
     if(!btn) return;
