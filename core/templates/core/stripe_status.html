@@ -26,7 +26,7 @@
           {% csrf_token %}
           <label for="stripeKey" class="visually-hidden">Stripe Secret Key</label>
           <input id="stripeKey" type="password" name="stripe_api_key" class="form-control" placeholder="sk_test_... or sk_live_..." style="min-width: 320px;" aria-label="Stripe secret key">
-          <button class="btn btn-primary" title="Save Stripe key">Change Stripe Key</button>
+          <button type="submit" class="btn btn-primary" title="Save Stripe key">Change Stripe Key</button>
         </form>
       {% else %}
         <div class="text-muted small">

@@ -5,7 +5,7 @@
 
 <form method="post" action="{% url 'clients_stripe_sync' %}" class="mb-3" data-disable-on-submit>
   {% csrf_token %}
-  <button class="btn btn-outline-primary" title="Link clients to Stripe by email">Sync Stripe customers</button>
+  <button type="submit" class="btn btn-outline-primary" title="Link clients to Stripe by email">Sync Stripe customers</button>
   <span class="text-muted ms-2 small">Links by email; updates phone/address; respects test/live key.</span>
 </form>
 
@@ -70,7 +70,7 @@
                 </div>
                 <div class="modal-footer">
                   <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                  <button class="btn btn-primary">Link</button>
+                  <button type="submit" class="btn btn-primary">Link</button>
                 </div>
               </form>
             </div>
@@ -95,7 +95,7 @@
                 </div>
                 <div class="modal-footer">
                   <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                  <button class="btn btn-success">Save</button>
+                  <button type="submit" class="btn btn-success">Save</button>
                 </div>
               </form>
             </div>
