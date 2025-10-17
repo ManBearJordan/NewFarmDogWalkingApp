@@ -150,3 +150,23 @@ class TestStaffAccessRestrictions:
         resp = self.client.get(reverse("client_list"))
         assert resp.status_code == 302
         assert '/login' in resp.url or 'accounts/login' in resp.url
+
+    def test_booking_list_requires_staff(self):
+        """Non-staff users should not access booking list"""
+        self.client.login(username="regular", password="pass")
+        resp = self.client.get(reverse("booking_list"))
+        assert resp.status_code in [302, 403]
+        
+        self.client.login(username="staff", password="pass")
+        resp = self.client.get(reverse("booking_list"))
+        assert resp.status_code == 200
+
+    def test_calendar_view_requires_staff(self):
+        """Non-staff users should not access calendar view"""
+        self.client.login(username="regular", password="pass")
+        resp = self.client.get(reverse("calendar_view"))
+        assert resp.status_code in [302, 403]
+        
+        self.client.login(username="staff", password="pass")
+        resp = self.client.get(reverse("calendar_view"))
+        assert resp.status_code == 200

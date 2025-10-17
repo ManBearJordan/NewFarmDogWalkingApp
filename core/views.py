@@ -332,6 +332,7 @@ def client_add_credit(request, client_id):
         return JsonResponse({'error': f'Error adding credit: {e}'}, status=500)
 
 
+@user_passes_test(lambda u: u.is_staff)
 def calendar_view(request):
     """Show calendar month view with day details."""
     # Get current month or requested month
@@ -540,7 +541,7 @@ class PetDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
 # -----------------------------
 # Bookings tab (list & manage)
 # -----------------------------
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def booking_list(request):
     from .models import Booking
     # parse filters
@@ -580,7 +581,7 @@ def booking_list(request):
     return render(request, "core/booking_list.html", ctx)
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def booking_open_invoice(request, booking_id: int):
     from .models import Booking
     b = get_object_or_404(Booking, id=booking_id)
@@ -592,7 +593,7 @@ def booking_open_invoice(request, booking_id: int):
     return HttpResponseRedirect(url)
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def booking_soft_delete(request, booking_id: int):
     from .models import Booking
     b = get_object_or_404(Booking, id=booking_id)
@@ -603,7 +604,7 @@ def booking_soft_delete(request, booking_id: int):
     return HttpResponseRedirect(f"{reverse_lazy('booking_list')}?{params}")
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def booking_export_ics(request: HttpRequest) -> HttpResponse:
     """
     Export ICS for either selected `ids` (comma-separated) or current filtered range.
