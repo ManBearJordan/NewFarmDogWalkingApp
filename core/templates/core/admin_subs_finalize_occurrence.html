@@ -8,7 +8,7 @@
   {% csrf_token %}
   <label>Start time (HH:MM)</label>
   <input class="form-control" name="start_time" placeholder="09:30" required>
-  <button class="btn btn-success mt-2">Create booking</button>
+  <button type="submit" class="btn btn-success mt-2">Create booking</button>
   <a class="btn btn-link" href="{% url 'admin_subs_dashboard' %}">Back</a>
 </form>
 {% endblock %}

@@ -5,7 +5,7 @@
 <div class="d-flex mb-3">
   <form method="post" action="{% url 'subscriptions_sync' %}">
     {% csrf_token %}
-    <button class="btn btn-primary">Troubleshoot Sync</button>
+    <button type="submit" class="btn btn-primary">Troubleshoot Sync</button>
   </form>
 </div>
 

@@ -10,7 +10,7 @@
     <form method="post" class="d-inline">
       {% csrf_token %}
       <input type="hidden" name="action" value="copy_yesterday">
-      <button class="btn btn-outline-secondary">Copy yesterday</button>
+      <button type="submit" class="btn btn-outline-secondary">Copy yesterday</button>
     </form>
   </div>
 
@@ -30,7 +30,7 @@
       <input class="form-control" type="text" name="label" placeholder="e.g., Morning Run">
     </div>
     <div class="col-auto align-self-end">
-      <button class="btn btn-primary">Add block</button>
+      <button type="submit" class="btn btn-primary">Add block</button>
     </div>
     <div class="col-auto align-self-end">
       <input class="form-control" type="date" name="date" value="{{ date|date:'Y-m-d' }}" disabled>
@@ -63,7 +63,7 @@
             </label>
           </div>
           <div class="col-auto">
-            <button class="btn btn-success btn-sm">Save capacity</button>
+            <button type="submit" class="btn btn-success btn-sm">Save capacity</button>
           </div>
         </form>
         

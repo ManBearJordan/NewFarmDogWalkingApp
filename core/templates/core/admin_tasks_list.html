@@ -12,7 +12,7 @@
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin_task_edit' ev.id %}">Edit</a>
         <form method="post" action="{% url 'admin_task_delete' ev.id %}" class="ms-2">
           {% csrf_token %}
-          <button class="btn btn-sm btn-outline-danger">Delete</button>
+          <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
         </form>
       </div>
     </div>
