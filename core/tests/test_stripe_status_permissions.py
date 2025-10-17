@@ -6,6 +6,10 @@ from django.contrib.auth.models import User
 def test_status_page_renders_without_key_leak(client, monkeypatch):
     # Force a key in env but mock get_key_status to avoid exposing raw key
     from core import stripe_key_manager as m
+    from django.contrib.auth.models import User
+    # Need staff user to access stripe status
+    u = User.objects.create_user(username="staff", password="p", is_staff=True)
+    client.login(username="staff", password="p")
     monkeypatch.setattr(m, "get_key_status", lambda: {"configured": True, "mode":"env", "test_or_live":"test"})
     resp = client.get(reverse("stripe_status"))
     assert resp.status_code == 200

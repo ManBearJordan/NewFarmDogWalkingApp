@@ -9,7 +9,7 @@ from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, HttpRe
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.utils.http import urlencode
@@ -21,7 +21,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from django.db.models import Q
 from django.urls import reverse_lazy
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from datetime import datetime, date
 from calendar import Calendar, monthrange
@@ -61,6 +61,7 @@ from .stripe_integration import get_invoice_public_url
 from .admin_views import stripe_diagnostics_view
 
 
+@user_passes_test(lambda u: u.is_staff)
 def client_list(request):
     """List clients and handle client creation."""
     if request.method == 'POST':
@@ -93,6 +94,7 @@ def client_list(request):
     })
 
 
+@user_passes_test(lambda u: u.is_staff)
 def client_create(request: HttpRequest) -> HttpResponse:
     """Create a client with tags support."""
     form = ClientForm(request.POST or None)
@@ -105,7 +107,7 @@ def client_create(request: HttpRequest) -> HttpResponse:
 # -----------------------------
 # Clients: Stripe + Credit actions
 # -----------------------------
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def clients_stripe_sync(request: HttpRequest) -> HttpResponse:
     """
     Link clients to Stripe customers by email (case-insensitive).
@@ -131,7 +133,7 @@ def clients_stripe_sync(request: HttpRequest) -> HttpResponse:
     return redirect("client_list")
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def client_stripe_link(request: HttpRequest, client_id: int) -> HttpResponse:
     """
     Link a single client to Stripe by explicit input (cus_… or email).
@@ -161,7 +163,7 @@ def client_stripe_link(request: HttpRequest, client_id: int) -> HttpResponse:
     return redirect("client_list")
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def client_stripe_open(request: HttpRequest, client_id: int) -> HttpResponse:
     from .models import Client
     c = get_object_or_404(Client, id=client_id)
@@ -172,7 +174,7 @@ def client_stripe_open(request: HttpRequest, client_id: int) -> HttpResponse:
     return HttpResponseRedirect(url)
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def client_credit_add(request: HttpRequest, client_id: int) -> HttpResponse:
     from .models import Client
     c = get_object_or_404(Client, id=client_id)
@@ -196,6 +198,7 @@ def client_credit_add(request: HttpRequest, client_id: int) -> HttpResponse:
     return redirect("client_list")
 
 
+@user_passes_test(lambda u: u.is_staff)
 def booking_create_batch(request):
     """Create multiple bookings with billing."""
     if request.method == 'POST':
@@ -299,6 +302,7 @@ def booking_create_batch(request):
     })
 
 
+@user_passes_test(lambda u: u.is_staff)
 @require_POST
 def client_add_credit(request, client_id):
     """Add credit to a client account."""
@@ -427,6 +431,7 @@ def calendar_view(request):
     return render(request, 'core/calendar.html', context)
 
 
+@user_passes_test(lambda u: u.is_staff)
 def reports_invoices_list(request):
     """List recent invoices for clients in our database."""
     from datetime import datetime
@@ -457,7 +462,7 @@ def reports_invoices_list(request):
 #
 # Pets — CRUD UI
 #
-class PetListView(LoginRequiredMixin, ListView):
+class PetListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     template_name = "core/pet_list.html"
     model = Pet
     context_object_name = "pets"
@@ -487,8 +492,11 @@ class PetListView(LoginRequiredMixin, ListView):
         ctx["clients"] = Client.objects.order_by("name")
         return ctx
 
+    def test_func(self):
+        return self.request.user.is_staff
 
-class PetCreateView(LoginRequiredMixin, CreateView):
+
+class PetCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Pet
     form_class = PetForm
     template_name = "core/pet_form.html"
@@ -498,8 +506,11 @@ class PetCreateView(LoginRequiredMixin, CreateView):
         messages.success(self.request, "Pet created.")
         return super().form_valid(form)
 
+    def test_func(self):
+        return self.request.user.is_staff
 
-class PetUpdateView(LoginRequiredMixin, UpdateView):
+
+class PetUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Pet
     form_class = PetForm
     template_name = "core/pet_form.html"
@@ -509,8 +520,11 @@ class PetUpdateView(LoginRequiredMixin, UpdateView):
         messages.success(self.request, "Pet updated.")
         return super().form_valid(form)
 
+    def test_func(self):
+        return self.request.user.is_staff
 
-class PetDeleteView(LoginRequiredMixin, DeleteView):
+
+class PetDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = Pet
     template_name = "core/pet_confirm_delete.html"
     success_url = reverse_lazy("pet_list")
@@ -518,6 +532,9 @@ class PetDeleteView(LoginRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, "Pet deleted.")
         return super().delete(request, *args, **kwargs)
+
+    def test_func(self):
+        return self.request.user.is_staff
 
 
 # -----------------------------
@@ -616,7 +633,7 @@ def booking_export_ics(request: HttpRequest) -> HttpResponse:
 # -----------------------------
 # Subscriptions tab
 # -----------------------------
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def subscriptions_list(request: HttpRequest) -> HttpResponse:
     """List distinct subscription IDs inferred from future active holds."""
     from .models import SubOccurrence
@@ -649,7 +666,7 @@ def subscriptions_list(request: HttpRequest) -> HttpResponse:
     return render(request, "core/subscriptions.html", {"subs": subs})
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def subscriptions_sync(request: HttpRequest) -> HttpResponse:
     """Run the unified sync and show a toast with stats."""
     stats = sync_subscriptions_to_bookings_and_calendar()
@@ -657,7 +674,7 @@ def subscriptions_sync(request: HttpRequest) -> HttpResponse:
     return redirect("subscriptions_list")
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def calendar_troubleshoot_sync(request: HttpRequest) -> JsonResponse:
     """
     Run the unified subscription sync and return stats JSON:
@@ -677,7 +694,7 @@ def calendar_troubleshoot_sync(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": str(e)}, status=500)
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def subscription_delete(request: HttpRequest, sub_id: str) -> HttpResponse:
     """
     Cancel subscription in Stripe and remove future holds.
@@ -698,7 +715,7 @@ def subscription_delete(request: HttpRequest, sub_id: str) -> HttpResponse:
     return redirect("subscriptions_list")
 
 # ---------- Admin tasks (simple CRUD) ----------
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def admin_tasks_list(request: HttpRequest) -> HttpResponse:
     """
     Show AdminEvent items. Default filter = upcoming; `?f=past` lists past ones.
@@ -718,7 +735,7 @@ def admin_tasks_list(request: HttpRequest) -> HttpResponse:
     return render(request, "core/admin_tasks_list.html", {"tasks": qs, "f": f})
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def admin_task_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         tz = get_current_timezone()
@@ -734,7 +751,7 @@ def admin_task_create(request: HttpRequest) -> HttpResponse:
     return render(request, "core/admin_task_form.html")
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def admin_task_edit(request: HttpRequest, pk: int) -> HttpResponse:
     ev = get_object_or_404(AdminEvent, pk=pk)
     if request.method == "POST":
@@ -751,7 +768,7 @@ def admin_task_edit(request: HttpRequest, pk: int) -> HttpResponse:
     return render(request, "core/admin_task_form.html", {"event": ev})
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def admin_task_delete(request: HttpRequest, pk: int) -> HttpResponse:
     ev = get_object_or_404(AdminEvent, pk=pk)
     if request.method == "POST":
@@ -762,7 +779,7 @@ def admin_task_delete(request: HttpRequest, pk: int) -> HttpResponse:
 # -----------------------------
 # CRM Tags
 # -----------------------------
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 def tags_list(request: HttpRequest) -> HttpResponse:
     q = (request.GET.get("q") or "").strip()
     qs = Tag.objects.all()
@@ -772,7 +789,7 @@ def tags_list(request: HttpRequest) -> HttpResponse:
     return render(request, "core/tags_list.html", {"rows": qs, "q": q})
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 @require_http_methods(["GET", "POST"])
 def tag_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
@@ -787,7 +804,7 @@ def tag_create(request: HttpRequest) -> HttpResponse:
     return render(request, "core/tag_form.html", {"obj": None})
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 @require_http_methods(["GET", "POST"])
 def tag_edit(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(Tag, pk=pk)
@@ -805,7 +822,7 @@ def tag_edit(request: HttpRequest, pk: int) -> HttpResponse:
     return render(request, "core/tag_form.html", {"obj": obj})
 
 
-@login_required
+@user_passes_test(lambda u: u.is_staff)
 @require_http_methods(["GET", "POST"])
 def tag_delete(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(Tag, pk=pk)
@@ -846,6 +863,7 @@ def api_service_info(request: HttpRequest) -> JsonResponse:
     return JsonResponse(info)
 
 
+@user_passes_test(lambda u: u.is_staff)
 def stripe_status_view(request: HttpRequest) -> HttpResponse:
     """
     Show Stripe key status + catalog peek. Manual refresh via ?refresh=1

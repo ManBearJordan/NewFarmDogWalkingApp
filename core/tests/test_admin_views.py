@@ -6,8 +6,8 @@ from django.test import Client
 
 @pytest.mark.django_db
 def test_admin_stripe_status_basic():
-    """Test basic access to stripe status page (doesn't require staff)"""
-    user = User.objects.create_user(username="user", password="p")
+    """Test basic access to stripe status page (requires staff)"""
+    user = User.objects.create_user(username="user", password="p", is_staff=True)
     client = Client()
     client.login(username="user", password="p")
     
@@ -20,7 +20,7 @@ def test_admin_stripe_status_basic():
 @pytest.mark.django_db 
 def test_stripe_key_update_post():
     """Test POST request to update stripe key"""
-    user = User.objects.create_user(username="user", password="p")
+    user = User.objects.create_user(username="user", password="p", is_staff=True)
     client = Client()
     client.login(username="user", password="p")
     
@@ -34,7 +34,7 @@ def test_stripe_key_update_post():
 @pytest.mark.django_db
 def test_stripe_status_refresh():
     """Test stripe status page with refresh parameter"""  
-    user = User.objects.create_user(username="user", password="p")
+    user = User.objects.create_user(username="user", password="p", is_staff=True)
     client = Client()
     client.login(username="user", password="p")
     

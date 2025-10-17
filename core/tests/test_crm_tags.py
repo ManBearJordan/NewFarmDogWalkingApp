@@ -5,7 +5,7 @@ from core.models import Client, Tag
 
 @pytest.fixture
 def authed(client):
-    u = User.objects.create_user(username="u", password="p")
+    u = User.objects.create_user(username="u", password="p", is_staff=True)
     client.login(username="u", password="p")
     return client
 
