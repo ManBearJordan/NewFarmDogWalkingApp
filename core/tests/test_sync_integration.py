@@ -330,3 +330,57 @@ def test_sync_skips_invoices_without_customer():
             assert result["created"] == 0
             assert result["updated"] == 0
             assert Booking.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_sync_customers_with_missing_email():
+    """Test that sync_customers handles customers without email addresses"""
+    stripe_customers = [
+        {
+            "id": "cus_no_email1",
+            "email": None,  # No email
+            "name": "Customer Without Email",
+            "phone": "+1234567890",
+            "address": None,
+        },
+        {
+            "id": "cus_no_email2",
+            "email": "",  # Empty email
+            "name": "Another Customer",
+            "phone": None,
+            "address": None,
+        },
+        {
+            "id": "cus_invalid_email",
+            "email": "not-an-email",  # Invalid email format
+            "name": "Customer With Invalid Email",
+            "phone": None,
+            "address": None,
+        }
+    ]
+    
+    with patch('core.sync.stripe') as mock_stripe:
+        mock_list = MagicMock()
+        mock_list.auto_paging_iter.return_value = iter(stripe_customers)
+        mock_stripe.Customer.list.return_value = mock_list
+        
+        with patch.dict('os.environ', {'STRIPE_API_KEY': 'sk_test_fake'}):
+            result = sync_customers()
+            
+            # All customers should be processed and created with synthesized emails
+            assert result["processed"] == 3
+            assert result["created"] == 3
+            assert result["updated"] == 0
+            
+            # Verify clients were created with synthesized emails
+            client1 = Client.objects.get(stripe_customer_id="cus_no_email1")
+            assert client1.email == "customer_cus_no_email1@stripe.local"
+            assert client1.name == "Customer Without Email"
+            
+            client2 = Client.objects.get(stripe_customer_id="cus_no_email2")
+            assert client2.email == "customer_cus_no_email2@stripe.local"
+            assert client2.name == "Another Customer"
+            
+            client3 = Client.objects.get(stripe_customer_id="cus_invalid_email")
+            assert client3.email == "customer_cus_invalid_email@stripe.local"
+            assert client3.name == "Customer With Invalid Email"
