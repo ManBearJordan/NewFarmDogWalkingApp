@@ -369,12 +369,12 @@ def calendar_view(request):
         linked_client = _get_linked_client(user)
         if linked_client:
             client_filter = linked_client
-            logger.info(f"Calendar view for non-admin user {user.username}: filtering by client {linked_client.name}")
+            logger.debug(f"Calendar view for non-admin user {user.username}: filtering by client ID {linked_client.id}")
         else:
             # Staff user with no linked client sees all bookings
-            logger.info(f"Calendar view for staff user {user.username}: no linked client, showing all bookings")
+            logger.debug(f"Calendar view for staff user {user.username}: no linked client, showing all bookings")
     else:
-        logger.info(f"Calendar view for admin user {user.username}: showing all bookings")
+        logger.debug(f"Calendar view for admin user {user.username}: showing all bookings")
     
     # Count bookings (exclude deleted and cancelled/voided status)
     bookings_qs = Booking.objects.filter(
@@ -395,10 +395,10 @@ def calendar_view(request):
         start_dt__date__lt=month_end,
         active=True
     )
-    # Filter sub occurrences by client if needed (via stripe_subscription_id -> client)
-    # Note: SubOccurrence doesn't have a direct client relationship, so we need to filter differently
-    # For now, we'll keep sub_occurrences unfiltered for staff users
-    # If we need to filter, we'd need to join through subscription data
+    # TODO: Filter sub occurrences by client if needed
+    # SubOccurrence doesn't have a direct client relationship. To filter by client,
+    # we would need to join through Stripe subscription metadata or create a link table.
+    # For now, all staff users see all subscription occurrences.
     sub_occurrences = sub_occurrences_qs
     sub_occurrence_count = sub_occurrences.count()
     logger.info(f"Calendar view: found {sub_occurrence_count} active subscription occurrences for {year}-{month:02d}")
