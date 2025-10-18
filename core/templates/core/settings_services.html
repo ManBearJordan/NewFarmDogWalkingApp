@@ -23,6 +23,7 @@
       <tbody>
         {% for form in formset %}
           <tr>
+            {{ form.id }}
             <td>{{ form.code }}</td>
             <td>{{ form.name }}</td>
             <td style="max-width:160px">{{ form.duration_minutes }}</td>
