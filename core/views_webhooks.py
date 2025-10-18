@@ -77,7 +77,7 @@ def stripe_webhook(request):
                         b.payment_status = 'paid'
                         if b.paid_at is None:
                             b.paid_at = timezone.now()
-                        b.save(update_fields=["invoice_pdf_url","payment_status","paid_at"])
+                        b.save(update_fields=["invoice_pdf_url", "payment_status", "paid_at"])
                     elif t == "invoice.voided":
                         b.payment_status = 'void'
                         b.save(update_fields=["payment_status"])
