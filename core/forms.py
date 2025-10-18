@@ -1,5 +1,5 @@
 from django import forms
-from .models import Pet, Client, Tag
+from .models import Pet, Client, Tag, Service
 
 
 class PetForm(forms.ModelForm):
@@ -41,3 +41,15 @@ class ClientForm(forms.ModelForm):
             instance.save()
             self.save_m2m()  # Save the many-to-many relationship for tags
         return instance
+
+
+class ServiceDurationForm(forms.ModelForm):
+    class Meta:
+        model = Service
+        fields = ("code", "name", "duration_minutes", "is_active")
+        widgets = {
+            "code": forms.TextInput(attrs={"class": "form-control", "placeholder": "walk30"}),
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Standard Walk (30m)"}),
+            "duration_minutes": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }

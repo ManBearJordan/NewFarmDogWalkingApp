@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence, Tag,
-    StripeKeyAudit, ServiceDefaults, TimetableBlock, BlockCapacity, CapacityHold
+    StripeKeyAudit, Service, ServiceDefaults, TimetableBlock, BlockCapacity, CapacityHold
 )
 
 
@@ -90,6 +90,12 @@ class SubOccurrenceAdmin(admin.ModelAdmin):
 class TagAdmin(admin.ModelAdmin):
     list_display = ("name", "color", "created_at")
     search_fields = ("name",)
+
+
+@admin.register(Service)
+class ServiceAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "duration_minutes", "is_active")
+    list_filter = ("is_active",)
 
 
 @admin.register(ServiceDefaults)

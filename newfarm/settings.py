@@ -50,6 +50,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # Force-login middleware MUST come after AuthenticationMiddleware
     'newfarm.middleware.RedirectAnonymousToLoginMiddleware',
+    'core.middleware.ServiceDurationGuardMiddleware',
 ]
 
 ROOT_URLCONF = 'newfarm.urls'
