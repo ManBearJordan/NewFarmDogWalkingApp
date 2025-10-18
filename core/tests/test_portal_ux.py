@@ -67,7 +67,7 @@ def test_calendar_stripe_badge_shown(client):
     
     # Get calendar with the booking date selected
     date_str = now.strftime("%Y-%m-%d")
-    resp = client.get(reverse("calendar_view"), {"date": date_str})
+    resp = client.get(reverse("calendar_view"), {"date": date_str}, follow=True)
     assert resp.status_code == 200
     content = resp.content.decode()
     
@@ -102,7 +102,7 @@ def test_calendar_no_stripe_badge_for_regular_booking(client):
     
     # Get calendar with the booking date selected
     date_str = now.strftime("%Y-%m-%d")
-    resp = client.get(reverse("calendar_view"), {"date": date_str})
+    resp = client.get(reverse("calendar_view"), {"date": date_str}, follow=True)
     assert resp.status_code == 200
     content = resp.content.decode()
     
