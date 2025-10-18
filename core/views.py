@@ -336,7 +336,7 @@ def client_add_credit(request, client_id):
         return JsonResponse({'error': f'Error adding credit: {e}'}, status=500)
 
 
-@user_passes_test(lambda u: u.is_staff)
+@login_required
 def calendar_view(request):
     """Show calendar month view with day details."""
     # Get current month or requested month
