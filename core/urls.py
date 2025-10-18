@@ -4,7 +4,7 @@ URL configuration for the core app.
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks
+from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings
 
 urlpatterns = [
     path('', views.client_list, name='home'),
@@ -73,4 +73,6 @@ urlpatterns = [
     path("admin/subs/occ/<int:occ_id>/finalize/", views_admin_subs.subs_finalize_occurrence, name="admin_subs_finalize_occurrence"),
     # Stripe webhook
     path("stripe/webhooks/", views_webhooks.stripe_webhook, name="stripe_webhook"),
+    # Service settings
+    path('settings/services/', views_settings.service_settings, name='service_settings'),
 ]

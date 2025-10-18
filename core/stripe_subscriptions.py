@@ -3,10 +3,13 @@ from dateutil.rrule import rrule, WEEKLY, MO, TU, WE, TH, FR, SA, SU
 from django.utils import timezone
 from django.db import transaction
 import stripe
+import logging
 
-from .models import Client, StripeSubscriptionLink, StripeSubscriptionSchedule, SubOccurrence
+from .models import Client, StripeSubscriptionLink, StripeSubscriptionSchedule, SubOccurrence, Service, Booking
 from .stripe_integration import get_stripe_key
 from .service_map import get_service_code
+
+log = logging.getLogger(__name__)
 
 WEEKDAY_MAP = {"mon": MO, "tue": TU, "wed": WE, "thu": TH, "fri": FR, "sat": SA, "sun": SU}
 
@@ -54,6 +57,7 @@ def materialize_future_holds(sub_link: StripeSubscriptionLink, horizon_days: int
     """
     For a given subscription link with an existing schedule, create/refresh SubOccurrence
     records for the next `horizon_days`. Uses schedule.weekdays + default_time/duration.
+    Also auto-creates Booking records with correct service duration.
     """
     sched = getattr(sub_link, "schedule", None)
     if not sched:
@@ -64,23 +68,60 @@ def materialize_future_holds(sub_link: StripeSubscriptionLink, horizon_days: int
     if not wk:
         return {"created": 0, "skipped": "empty-weekdays"}
 
+    # Determine which service to use based on service_code
+    service = None
+    service_code = sub_link.service_code
+    if service_code:
+        service = Service.objects.filter(code=service_code, is_active=True).first()
+    if service is None:
+        service = Service.objects.filter(is_active=True, duration_minutes__isnull=False).first()
+
     hh, mm = [int(x) for x in sched.default_time.split(":")]
     dur = timedelta(minutes=sched.default_duration_minutes)
     created = 0
 
-    for dt in rrule(WEEKLY, byweekday=wk, dtstart=datetime.combine(today, time(0,0)), until=datetime.combine(until, time(23,59))):
-        start_naive = datetime.combine(dt.date(), time(hh, mm))
-        start = _tzaware(start_naive)
-        end = start + dur
-        # Upsert SubOccurrence for this day
-        obj, made = SubOccurrence.objects.get_or_create(
-            stripe_subscription_id=sub_link.stripe_subscription_id,
-            start_dt=start,
-            end_dt=end,
-            defaults={"active": True},
-        )
-        if made:
-            created += 1
+    with transaction.atomic():
+        for dt in rrule(WEEKLY, byweekday=wk, dtstart=datetime.combine(today, time(0,0)), until=datetime.combine(until, time(23,59))):
+            start_naive = datetime.combine(dt.date(), time(hh, mm))
+            start = _tzaware(start_naive)
+            end = start + dur
+            # Upsert SubOccurrence for this day
+            obj, made = SubOccurrence.objects.get_or_create(
+                stripe_subscription_id=sub_link.stripe_subscription_id,
+                start_dt=start,
+                end_dt=end,
+                defaults={"active": True},
+            )
+            if obj.service_id is None and service:
+                obj.service = service
+                obj.save(update_fields=["service"])
+
+            # Auto-create a Booking if a duration is known
+            if made:
+                created += 1
+                exists = Booking.objects.filter(client=sub_link.client, start_dt=start).exists()
+                if not exists:
+                    svc = obj.service or service
+                    if svc and svc.duration_minutes:
+                        end_dt = start + timedelta(minutes=svc.duration_minutes)
+                        Booking.objects.create(
+                            client=sub_link.client,
+                            service=svc,
+                            service_code=sub_link.service_code,
+                            service_name=svc.name,
+                            service_label=svc.name,
+                            start_dt=start,
+                            end_dt=end_dt,
+                            location="",
+                            dogs=1,
+                            status="confirmed",
+                            price_cents=0,
+                            stripe_invoice_id=None,
+                            notes="Auto-created from subscription occurrence",
+                        )
+                    else:
+                        log.warning("Skipping booking creation for %s at %s: no service duration set.",
+                                    sub_link.client, start)
     sched.last_materialized_until = until
     sched.save(update_fields=["last_materialized_until"])
     return {"created": created}

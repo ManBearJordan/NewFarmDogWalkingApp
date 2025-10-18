@@ -5,6 +5,20 @@ import uuid
 from django.core.validators import RegexValidator
 
 
+class Service(models.Model):
+    """
+    A walk/visit product with a configured default duration (in minutes).
+    """
+    code = models.SlugField(max_length=50, unique=True, help_text="Short code used by schedules/subscriptions (e.g., 'walk30').")
+    name = models.CharField(max_length=120)
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True, help_text="Length in minutes. Must be set before auto-bookings can be created.")
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        dur = f" — {self.duration_minutes}m" if self.duration_minutes else ""
+        return f"{self.name}{dur}"
+
+
 class StripeSettings(models.Model):
     """Optional admin-surfaceable Stripe key; runtime prefers environment or keyring."""
     stripe_secret_key = models.CharField(max_length=200, blank=True, null=True)
@@ -96,6 +110,7 @@ class Pet(models.Model):
 class Booking(models.Model):
     # ...
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
+    service = models.ForeignKey('Service', on_delete=models.PROTECT, null=True, blank=True)
     service_code = models.CharField(max_length=50)
     service_name = models.CharField(max_length=200)
     service_label = models.CharField(max_length=200)
@@ -161,6 +176,8 @@ class SubOccurrence(models.Model):
     start_dt = models.DateTimeField()
     end_dt = models.DateTimeField()
     active = models.BooleanField(default=True)
+    service = models.ForeignKey('Service', on_delete=models.PROTECT, null=True, blank=True,
+                                help_text="Service for this occurrence; determines duration for generated booking.")
 
     def __str__(self):
         return f"Sub {self.stripe_subscription_id} ({self.start_dt.date()} - {self.end_dt.date()})"
