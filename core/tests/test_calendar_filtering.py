@@ -81,7 +81,7 @@ class TestCalendarFiltering:
         """Admin users should see all bookings"""
         self.test_client.login(username="admin", password="pass")
         resp = self.test_client.get(reverse("calendar_view"), follow=True)
-        assert resp.status_code == 200  # After following redirects
+        assert resp.status_code == 200
         
         # Check that calendar_days has data (both bookings should be counted)
         calendar_days = resp.context['calendar_days']
@@ -93,7 +93,7 @@ class TestCalendarFiltering:
         """Non-admin staff with linked client should see only their bookings"""
         self.test_client.login(username="staff", password="pass")
         resp = self.test_client.get(reverse("calendar_view"), follow=True)
-        assert resp.status_code == 200  # After following redirects
+        assert resp.status_code == 200
         
         # Check that calendar_days only has bookings for client1
         calendar_days = resp.context['calendar_days']
@@ -104,7 +104,7 @@ class TestCalendarFiltering:
         """Non-admin staff without linked client should see all bookings"""
         self.test_client.login(username="staff_no_client", password="pass")
         resp = self.test_client.get(reverse("calendar_view"), follow=True)
-        assert resp.status_code == 200  # After following redirects
+        assert resp.status_code == 200
         
         # Check that calendar_days has all bookings
         calendar_days = resp.context['calendar_days']
@@ -119,7 +119,7 @@ class TestCalendarFiltering:
         # Admin sees both bookings on that date (if they're on the same date)
         self.test_client.login(username="admin", password="pass")
         resp = self.test_client.get(reverse("calendar_view"), {'date': date_str}, follow=True)
-        assert resp.status_code == 200  # After following redirects
+        assert resp.status_code == 200
         day_detail = resp.context.get('day_detail')
         if day_detail:
             # booking1 is on this date
@@ -128,7 +128,7 @@ class TestCalendarFiltering:
         # Non-admin staff with client1 sees only booking1
         self.test_client.login(username="staff", password="pass")
         resp = self.test_client.get(reverse("calendar_view"), {'date': date_str}, follow=True)
-        assert resp.status_code == 200  # After following redirects
+        assert resp.status_code == 200
         day_detail = resp.context.get('day_detail')
         if day_detail:
             bookings = list(day_detail['bookings'])
@@ -144,7 +144,7 @@ class TestCalendarFiltering:
         # Admin should now see only 1 booking
         self.test_client.login(username="admin", password="pass")
         resp = self.test_client.get(reverse("calendar_view"), follow=True)
-        assert resp.status_code == 200  # After following redirects
+        assert resp.status_code == 200
         
         calendar_days = resp.context['calendar_days']
         total_bookings = sum(day['bookings'] for day in calendar_days.values())
@@ -159,7 +159,7 @@ class TestCalendarFiltering:
         # Admin should now see only 1 booking
         self.test_client.login(username="admin", password="pass")
         resp = self.test_client.get(reverse("calendar_view"), follow=True)
-        assert resp.status_code == 200  # After following redirects
+        assert resp.status_code == 200
         
         calendar_days = resp.context['calendar_days']
         total_bookings = sum(day['bookings'] for day in calendar_days.values())
