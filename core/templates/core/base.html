@@ -56,16 +56,16 @@
           </button>
           <div class="collapse navbar-collapse" id="navbarNav">
               <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                  {# Basic links that regular users may see #}
-                  <li class="nav-item">
-                      <a class="nav-link" href="{% url 'booking_list' %}">Bookings</a>
-                  </li>
+                  {# Always OK for clients and admins #}
                   <li class="nav-item">
                       <a class="nav-link" href="{% url 'calendar_view' %}">Calendar</a>
                   </li>
 
-                  {# Admin/staff-only items #}
+                  {# Staff-only menu items #}
                   {% if request.user.is_staff %}
+                      <li class="nav-item">
+                          <a class="nav-link" href="{% url 'booking_list' %}">Bookings</a>
+                      </li>
                       <li class="nav-item">
                           <a class="nav-link" href="{% url 'subscriptions_list' %}">Subscriptions</a>
                       </li>
