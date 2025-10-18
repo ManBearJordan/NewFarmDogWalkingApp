@@ -94,6 +94,7 @@ class Pet(models.Model):
 
 
 class Booking(models.Model):
+    # ...
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
     service_code = models.CharField(max_length=50)
     service_name = models.CharField(max_length=200)
@@ -114,6 +115,21 @@ class Booking(models.Model):
     charge_id = models.CharField(max_length=128, blank=True, null=True)
     # External key for syncing from Stripe (subscriptions/invoices)
     external_key = models.CharField(max_length=200, blank=True, null=True, unique=True, db_index=True)
+
+    PAYMENT_STATUS_CHOICES = [
+        ('unpaid', 'Unpaid'),
+        ('paid', 'Paid'),
+        ('void', 'Voided'),
+        ('failed', 'Failed'),
+    ]
+    payment_status = models.CharField(max_length=16, choices=PAYMENT_STATUS_CHOICES, default='unpaid')
+    invoice_pdf_url = models.URLField(blank=True, null=True)
+    paid_at = models.DateTimeField(blank=True, null=True)
+
+    def mark_paid(self, when=None):
+        self.payment_status = 'paid'
+        self.paid_at = when or timezone.now()
+        self.save(update_fields=['payment_status', 'paid_at'])
 
     def __str__(self):
         return f"{self.service_name} for {self.client.name} on {self.start_dt.date()}"

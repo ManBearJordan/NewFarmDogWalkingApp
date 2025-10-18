@@ -35,6 +35,7 @@ LOGIN_URL = '/accounts/login/'
 # extra per-project exemptions (regex); core exemptions are in middleware
 LOGIN_EXEMPT_URLS = [
     # add project-specific regexes here if needed
+    r"^stripe/webhooks/$",  # Stripe webhook endpoint
 ]
 
 MIDDLEWARE = [

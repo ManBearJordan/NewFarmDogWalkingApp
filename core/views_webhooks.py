@@ -2,8 +2,9 @@ import json, stripe
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.conf import settings
+from django.utils import timezone
 from .stripe_integration import get_stripe_key
-from .models import Client, StripeSubscriptionLink
+from .models import Client, StripeSubscriptionLink, Booking
 from .stripe_subscriptions import materialize_future_holds, resolve_service_code
 
 @csrf_exempt
@@ -49,5 +50,40 @@ def stripe_webhook(request):
     if t == "customer.subscription.deleted":
         sub_id = data.get("id")
         StripeSubscriptionLink.objects.filter(stripe_subscription_id=sub_id).update(status="canceled")
+
+    # --- Invoice events ---
+    if t.startswith("invoice."):
+        inv = data
+        invoice_id = inv.get('id')
+        hosted_pdf = None
+        # Try to extract a useful URL for the invoice PDF or hosted invoice
+        try:
+            hosted_pdf = inv.get('invoice_pdf') or inv.get('hosted_invoice_url') or None
+        except Exception:
+            hosted_pdf = None
+
+        if invoice_id:
+            qs = Booking.objects.filter(stripe_invoice_id=invoice_id)
+            if qs.exists():
+                for b in qs:
+                    if t == "invoice.finalized":
+                        # Just attach URL; status still unpaid until payment succeeds
+                        if hosted_pdf and b.invoice_pdf_url != hosted_pdf:
+                            b.invoice_pdf_url = hosted_pdf
+                            b.save(update_fields=["invoice_pdf_url"])
+                    elif t == "invoice.payment_succeeded":
+                        if hosted_pdf and b.invoice_pdf_url != hosted_pdf:
+                            b.invoice_pdf_url = hosted_pdf
+                        b.payment_status = 'paid'
+                        if b.paid_at is None:
+                            b.paid_at = timezone.now()
+                        b.save(update_fields=["invoice_pdf_url","payment_status","paid_at"])
+                    elif t == "invoice.voided":
+                        b.payment_status = 'void'
+                        b.save(update_fields=["payment_status"])
+                    elif t == "invoice.payment_failed":
+                        b.payment_status = 'failed'
+                        b.save(update_fields=["payment_status"])
+        return HttpResponse("ok")
 
     return HttpResponse("ok", status=200)
