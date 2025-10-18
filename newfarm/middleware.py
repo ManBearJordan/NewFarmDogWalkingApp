@@ -4,6 +4,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 
 DEFAULT_EXEMPT = [
+    r"^$",  # Allow root path to be handled by root_router
     r"^accounts/login/$",
     r"^accounts/logout/$",
     r"^static/.*",
