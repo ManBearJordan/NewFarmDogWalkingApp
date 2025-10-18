@@ -35,7 +35,7 @@ class StripeSettings(models.Model):
 
 class Client(models.Model):
     name = models.CharField(max_length=200)
-    email = models.EmailField()
+    email = models.EmailField(unique=True, max_length=254)
     phone = models.CharField(max_length=20)
     address = models.TextField()
     notes = models.TextField(blank=True)

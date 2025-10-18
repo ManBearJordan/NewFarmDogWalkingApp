@@ -1,5 +1,6 @@
 import pytest
 from django.contrib.auth.models import User
+from django.db import IntegrityError
 from core.models import Client, Booking, Pet, Tag
 from django.utils import timezone
 
@@ -36,3 +37,24 @@ def test_tag_str_representation():
     # Test Tag model __str__ method
     tag = Tag.objects.create(name="VIP")
     assert str(tag) == "VIP"
+
+@pytest.mark.django_db
+def test_client_email_unique():
+    # Test that Client email field is unique
+    Client.objects.create(
+        name="Client 1",
+        email="test@example.com",
+        phone="1234567890",
+        address="123 Test St",
+        status="active"
+    )
+    
+    # Attempting to create another client with the same email should raise IntegrityError
+    with pytest.raises(IntegrityError):
+        Client.objects.create(
+            name="Client 2",
+            email="test@example.com",
+            phone="0987654321",
+            address="456 Test Ave",
+            status="active"
+        )
