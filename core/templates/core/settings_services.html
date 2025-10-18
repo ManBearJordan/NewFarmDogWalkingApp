@@ -23,7 +23,7 @@
       <tbody>
         {% for form in formset %}
           <tr>
-            {# Hidden ID field required by Django's modelformset to identify which instance to update #}
+            {# Django modelformset ID field for instance identification #}
             {{ form.id }}
             <td>{{ form.code }}</td>
             <td>{{ form.name }}</td>
