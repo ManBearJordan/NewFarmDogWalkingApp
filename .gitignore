@@ -38,3 +38,7 @@ node_modules/
 .continue/agents/new-agent-1.yaml
 .continue/agents/new-agent-2.yaml
 .continue/agents/new-agent.yaml
+
+# Local tunnel binary (downloaded by install script)
+/cloudflared/
+
