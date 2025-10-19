@@ -47,17 +47,20 @@ def ensure_links_for_client_stripe_subs():
             nickname = price.get("nickname") or ""
             
             # OPTIONAL: fetch product details only if absolutely required
-            prod_name = ""
-            # If you truly need product info (e.g., name), uncomment these lines:
+            # Product is now just an ID string, not an expanded object.
+            # If you need product name for service_code resolution, uncomment these lines:
+            # prod_name = ""
             # if isinstance(product_id, str):
             #     try:
             #         product = stripe.Product.retrieve(product_id)
             #         prod_name = product.get("name") or ""
             #     except Exception as e:
             #         log.warning("Stripe product fetch failed for %s: %s", product_id, e)
+            # service_code = resolve_service_code(nickname or prod_name) or "walk"
             
-            # Resolve to our service_code from nickname/product name (fallback to 'walk')
-            service_code = resolve_service_code(nickname or prod_name) or "walk"
+            # Resolve to our service_code from nickname (fallback to 'walk')
+            # Note: We no longer use product name since we don't expand to product
+            service_code = resolve_service_code(nickname) or "walk"
             link, _ = StripeSubscriptionLink.objects.update_or_create(
                 stripe_subscription_id=sub_id,
                 defaults={"client": client, "service_code": service_code, "status": status},
