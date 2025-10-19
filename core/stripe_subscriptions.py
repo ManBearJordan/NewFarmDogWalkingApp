@@ -33,7 +33,10 @@ def ensure_links_for_client_stripe_subs():
     """
     stripe.api_key = get_stripe_key()
     for client in Client.objects.exclude(stripe_customer_id__isnull=True).exclude(stripe_customer_id__exact=""):
-        subs = stripe.Subscription.list(customer=client.stripe_customer_id, status="all", expand=["data.items.price.product"])
+        # NOTE: For list responses, Stripe requires expansions under the 'data' array.
+        # Old: "data.items.price.product"  -> ERROR: cannot be expanded
+        # New: "data.items.data.price.product"
+        subs = stripe.Subscription.list(customer=client.stripe_customer_id, status="all", expand=["data.items.data.price.product"])
         for s in subs.auto_paging_iter():
             sub_id = s["id"]
             status = s["status"]
