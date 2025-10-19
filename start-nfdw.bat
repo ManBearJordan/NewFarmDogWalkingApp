@@ -72,6 +72,6 @@ set "CLOUDFLARED_EXE=.\cloudflared\cloudflared.exe"
 
 :run_cloudflared
 echo [NFDW] Starting Cloudflare Tunnel using: %CLOUDFLARED_EXE%
-start "NFDW Cloudflare" /min "%CLOUDFLARED_EXE%" tunnel run ^
+start "NFDW Cloudflare" /min "%CLOUDFLARED_EXE%" tunnel run nfdw-app ^
   1>logs\cloudflared.out.log 2>logs\cloudflared.err.log
 goto :eof
