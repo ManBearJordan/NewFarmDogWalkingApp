@@ -24,11 +24,14 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM Ensure logs directory exists
+if not exist "logs" mkdir logs
+
 REM Start waitress on 127.0.0.1:8000
 echo [NFDW] Starting Waitress...
-python -X utf8 -m waitress --listen=127.0.0.1:8000 newfarm.wsgi:application ^
+start "Waitress" python -X utf8 -m waitress --listen=127.0.0.1:8000 newfarm.wsgi:application ^
   1>logs\waitress.out.log 2>logs\waitress.err.log
 
 REM Start Cloudflare Tunnel (assumes cloudflared is installed and configured)
 echo [NFDW] Starting Cloudflare Tunnel...
-cloudflared tunnel run 1>logs\cloudflared.out.log 2>logs\cloudflared.err.log
+start "Cloudflared" cloudflared tunnel run 1>logs\cloudflared.out.log 2>logs\cloudflared.err.log
