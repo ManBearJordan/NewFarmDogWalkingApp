@@ -88,7 +88,7 @@
                               <li><a class="dropdown-item" href="{% url 'stripe_status' %}">Stripe Status</a></li>
                               <li><a class="dropdown-item" href="{% url 'stripe_diagnostics' %}">Stripe Diagnostics</a></li>
                               <li><hr class="dropdown-divider"></li>
-                              <li><a class="dropdown-item" href="/{{ DJANGO_ADMIN_URL|default:'admin/' }}">Django Admin</a></li>
+                              <li><a class="dropdown-item" href="{% url 'admin:index' %}">Django Admin</a></li>
                           </ul>
                       </li>
                   {% endif %}
