@@ -17,6 +17,6 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
     path(getattr(settings, 'DJANGO_ADMIN_URL', 'admin/'), admin.site.urls),
     path('', include('core.urls')),
-    # simple liveness probe
+    # Simple liveness probe
     path('healthz/', health_check, name='healthz'),
 ]
