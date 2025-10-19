@@ -3,11 +3,15 @@
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 import stripe
+import logging
 
 from django.utils import timezone as django_tz
 from .models import SubOccurrence
-from .stripe_integration import get_api_key, list_active_subscriptions
+from .secrets_config import get_stripe_key
+from .stripe_integration import list_active_subscriptions
 from .log_utils import log_subscription_error, log_subscription_info
+
+log = logging.getLogger(__name__)
 
 
 def _get_fake_subscriptions() -> List[Dict]:
@@ -131,13 +135,19 @@ def _get_active_subscriptions(horizon_days: int) -> List[Dict]:
     """
     try:
         # Try to get real Stripe subscriptions
-        api_key = get_api_key()
-        if not api_key:
-            log_subscription_info("Stripe API key not configured, using fake subscription data")
-            return _get_fake_subscriptions()
-        
+        api_key = get_stripe_key()  # raises in production if unset
+    except RuntimeError as e:
+        log.error(f"[Stripe] {e}")
+        return []
+    
+    if not api_key:
+        log.info("[Stripe] No key; using sample subscriptions (non-production)")
+        return _get_fake_subscriptions()
+    
+    try:
         # Get active subscriptions from Stripe
         subscriptions = list_active_subscriptions(
+            api_key=api_key,
             status='active',
             limit=100  # Adjust limit as needed
         )
@@ -217,8 +227,12 @@ def sync_subscriptions_to_bookings_and_calendar(horizon_days: int = 90) -> Dict:
                 )
                 
             except Exception as e:
-                log_subscription_error(f"Error processing subscription {subscription.get('id', 'unknown')}: {e}")
+                sub_id = subscription.get('id')
+                log.exception("[Sync] Error materializing subscription %s: %s", sub_id, e)
                 result['errors'] += 1
+        
+        if result['errors']:
+            log.error("[Sync] Completed with %s errors", result['errors'])
         
         log_subscription_info(
             f"Sync completed: processed={result['processed']}, "

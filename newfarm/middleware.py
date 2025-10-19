@@ -11,7 +11,7 @@ DEFAULT_EXEMPT = [
     r"^media/.*",
     r"^favicon\.ico$",
     r"^health/?$",
-    r"^healthz$",
+    r"^healthz/?$",
     r"^readyz$",
     r"^admin/stripe/.*",
 ]

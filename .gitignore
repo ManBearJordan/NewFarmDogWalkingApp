@@ -24,6 +24,7 @@ Thumbs.db
 .idea/
 
 # Application logs
+logs/
 subscription_error_log.txt
 subscription_sync_log.txt
 
