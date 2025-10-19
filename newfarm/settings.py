@@ -8,6 +8,42 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+# -----------------------------------------------------------------------------
+# Simple environment variable helper
+# -----------------------------------------------------------------------------
+class EnvHelper:
+    """Simple helper to read environment variables with type conversion."""
+    
+    @staticmethod
+    def str(key: str, default: str = "") -> str:
+        """Get string value from environment."""
+        return os.getenv(key, default)
+    
+    @staticmethod
+    def bool(key: str, default: bool = False) -> bool:
+        """Get boolean value from environment."""
+        value = os.getenv(key)
+        if value is None:
+            return default
+        return value.lower() in ("1", "true", "yes", "on")
+    
+    @staticmethod
+    def list(key: str, default: list = None) -> list:
+        """Get list value from environment (comma-separated)."""
+        if default is None:
+            default = []
+        value = os.getenv(key)
+        if value is None:
+            return default
+        # Handle both comma-separated strings and already-list format
+        if isinstance(value, str):
+            return [v.strip() for v in value.split(",") if v.strip()]
+        return default
+
+
+env = EnvHelper()
+
 # -----------------------------------------------------------------------------
 # Core toggles from environment (fallbacks preserve local dev)
 # -----------------------------------------------------------------------------
@@ -138,22 +174,17 @@ PRODUCTION = os.getenv("PRODUCTION", "0") == "1"
 # Reverse-proxy / security
 # -----------------------------------------------------------------------------
 # --- Proxy/HTTPS awareness (Cloudflare Tunnel) ---
-# Trust X-Forwarded-Proto from our reverse-proxy (cloudflared)
-USE_X_FORWARDED_HOST = os.getenv('USE_X_FORWARDED_HOST', '1' if PRODUCTION else '0') in ('1','true','True')
-SECURE_PROXY_SSL_HEADER = None
-_h = os.getenv('SECURE_PROXY_SSL_HEADER')
-if _h:
-    try:
-        # env format: "HTTP_X_FORWARDED_PROTO,https"
-        name, val = [p.strip() for p in _h.split(',', 1)]
-        SECURE_PROXY_SSL_HEADER = (name, val)
-    except Exception:
-        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO','https')
-elif PRODUCTION:
-    # Default to standard proxy header in production if not explicitly set
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO','https')
+USE_X_FORWARDED_HOST = env.bool("USE_X_FORWARDED_HOST", default=True if PRODUCTION else False)
+# Trust the proto header set by Cloudflare Tunnel
+SECURE_PROXY_SSL_HEADER = tuple(
+    env.list("SECURE_PROXY_SSL_HEADER", default=["HTTP_X_FORWARDED_PROTO", "https"])
+)
 
-SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', '1' if PRODUCTION else '0') in ('1','true','True')
+# Optional: tolerate Cloudflare CF-Visitor if present (middleware also handles this)
+CF_VISITOR_HEADER = "HTTP_CF_VISITOR"
+
+# In production, prefer redirect to HTTPS unless explicitly disabled
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True if PRODUCTION else False)
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS','testserver,localhost,127.0.0.1,app.newfarmdogwalking.com.au').split(',') if h.strip()]
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS','https://app.newfarmdogwalking.com.au').split(',') if o.strip()]
@@ -172,21 +203,22 @@ def SECURE_PROXY_SSL_HEADER_FALLBACK(get_response):
 # insert fallback right after SecurityMiddleware if active
 MIDDLEWARE.insert(1, 'newfarm.settings.SECURE_PROXY_SSL_HEADER_FALLBACK')
 
-# Keep PRODUCTION-based settings for cookie security
-if PRODUCTION:
-    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "1") == "1"
-    CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "1") == "1"
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-else:
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
-    SECURE_HSTS_SECONDS = 0
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
-    SECURE_HSTS_PRELOAD = False
+# Cookies/HSTS only when PRODUCTION
+SESSION_COOKIE_SECURE = PRODUCTION
+CSRF_COOKIE_SECURE = PRODUCTION
+SECURE_HSTS_SECONDS = 60 * 60 * 24 * 7 if PRODUCTION else 0
 
 # --- Client portal auth ---
 # LOGIN_URL is defined earlier in the file
 LOGIN_REDIRECT_URL = '/calendar/'
 LOGOUT_REDIRECT_URL = "login"
+
+# Basic error email/logging defaults (mail backend configured elsewhere)
+ADMINS = [("Admin", env.str("ADMIN_EMAIL", default="admin@newfarmdogwalking.com.au"))]
+SERVER_EMAIL = env.str("SERVER_EMAIL", default="server@app.newfarmdogwalking.com.au")
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "loggers": {"django.request": {"handlers": ["console"], "level": "ERROR", "propagate": True}},
+}
