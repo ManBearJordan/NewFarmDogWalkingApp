@@ -91,9 +91,9 @@ class TestAdminLinkRobustness:
         
         # Should not contain Django Admin link
         admin_url = reverse('admin:index')
-        # The link might be in the HTML but not visible due to staff check
-        # We check that the Admin dropdown is not rendered for non-staff
-        assert b'adminMenu' not in resp.content or b'Django Admin' not in resp.content
+        # The Admin dropdown should not be rendered for non-staff users
+        # Both the admin menu and Django Admin link should be absent
+        assert b'adminMenu' not in resp.content and b'Django Admin' not in resp.content
         
         # Staff user should see the admin link
         self.client.login(username="staffuser", password="testpass123")
