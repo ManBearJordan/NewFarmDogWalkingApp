@@ -6,6 +6,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 function Write-Info($msg) { Write-Host "[cloudflared] $msg" }
+function Write-Err($msg) { Write-Error "[cloudflared] $msg" }
+
 function Ensure-Dir($p) {
   if (-not (Test-Path -LiteralPath $p)) { New-Item -ItemType Directory -Path $p | Out-Null }
 }
@@ -27,14 +29,14 @@ $tmp = Join-Path $env:TEMP "cloudflared-windows-amd64.exe"
 try {
   Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
 } catch {
-  Write-Error "Failed to download cloudflared: $($_.Exception.Message)"
+  Write-Err "Failed to download cloudflared: $($_.Exception.Message)"
   exit 1
 }
 
 try {
   Move-Item -Force -Path $tmp -Destination $exePath
 } catch {
-  Write-Error "Failed to move cloudflared into $exePath: $($_.Exception.Message)"
+  Write-Err "Failed to move cloudflared into ${exePath}: $($_.Exception.Message)"
   exit 1
 }
 
