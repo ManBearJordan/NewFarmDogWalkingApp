@@ -50,9 +50,11 @@ if not defined CLOUDFLARED_EXE if exist "%ProgramFiles%\Cloudflare\cloudflared\c
 if not defined CLOUDFLARED_EXE if exist "%LOCALAPPDATA%\Cloudflare\cloudflared\cloudflared.exe" set "CLOUDFLARED_EXE=%LOCALAPPDATA%\Cloudflare\cloudflared\cloudflared.exe"
 
 REM 3) PATH lookup
-where cloudflared >nul 2>&1
-if %errorlevel%==0 (
-  set "CLOUDFLARED_EXE=cloudflared"
+if not defined CLOUDFLARED_EXE (
+  where cloudflared >nul 2>&1
+  if %errorlevel%==0 (
+    set "CLOUDFLARED_EXE=cloudflared"
+  )
 )
 
 REM If we still didn't find it, warn and continue (local only)
