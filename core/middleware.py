@@ -1,5 +1,4 @@
-from django.shortcuts import redirect
-from django.urls import reverse
+from django.http import HttpResponseRedirect
 from django.contrib import messages
 from .models import Service
 
@@ -14,10 +13,12 @@ class ServiceDurationGuardMiddleware:
 
     def __call__(self, request):
         if request.user.is_authenticated and request.user.is_staff:
-            allowed = {reverse('service_settings')}
+            # Allow access to service_settings page and static/media files
             path = request.path
-            if not any(path.startswith(p) for p in allowed.union({"/static/", "/media/"})):
-                if Service.objects.filter(is_active=True, duration_minutes__isnull=True).exists():
+            if not any(path.startswith(p) for p in ["/settings/services/", "/static/", "/media/"]):
+                needs_setup = Service.objects.filter(is_active=True, duration_minutes__isnull=True).exists()
+                if needs_setup:
+                    # Use absolute path to avoid reverse() failures if route name changes
                     messages.warning(request, "Set service durations before using the system.")
-                    return redirect('service_settings')
+                    return HttpResponseRedirect("/settings/services/")
         return self.get_response(request)
