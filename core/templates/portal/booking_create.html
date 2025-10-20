@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Book a walk</h1>
+<form method="post">
+  {% csrf_token %}
+  <label>Service</label><br/>
+  <select name="service_id" required>
+    <option value="">-- choose --</option>
+    {% for s in services %}
+      <option value="{{ s.id }}">{{ s.name }} ({{ s.duration_minutes }} min)</option>
+    {% endfor %}
+  </select><br/><br/>
+  <label>Start time (ISO 8601, e.g. 2025-10-19T14:30)</label><br/>
+  <input type="text" name="start" required />
+  <br/><br/>
+  <button type="submit">Continue</button>
+  <a href="{% url 'portal_home' %}">Cancel</a>
+</form>
+{% endblock %}

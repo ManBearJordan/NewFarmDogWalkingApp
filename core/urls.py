@@ -4,10 +4,15 @@ URL configuration for the core app.
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings
+from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings, views_misc, views_client
 
 urlpatterns = [
-    path('', views.client_list, name='home'),
+    path("", views_portal.root_router, name="root"),
+    path("portal/", views_client.client_dashboard, name="portal_home"),
+    path("calendar/", views_client.client_calendar, name="calendar"),
+    path("portal/book/", views_client.booking_create, name="portal_booking_create"),
+    path("portal/confirm/", views_client.booking_confirm, name="portal_booking_confirm"),
+    path("healthz/", views_misc.health_check, name="healthz"),
     path('clients/', views.client_list, name='client_list'),
     path('clients/new/', views.client_create, name='client_create'),
     # Clients: Stripe + Credit actions
