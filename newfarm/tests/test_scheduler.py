@@ -78,22 +78,111 @@ def test_appconfig_ready_starts_scheduler(monkeypatch):
     monkeypatch.setenv("RUN_MAIN", "true")
     monkeypatch.setenv("PERIODIC_SYNC", "1")
     
-    with patch('newfarm.scheduler.start_scheduler') as mock_start:
-        config = NewfarmConfig("newfarm", __import__('newfarm'))
-        config.ready()
-        
-        mock_start.assert_called_once()
+    # Ensure no management commands in sys.argv
+    import sys
+    original_argv = sys.argv.copy()
+    sys.argv = ["manage.py", "runserver"]
+    
+    # Mock DISABLE_SCHEDULER to False
+    from django.conf import settings
+    monkeypatch.setattr(settings, "DISABLE_SCHEDULER", False)
+    
+    try:
+        with patch('newfarm.scheduler.start_scheduler') as mock_start:
+            config = NewfarmConfig("newfarm", __import__('newfarm'))
+            config.ready()
+            
+            mock_start.assert_called_once()
+    finally:
+        sys.argv = original_argv
 
 
 def test_appconfig_ready_skips_in_reloader(monkeypatch):
     """Test that NewfarmConfig.ready() skips when RUN_MAIN is not true"""
     monkeypatch.setenv("RUN_MAIN", "false")
     
-    with patch('newfarm.scheduler.start_scheduler') as mock_start:
-        config = NewfarmConfig("newfarm", __import__('newfarm'))
-        config.ready()
-        
-        mock_start.assert_not_called()
+    # Ensure no management commands in sys.argv
+    import sys
+    original_argv = sys.argv.copy()
+    sys.argv = ["manage.py", "runserver"]
+    
+    try:
+        with patch('newfarm.scheduler.start_scheduler') as mock_start:
+            config = NewfarmConfig("newfarm", __import__('newfarm'))
+            config.ready()
+            
+            mock_start.assert_not_called()
+    finally:
+        sys.argv = original_argv
+
+
+def test_appconfig_ready_skips_on_migrate(monkeypatch):
+    """Test that NewfarmConfig.ready() skips when migrate command is in sys.argv"""
+    monkeypatch.setenv("RUN_MAIN", "true")
+    
+    # Mock sys.argv to contain 'migrate'
+    import sys
+    original_argv = sys.argv.copy()
+    sys.argv = ["manage.py", "migrate"]
+    
+    # Mock DISABLE_SCHEDULER to False
+    from django.conf import settings
+    monkeypatch.setattr(settings, "DISABLE_SCHEDULER", False)
+    
+    try:
+        with patch('newfarm.scheduler.start_scheduler') as mock_start:
+            config = NewfarmConfig("newfarm", __import__('newfarm'))
+            config.ready()
+            
+            mock_start.assert_not_called()
+    finally:
+        sys.argv = original_argv
+
+
+def test_appconfig_ready_skips_on_test(monkeypatch):
+    """Test that NewfarmConfig.ready() skips when test command is in sys.argv"""
+    monkeypatch.setenv("RUN_MAIN", "true")
+    
+    # Mock sys.argv to contain 'test'
+    import sys
+    original_argv = sys.argv.copy()
+    sys.argv = ["manage.py", "test"]
+    
+    # Mock DISABLE_SCHEDULER to False
+    from django.conf import settings
+    monkeypatch.setattr(settings, "DISABLE_SCHEDULER", False)
+    
+    try:
+        with patch('newfarm.scheduler.start_scheduler') as mock_start:
+            config = NewfarmConfig("newfarm", __import__('newfarm'))
+            config.ready()
+            
+            mock_start.assert_not_called()
+    finally:
+        sys.argv = original_argv
+
+
+def test_appconfig_ready_skips_when_disable_scheduler_set(monkeypatch):
+    """Test that NewfarmConfig.ready() skips when DISABLE_SCHEDULER is True"""
+    monkeypatch.setenv("RUN_MAIN", "true")
+    
+    # Mock sys.argv to NOT contain management commands
+    import sys
+    original_argv = sys.argv.copy()
+    sys.argv = ["manage.py", "runserver"]
+    
+    # Mock DISABLE_SCHEDULER to True
+    from django.conf import settings
+    monkeypatch.setattr(settings, "DISABLE_SCHEDULER", True)
+    
+    try:
+        with patch('newfarm.scheduler.start_scheduler') as mock_start:
+            config = NewfarmConfig("newfarm", __import__('newfarm'))
+            config.ready()
+            
+            mock_start.assert_not_called()
+    finally:
+        sys.argv = original_argv
 
 
 @pytest.mark.django_db
