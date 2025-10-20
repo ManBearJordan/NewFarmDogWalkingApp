@@ -110,3 +110,41 @@ class SubscriptionAdminTest(TestCase):
         messages = list(response.wsgi_request._messages)
         self.assertEqual(len(messages), 1)
         self.assertEqual(str(messages[0]), 'Link not found.')
+    
+    def test_link_save_invalid_weekday_value(self):
+        """Test that invalid weekday values are rejected."""
+        url = reverse('admin_sub_link_save', args=[self.sub_link.id])
+        response = self.client_test.post(url, {
+            'service_code': 'walk30',
+            'weekday': '10',  # Invalid: must be 0-6
+            'time_of_day': '10:00'
+        })
+        
+        # Should redirect with error message
+        self.assertEqual(response.status_code, 302)
+        messages = list(response.wsgi_request._messages)
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(str(messages[0]), 'Invalid weekday value.')
+    
+    def test_link_save_non_numeric_weekday(self):
+        """Test that non-numeric weekday values are rejected."""
+        url = reverse('admin_sub_link_save', args=[self.sub_link.id])
+        response = self.client_test.post(url, {
+            'service_code': 'walk30',
+            'weekday': 'invalid',
+            'time_of_day': '10:00'
+        })
+        
+        # Should redirect with error message
+        self.assertEqual(response.status_code, 302)
+        messages = list(response.wsgi_request._messages)
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(str(messages[0]), 'Invalid weekday value.')
+    
+    def test_link_save_requires_post(self):
+        """Test that link_save requires POST method."""
+        url = reverse('admin_sub_link_save', args=[self.sub_link.id])
+        response = self.client_test.get(url)
+        
+        # Should return 405 Method Not Allowed
+        self.assertEqual(response.status_code, 405)
