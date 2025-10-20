@@ -1,0 +1,38 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h1>Subscription → Service & Time Mapping</h1>
+<table border="1" cellpadding="6">
+  <tr><th>Client</th><th>Subscription</th><th>Service</th><th>Weekday</th><th>Time</th><th>Save</th></tr>
+  {% for l in links %}
+    <tr>
+      <td>{{ l.client }}</td>
+      <td>{{ l.stripe_subscription_id }}</td>
+      <td>
+        <form method="post" action="{% url 'admin_sub_link_save' l.id %}">
+          {% csrf_token %}
+          <select name="service_code">
+            <option value="">--</option>
+            {% for s in services %}
+              <option value="{{ s.code }}" {% if l.service_code == s.code %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+      </td>
+      <td>
+        <select name="weekday">
+          <option value="">--</option>
+          <option value="0" {% if l.weekday == 0 %}selected{% endif %}>Mon</option>
+          <option value="1" {% if l.weekday == 1 %}selected{% endif %}>Tue</option>
+          <option value="2" {% if l.weekday == 2 %}selected{% endif %}>Wed</option>
+          <option value="3" {% if l.weekday == 3 %}selected{% endif %}>Thu</option>
+          <option value="4" {% if l.weekday == 4 %}selected{% endif %}>Fri</option>
+          <option value="5" {% if l.weekday == 5 %}selected{% endif %}>Sat</option>
+          <option value="6" {% if l.weekday == 6 %}selected{% endif %}>Sun</option>
+        </select>
+      </td>
+      <td><input type="time" name="time_of_day" value="{{ l.time_of_day|default_if_none:'' }}"></td>
+      <td><button type="submit">Save</button></td>
+        </form>
+    </tr>
+  {% endfor %}
+</table>
+{% endblock %}
