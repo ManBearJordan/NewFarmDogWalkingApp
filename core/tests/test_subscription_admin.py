@@ -148,3 +148,48 @@ class SubscriptionAdminTest(TestCase):
         
         # Should return 405 Method Not Allowed
         self.assertEqual(response.status_code, 405)
+    
+    def test_link_save_invalid_service_code(self):
+        """Test that invalid service codes are rejected."""
+        url = reverse('admin_sub_link_save', args=[self.sub_link.id])
+        response = self.client_test.post(url, {
+            'service_code': 'invalid_service',
+            'weekday': '1',
+            'time_of_day': '10:00'
+        })
+        
+        # Should redirect with error message
+        self.assertEqual(response.status_code, 302)
+        messages = list(response.wsgi_request._messages)
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(str(messages[0]), 'Invalid service code.')
+    
+    def test_link_save_invalid_time_format(self):
+        """Test that invalid time formats are rejected."""
+        url = reverse('admin_sub_link_save', args=[self.sub_link.id])
+        response = self.client_test.post(url, {
+            'service_code': 'walk30',
+            'weekday': '1',
+            'time_of_day': '25:00'  # Invalid hour
+        })
+        
+        # Should redirect with error message
+        self.assertEqual(response.status_code, 302)
+        messages = list(response.wsgi_request._messages)
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(str(messages[0]), 'Invalid time format. Use HH:MM.')
+    
+    def test_link_save_non_time_string(self):
+        """Test that non-time strings are rejected."""
+        url = reverse('admin_sub_link_save', args=[self.sub_link.id])
+        response = self.client_test.post(url, {
+            'service_code': 'walk30',
+            'weekday': '1',
+            'time_of_day': 'not-a-time'
+        })
+        
+        # Should redirect with error message
+        self.assertEqual(response.status_code, 302)
+        messages = list(response.wsgi_request._messages)
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(str(messages[0]), 'Invalid time format. Use HH:MM.')

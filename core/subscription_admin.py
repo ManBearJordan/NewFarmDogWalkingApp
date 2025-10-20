@@ -2,7 +2,9 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
+from django.core.exceptions import ValidationError
 from .models import StripeSubscriptionLink, Service
+import datetime
 
 @staff_member_required
 def link_list(request):
@@ -17,7 +19,16 @@ def link_save(request, link_id):
     if not l:
         messages.error(request, "Link not found.")
         return redirect("admin_sub_links")
-    l.service_code = request.POST.get("service_code") or None
+    
+    # Validate and set service_code
+    service_code = request.POST.get("service_code")
+    if service_code:
+        if not Service.objects.filter(code=service_code, is_active=True).exists():
+            messages.error(request, "Invalid service code.")
+            return redirect("admin_sub_links")
+        l.service_code = service_code
+    else:
+        l.service_code = None
     
     # Validate and set weekday
     weekday_str = request.POST.get("weekday")
@@ -35,7 +46,19 @@ def link_save(request, link_id):
     else:
         l.weekday = None
     
-    l.time_of_day = request.POST.get("time_of_day") or None
+    # Validate and set time_of_day
+    time_str = request.POST.get("time_of_day")
+    if time_str:
+        try:
+            # Parse the time string to validate format
+            datetime.datetime.strptime(time_str, "%H:%M")
+            l.time_of_day = time_str
+        except (ValueError, TypeError):
+            messages.error(request, "Invalid time format. Use HH:MM.")
+            return redirect("admin_sub_links")
+    else:
+        l.time_of_day = None
+    
     l.save()
     messages.success(request, "Saved.")
     return redirect("admin_sub_links")
