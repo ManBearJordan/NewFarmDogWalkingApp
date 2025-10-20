@@ -1,0 +1,19 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h1>Reconcile: Bookings without invoice</h1>
+<table border="1" cellpadding="6">
+  <tr><th>ID</th><th>Client</th><th>Service</th><th>Start</th><th>Status</th><th>Action</th></tr>
+  {% for b in no_invoice %}
+    <tr>
+      <td>{{ b.id }}</td>
+      <td>{{ b.client }}</td>
+      <td>{{ b.service.name }}</td>
+      <td>{{ b.start_dt }}</td>
+      <td>{{ b.status }}</td>
+      <td><a href="{% url 'admin_reconcile_paid' b.id %}">Mark paid</a></td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6">All good.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
