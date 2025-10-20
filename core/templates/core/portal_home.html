@@ -18,7 +18,12 @@
   <p class="text-muted">Welcome, {{ client.name }}.</p>
   <div class="mb-3 d-flex gap-2">
     <a class="btn btn-success" href="{% url 'portal_booking_create' %}">New booking</a>
-    <a class="btn btn-outline-secondary" href="{% url 'logout' %}">Sign out</a>
+    <form method="post" action="{% url 'logout' %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline-secondary" style="cursor:pointer;">
+        Sign out
+      </button>
+    </form>
   </div>
   <div class="table-responsive">
   <table class="table table-hover align-middle">
