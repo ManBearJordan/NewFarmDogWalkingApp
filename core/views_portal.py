@@ -3,7 +3,7 @@ Portal views for pre-pay booking flow with flexible capacity.
 """
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse, HttpResponseBadRequest
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseRedirect
 from django.utils import timezone
 from django.conf import settings
 from datetime import datetime, timedelta
@@ -16,6 +16,17 @@ from .capacity_helpers import (
 )
 from .stripe_integration import create_payment_intent, retrieve_payment_intent, cancel_payment_intent
 from .tasks import send_booking_confirmation_email
+
+
+def root_router(request):
+    """
+    Route the root URL based on authentication status.
+    Authenticated users go to portal, unauthenticated to login.
+    """
+    if request.user.is_authenticated:
+        # Clients land at portal; staff can use menu to reach /bookings/
+        return HttpResponseRedirect('/portal/')
+    return HttpResponseRedirect('/accounts/login/')
 
 
 @login_required

@@ -4,10 +4,15 @@ URL configuration for the core app.
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings
+from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings, views_misc, views_client
 
 urlpatterns = [
-    path('', views.client_list, name='home'),
+    path("", views_portal.root_router, name="root"),
+    path("portal/", views_client.client_dashboard, name="portal_home"),
+    path("calendar/", views_client.client_calendar, name="calendar"),
+    path("portal/book/", views_client.booking_create, name="portal_booking_create"),
+    path("portal/confirm/", views_client.booking_confirm, name="portal_booking_confirm"),
+    path("healthz/", views_misc.health_check, name="healthz"),
     path('clients/', views.client_list, name='client_list'),
     path('clients/new/', views.client_create, name='client_create'),
     # Clients: Stripe + Credit actions
@@ -44,10 +49,9 @@ urlpatterns = [
     # --- Auth (client portal) ---
     path("accounts/login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
-    # --- Portal ---
-    path("portal/", views.portal_home, name="portal_home"),
-    path("portal/bookings/new/", views.portal_booking_create, name="portal_booking_create"),
-    path("portal/bookings/confirm/", views.portal_booking_confirm, name="portal_booking_confirm"),
+    # --- Portal (original booking flow with credit/invoice support) ---
+    path("portal/bookings/new/", views.portal_booking_create, name="portal_booking_create_old"),
+    path("portal/bookings/confirm/", views.portal_booking_confirm, name="portal_booking_confirm_old"),
     # Portal (pre-pay flow with flexible capacity)
     path("portal/bookings/new-prepay/", views_portal.portal_booking_new, name="portal_booking_new_prepay"),
     path("portal/blocks/", views_portal.portal_blocks_for_date, name="portal_blocks_for_date"),
