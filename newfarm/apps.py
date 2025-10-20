@@ -21,7 +21,7 @@ class NewfarmConfig(AppConfig):
             "migrate", "makemigrations", "collectstatic", "test", "shell",
             "loaddata", "dumpdata", "createsuperuser", "check",
         }
-        if any(cmd in sys.argv for cmd in mgmt_cmds):
+        if len(sys.argv) > 1 and sys.argv[1] in mgmt_cmds:
             return
         if getattr(settings, "DISABLE_SCHEDULER", False):
             return

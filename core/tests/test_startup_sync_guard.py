@@ -164,3 +164,32 @@ def test_ready_runs_when_no_guard_triggered(monkeypatch):
         assert called["n"] == 1  # should start when no guards are triggered
     finally:
         sys.argv = original_argv
+
+
+def test_ready_runs_when_command_name_in_argument(monkeypatch):
+    """Test that ready() runs scheduler when command name appears as argument, not command itself"""
+    # Enable STARTUP_SYNC
+    monkeypatch.setenv("STARTUP_SYNC", "1")
+    from django.conf import settings
+    monkeypatch.setattr(settings, "STARTUP_SYNC", True)
+    monkeypatch.setattr(settings, "DISABLE_SCHEDULER", False)
+    
+    # Mock sys.argv where 'test' appears as an argument, not the command
+    original_argv = sys.argv.copy()
+    sys.argv = ["manage.py", "runserver", "--settings=test"]
+    
+    # Track if Timer.start() would be called
+    called = {"n": 0}
+    class DummyTimer:
+        def __init__(self, secs, fn): self.fn = fn
+        def start(self): called["n"] += 1
+    
+    monkeypatch.setenv("RUN_MAIN", "true")
+    monkeypatch.setattr("core.apps.threading.Timer", DummyTimer)
+    
+    try:
+        cfg = CoreConfig("core", __import__('core'))
+        cfg.ready()
+        assert called["n"] == 1  # should start - 'test' is not at argv[1]
+    finally:
+        sys.argv = original_argv
