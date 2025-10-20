@@ -50,9 +50,9 @@ def link_save(request, link_id):
     time_str = request.POST.get("time_of_day")
     if time_str:
         try:
-            # Parse the time string to validate format
-            datetime.datetime.strptime(time_str, "%H:%M")
-            l.time_of_day = time_str
+            # Parse the time string to validate format and convert to time object
+            time_obj = datetime.datetime.strptime(time_str, "%H:%M").time()
+            l.time_of_day = time_obj
         except (ValueError, TypeError):
             messages.error(request, "Invalid time format. Use HH:MM.")
             return redirect("admin_sub_links")
