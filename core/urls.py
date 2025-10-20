@@ -49,10 +49,6 @@ urlpatterns = [
     # --- Auth (client portal) ---
     path("accounts/login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
-    # --- Portal ---
-    path("portal/", views.portal_home, name="portal_home"),
-    path("portal/bookings/new/", views.portal_booking_create, name="portal_booking_create"),
-    path("portal/bookings/confirm/", views.portal_booking_confirm, name="portal_booking_confirm"),
     # Portal (pre-pay flow with flexible capacity)
     path("portal/bookings/new-prepay/", views_portal.portal_booking_new, name="portal_booking_new_prepay"),
     path("portal/blocks/", views_portal.portal_blocks_for_date, name="portal_blocks_for_date"),
