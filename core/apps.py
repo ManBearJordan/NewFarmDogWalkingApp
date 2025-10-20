@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import sys
 import threading
 import logging
 from django.apps import AppConfig
@@ -20,6 +21,16 @@ class CoreConfig(AppConfig):
         Django autoreload by checking RUN_MAIN.
         """
         try:
+            # Don't spin up background jobs when running mgmt commands
+            mgmt_cmds = {
+                "migrate", "makemigrations", "collectstatic", "test", "shell",
+                "loaddata", "dumpdata", "createsuperuser", "check",
+            }
+            if len(sys.argv) > 1 and sys.argv[1] in mgmt_cmds:
+                return
+            if getattr(settings, "DISABLE_SCHEDULER", False):
+                return
+            
             if not getattr(settings, "STARTUP_SYNC", False):
                 return
             # Avoid double-run with the dev autoreloader

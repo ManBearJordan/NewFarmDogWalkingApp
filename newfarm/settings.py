@@ -139,6 +139,8 @@ STRIPE_CATALOG_TTL_SECONDS = int(os.getenv("STRIPE_CATALOG_TTL_SECONDS", "300"))
 # --- Startup sync & background jobs ---
 # Trigger one-off subscription sync in AppConfig.ready() when set
 STARTUP_SYNC = os.getenv("STARTUP_SYNC", "0") == "1"
+# Optional kill switch if needed in ops
+DISABLE_SCHEDULER = env.bool("DISABLE_SCHEDULER", default=False)
 
 # ---------------------------
 # Celery (background jobs)
