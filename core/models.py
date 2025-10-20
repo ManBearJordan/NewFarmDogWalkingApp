@@ -194,6 +194,9 @@ class StripeSubscriptionLink(models.Model):
     status = models.CharField(max_length=32, default="active")  # active, canceled, paused
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    weekday = models.IntegerField(blank=True, null=True, help_text="0=Mon ... 6=Sun")
+    time_of_day = models.TimeField(blank=True, null=True)  # local time
+    active = models.BooleanField(default=True)
 
     def __str__(self):
         return f"Sub {self.stripe_subscription_id} - {self.client.name} - {self.service_code}"
