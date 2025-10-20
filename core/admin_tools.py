@@ -16,7 +16,6 @@ def reconcile_mark_paid(request, booking_id):
     if not b:
         messages.error(request, "Booking not found.")
         return redirect("admin_reconcile")
-    b.status = "paid"
-    b.save(update_fields=["status"])
+    b.mark_paid()
     messages.success(request, f"Marked booking #{b.id} paid.")
     return redirect("admin_reconcile")

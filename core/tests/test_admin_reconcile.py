@@ -179,7 +179,7 @@ def test_reconcile_mark_paid_updates_booking():
     
     # Check booking was updated
     booking.refresh_from_db()
-    assert booking.status == "paid"
+    assert booking.payment_status == "paid"
 
 
 @pytest.mark.django_db
