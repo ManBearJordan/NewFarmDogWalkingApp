@@ -1,9 +1,10 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.db.models import JSONField
 import uuid
 from django.core.validators import RegexValidator
-from datetime import time
+from datetime import time, datetime
 import re
 
 
@@ -143,10 +144,21 @@ class Booking(models.Model):
     invoice_pdf_url = models.URLField(blank=True, null=True)
     paid_at = models.DateTimeField(blank=True, null=True)
 
+    # --- PR5: admin review support ---
+    requires_admin_review = models.BooleanField(default=False, db_index=True)
+    review_diff = JSONField(blank=True, null=True)  # {"field": {"booking": "...", "invoice": "..."}}
+    review_source_invoice_id = models.CharField(max_length=128, blank=True, null=True)
+
     def mark_paid(self, when=None):
         self.payment_status = 'paid'
         self.paid_at = when or timezone.now()
         self.save(update_fields=['payment_status', 'paid_at'])
+
+    def clear_review(self):
+        self.requires_admin_review = False
+        self.review_diff = None
+        self.review_source_invoice_id = None
+        self.save(update_fields=["requires_admin_review", "review_diff", "review_source_invoice_id"])
 
     def __str__(self):
         return f"{self.service_name} for {self.client.name} on {self.start_dt.date()}"

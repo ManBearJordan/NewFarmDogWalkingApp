@@ -4,7 +4,12 @@
 {% if upcoming %}
   <ul>
     {% for b in upcoming %}
-      <li>{{ b.start_dt }} → {{ b.end_dt }} — {{ b.service.name|default:b.service_name }}</li>
+      <li>
+        {{ b.start_dt }} → {{ b.end_dt }} — {{ b.service.name|default:b.service_name }}
+        {% if b.requires_admin_review %}
+          <span title="Awaiting staff review" style="font-size:0.85em;padding:2px 6px;border:1px solid #f0ad4e;color:#8a6d3b;border-radius:8px;">under review</span>
+        {% endif %}
+      </li>
     {% endfor %}
   </ul>
 {% else %}
@@ -12,3 +17,4 @@
 {% endif %}
 <p><a href="{% url 'portal_booking_create' %}">Book a walk</a> · <a href="{% url 'calendar' %}">Calendar</a></p>
 {% endblock %}
+

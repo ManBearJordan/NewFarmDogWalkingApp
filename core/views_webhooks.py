@@ -6,6 +6,7 @@ from django.utils import timezone
 from .stripe_integration import get_stripe_key
 from .models import Client, StripeSubscriptionLink, Booking, Service, AdminEvent
 from .stripe_subscriptions import materialize_future_holds, resolve_service_code
+from .invoice_validation import validate_invoice_against_bookings
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,14 @@ def stripe_webhook(request):
                     elif t == "invoice.payment_failed":
                         b.payment_status = 'failed'
                         b.save(update_fields=["payment_status"])
+        
+        # Validate invoice line-item metadata against local bookings
+        try:
+            validate_invoice_against_bookings(inv)
+        except Exception as e:
+            # don't fail the webhook; just log
+            logger.exception("Invoice validation failed: %s", e)
+        
         return HttpResponse("ok")
 
     return HttpResponse("ok", status=200)
