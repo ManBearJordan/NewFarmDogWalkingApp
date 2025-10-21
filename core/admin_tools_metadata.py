@@ -31,10 +31,15 @@ def _diff_vs_booking(b: Booking, md: dict):
     diff = {}
     inv_start = _parse_iso_local(md.get("booking_start"))
     inv_end = _parse_iso_local(md.get("booking_end"))
-    if inv_start and b.start_dt != inv_start:
-        diff["start_dt"] = {"booking": b.start_dt.isoformat(), "invoice": inv_start.isoformat()}
-    if inv_end and b.end_dt != inv_end:
-        diff["end_dt"] = {"booking": b.end_dt.isoformat(), "invoice": inv_end.isoformat()}
+    # Compare naive datetimes
+    if inv_start:
+        booking_start_naive = make_naive(b.start_dt, BRISBANE) if is_aware(b.start_dt) else b.start_dt
+        if booking_start_naive != inv_start:
+            diff["start_dt"] = {"booking": b.start_dt.isoformat(), "invoice": inv_start.isoformat()}
+    if inv_end:
+        booking_end_naive = make_naive(b.end_dt, BRISBANE) if is_aware(b.end_dt) else b.end_dt
+        if booking_end_naive != inv_end:
+            diff["end_dt"] = {"booking": b.end_dt.isoformat(), "invoice": inv_end.isoformat()}
     if "dogs" in md:
         try:
             inv_dogs = int(md["dogs"])
