@@ -84,13 +84,16 @@ class TestLogoutPostForm:
         resp = self.client.get(reverse("calendar_view"))
         assert resp.status_code in [302, 301]
 
-    def test_logout_get_not_allowed(self):
+    def test_logout_get_now_allowed(self):
         """
-        Django's LogoutView should only accept POST requests,
-        preventing CSRF attacks via GET links.
+        CustomLogoutView allows GET requests for logout.
         """
         self.client.login(username="regular", password="pass")
         
-        # GET request to logout should return 405 Method Not Allowed
+        # GET request to logout should now work and redirect
         resp = self.client.get(reverse("logout"))
-        assert resp.status_code == 405
+        assert resp.status_code in [302, 301]
+        
+        # Verify user is logged out - accessing calendar should redirect to login
+        resp = self.client.get(reverse("calendar_view"))
+        assert resp.status_code in [302, 301]

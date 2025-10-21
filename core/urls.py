@@ -5,6 +5,7 @@ URL configuration for the core app.
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings, views_misc, views_client, admin_tools, subscription_admin
+from core.views_auth import CustomLogoutView
 
 urlpatterns = [
     path("", views_portal.root_router, name="root"),
@@ -52,7 +53,7 @@ urlpatterns = [
     path("admin/stripe/key/update/", views.stripe_key_update, name="stripe_key_update"),
     # --- Auth (client portal) ---
     path("accounts/login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
-    path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("accounts/logout/", CustomLogoutView.as_view(), name="logout"),
     # --- Portal (original booking flow with credit/invoice support) ---
     path("portal/bookings/new/", views.portal_booking_create, name="portal_booking_create_old"),
     path("portal/bookings/confirm/", views.portal_booking_confirm, name="portal_booking_confirm_old"),

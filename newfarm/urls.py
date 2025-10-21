@@ -5,7 +5,6 @@ from django.views.generic import RedirectView
 from django.contrib.auth.decorators import login_required
 
 urlpatterns = [
-    path('accounts/', include('django.contrib.auth.urls')),
     path(getattr(settings, 'DJANGO_ADMIN_URL', 'admin/'), admin.site.urls),
     path('', include('core.urls')),
 ]
