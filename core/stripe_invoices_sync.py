@@ -103,9 +103,13 @@ def _update_booking_from_invoice(booking: Booking, invoice, line_item_md: Dict[s
         booking.invoice_pdf_url = inv_pdf
         changed = True
     # only set paid_at when invoice is paid (avoid wiping existing)
-    if inv_status == "paid" and paid_at and booking.paid_at != paid_at:
-        booking.paid_at = paid_at
-        changed = True
+    # Compare timestamps at second precision to avoid microsecond differences
+    if inv_status == "paid" and paid_at:
+        existing_ts = int(booking.paid_at.timestamp()) if booking.paid_at else None
+        new_ts = int(paid_at.timestamp())
+        if existing_ts != new_ts:
+            booking.paid_at = paid_at
+            changed = True
     if changed:
         booking.save(update_fields=["stripe_invoice_id", "stripe_invoice_status", "invoice_pdf_url", "paid_at"])
     return changed
