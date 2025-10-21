@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Reconciliation Console</h1>
+<p><small>Tip: If a line lacks <code>service_code</code>, map its Stripe <strong>Price</strong> to a Service in Admin → <em>Stripe price maps</em>.</small></p>
+
 <form method="get" style="margin-bottom:12px">
   <label>Window (days): <input type="number" name="days" value="{{ days }}" min="7" max="365"></label>
   <button type="submit">Refresh</button>
