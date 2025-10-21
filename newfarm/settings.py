@@ -135,6 +135,8 @@ STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
 TIME_ZONE = os.getenv("TIME_ZONE", "Australia/Brisbane")
 # TTL (seconds) for Stripe catalog cache
 STRIPE_CATALOG_TTL_SECONDS = int(os.getenv("STRIPE_CATALOG_TTL_SECONDS", "300"))
+# Enable detailed metadata logging for Stripe webhooks (dev/debugging only)
+STRIPE_METADATA_LOGGING = env.bool("STRIPE_METADATA_LOGGING", default=False)
 
 # --- Startup sync & background jobs ---
 # Trigger one-off subscription sync in AppConfig.ready() when set
