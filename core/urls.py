@@ -4,13 +4,16 @@ URL configuration for the core app.
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings, views_misc, views_client, admin_tools, admin_tools_review, admin_tools_metadata, admin_tools_subs, subscription_admin
+from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings, views_misc, views_client, admin_tools, admin_tools_review, admin_tools_metadata, admin_tools_subs, admin_tools_reconcile, subscription_admin
 from core.views_auth import CustomLogoutView
 
 urlpatterns = [
     path("", views_portal.root_router, name="root"),
     path("portal/", views_client.client_dashboard, name="portal_home"),
-    path("admin-tools/reconcile/", admin_tools.reconcile_list, name="admin_reconcile"),
+    path("admin-tools/reconcile/", admin_tools_reconcile.reconcile_index, name="admin_reconcile"),
+    path("admin-tools/reconcile/link/", admin_tools_reconcile.reconcile_link, name="admin_reconcile_link"),
+    path("admin-tools/reconcile/detach/", admin_tools_reconcile.reconcile_detach, name="admin_reconcile_detach"),
+    path("admin-tools/reconcile/create-from-line/", admin_tools_reconcile.reconcile_create_from_line, name="admin_reconcile_create_from_line"),
     path("admin-tools/reconcile/mark-paid/<int:booking_id>/", admin_tools.reconcile_mark_paid, name="admin_reconcile_paid"),
     path("admin-tools/subscriptions/", subscription_admin.link_list, name="admin_sub_links"),
     path("admin-tools/subscriptions/save/<int:link_id>/", subscription_admin.link_save, name="admin_sub_link_save"),

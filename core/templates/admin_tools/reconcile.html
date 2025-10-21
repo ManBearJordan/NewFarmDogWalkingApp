@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Reconciliation Console</h1>
+<form method="get" style="margin-bottom:12px">
+  <label>Window (days): <input type="number" name="days" value="{{ days }}" min="7" max="365"></label>
+  <button type="submit">Refresh</button>
+  <a href="{% url 'admin_reconcile' %}">Reset</a>
+  <p style="margin-top:6px"><small>Shows Stripe invoices/lines and local bookings within the time window that look unlinked. Use actions below to link, create, or detach.</small></p>
+</form>
+
+<h2>Unlinked Stripe Invoices / Lines</h2>
+{% if unlinked_invoices %}
+  {% for inv in unlinked_invoices %}
+    <div style="border:1px solid #ddd; padding:12px; margin:12px 0; border-radius:8px;">
+      <div><strong>Invoice:</strong> {{ inv.invoice_id }} &nbsp; <em>Status:</em> {{ inv.status|default:"(n/a)" }}</div>
+      {% if inv.hosted_invoice_url %}
+        <div><a href="{{ inv.hosted_invoice_url }}" target="_blank" rel="noopener">Open invoice</a></div>
+      {% endif %}
+      <div><small>Customer ID: {{ inv.customer_id|default:"(n/a)" }}</small></div>
+      <table border="1" cellpadding="6" cellspacing="0" style="margin-top:8px">
+        <tr>
+          <th>Line ID</th>
+          <th>Description</th>
+          <th>Amount</th>
+          <th>Metadata</th>
+          <th>Actions</th>
+        </tr>
+        {% for li in inv.lines %}
+        <tr>
+          <td>{{ li.line_id }}</td>
+          <td>{{ li.description }}</td>
+          <td>{{ li.amount_total|default:"(n/a)" }}</td>
+          <td><pre style="white-space:pre-wrap">{{ li.metadata }}</pre></td>
+          <td>
+            <form method="post" action="{% url 'admin_reconcile_create_from_line' %}" style="margin-bottom:8px">
+              {% csrf_token %}
+              <input type="hidden" name="invoice_id" value="{{ inv.invoice_id }}">
+              <input type="hidden" name="line_id" value="{{ li.line_id }}">
+              <button type="submit">Create booking from line</button>
+            </form>
+            <form method="post" action="{% url 'admin_reconcile_link' %}">
+              {% csrf_token %}
+              <input type="hidden" name="invoice_id" value="{{ inv.invoice_id }}">
+              <label>Booking ID: <input type="number" name="booking_id" required></label>
+              <button type="submit">Link to this invoice</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% endfor %}
+{% else %}
+  <p>No unlinked invoice lines detected in this window.</p>
+{% endif %}
+
+<h2>Unlinked Local Bookings</h2>
+{% if unlinked_bookings %}
+  <table border="1" cellpadding="6" cellspacing="0">
+    <tr>
+      <th>Booking</th>
+      <th>Client</th>
+      <th>Service</th>
+      <th>Start → End</th>
+      <th>Actions</th>
+    </tr>
+    {% for b in unlinked_bookings %}
+      <tr>
+        <td>#{{ b.id }}</td>
+        <td>{{ b.client }}</td>
+        <td>{{ b.service.name }} ({{ b.service.code }})</td>
+        <td>{{ b.start_dt }} → {{ b.end_dt }}</td>
+        <td>
+          <form method="post" action="{% url 'admin_reconcile_link' %}" style="display:inline-block; margin-right:8px">
+            {% csrf_token %}
+            <input type="hidden" name="booking_id" value="{{ b.id }}">
+            <label>Invoice ID: <input type="text" name="invoice_id" required></label>
+            <button type="submit">Link</button>
+          </form>
+          <form method="post" action="{% url 'admin_reconcile_detach' %}" style="display:inline-block">
+            {% csrf_token %}
+            <input type="hidden" name="booking_id" value="{{ b.id }}">
+            <button type="submit">Detach (clear link)</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <p>No unlinked local bookings in this window.</p>
+{% endif %}
+{% endblock %}
