@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.core.management import call_command, get_commands
+from core.subscription_materializer import materialize_future_holds
 
 
 class Command(BaseCommand):
@@ -16,4 +17,9 @@ class Command(BaseCommand):
         maybe("sync_subscriptions")
         maybe("build_bookings_from_invoices")
         maybe("build_bookings_from_subscriptions")
+        
+        # Run materializer
+        result = materialize_future_holds()
+        self.stdout.write(self.style.SUCCESS(f"Materialization complete: created {result.get('created', 0)} bookings."))
+        
         self.stdout.write(self.style.SUCCESS("sync_all complete."))

@@ -1,9 +1,20 @@
 {% extends "core/base.html" %}
+{% load dict_filters %}
 {% block content %}
 <h1>Subscription → Service & Time Mapping</h1>
 <table border="1" cellpadding="6">
-  <tr><th>Client</th><th>Subscription</th><th>Service</th><th>Weekday</th><th>Time</th><th>Save</th></tr>
+  <tr>
+    <th>Client</th>
+    <th>Subscription</th>
+    <th>Service</th>
+    <th>Repeats</th>
+    <th>Days (e.g. MON,THU)</th>
+    <th>Start</th>
+    <th>Location</th>
+    <th>Save</th>
+  </tr>
   {% for l in links %}
+    {% with s=schedules|get_item:l.stripe_subscription_id %}
     <tr>
       <td>{{ l.client }}</td>
       <td>{{ l.stripe_subscription_id }}</td>
@@ -12,27 +23,24 @@
           {% csrf_token %}
           <select name="service_code">
             <option value="">--</option>
-            {% for s in services %}
-              <option value="{{ s.code }}" {% if l.service_code == s.code %}selected{% endif %}>{{ s.name }}</option>
+            {% for svc in services %}
+              <option value="{{ svc.code }}" {% if l.service_code == svc.code %}selected{% endif %}>{{ svc.name }}</option>
             {% endfor %}
           </select>
       </td>
       <td>
-        <select name="weekday">
-          <option value="">--</option>
-          <option value="0" {% if l.weekday == 0 %}selected{% endif %}>Mon</option>
-          <option value="1" {% if l.weekday == 1 %}selected{% endif %}>Tue</option>
-          <option value="2" {% if l.weekday == 2 %}selected{% endif %}>Wed</option>
-          <option value="3" {% if l.weekday == 3 %}selected{% endif %}>Thu</option>
-          <option value="4" {% if l.weekday == 4 %}selected{% endif %}>Fri</option>
-          <option value="5" {% if l.weekday == 5 %}selected{% endif %}>Sat</option>
-          <option value="6" {% if l.weekday == 6 %}selected{% endif %}>Sun</option>
+        <select name="repeats">
+          <option value="weekly" {% if s and s.repeats == 'weekly' %}selected{% endif %}>Weekly</option>
+          <option value="fortnightly" {% if s and s.repeats == 'fortnightly' %}selected{% endif %}>Fortnightly</option>
         </select>
       </td>
-      <td><input type="time" name="time_of_day" value="{{ l.time_of_day|default_if_none:'' }}"></td>
+      <td><input type="text" name="days" placeholder="MON,THU" value="{% if s %}{{ s.days|default_if_none:'' }}{% endif %}"></td>
+      <td><input type="text" name="start_time" placeholder="10:30" value="{% if s %}{{ s.start_time|default_if_none:'' }}{% endif %}"></td>
+      <td><input type="text" name="location" placeholder="Home" value="{% if s %}{{ s.location|default_if_none:'' }}{% endif %}"></td>
       <td><button type="submit">Save</button></td>
         </form>
     </tr>
+    {% endwith %}
   {% endfor %}
 </table>
 {% endblock %}

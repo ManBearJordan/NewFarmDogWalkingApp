@@ -3,14 +3,22 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
 from django.core.exceptions import ValidationError
-from .models import StripeSubscriptionLink, Service
+from .models import StripeSubscriptionLink, StripeSubscriptionSchedule, Service
 import datetime
 
 @staff_member_required
 def link_list(request):
-    links = StripeSubscriptionLink.objects.order_by("client__name")
+    links = StripeSubscriptionLink.objects.select_related("client").order_by("client__name")
     services = Service.objects.filter(is_active=True)
-    return render(request, "admin_tools/sub_links.html", {"links": links, "services": services})
+    # Build a dictionary mapping subscription_id to schedule
+    schedules = {}
+    for sched in StripeSubscriptionSchedule.objects.select_related("sub").all():
+        schedules[sched.sub.stripe_subscription_id] = sched
+    return render(request, "admin_tools/sub_links.html", {
+        "links": links, 
+        "services": services,
+        "schedules": schedules
+    })
 
 @staff_member_required
 @require_http_methods(["POST"])
@@ -30,7 +38,7 @@ def link_save(request, link_id):
     else:
         l.service_code = None
     
-    # Validate and set weekday
+    # Backward compatibility: validate and set weekday on link
     weekday_str = request.POST.get("weekday")
     if weekday_str:
         try:
@@ -46,7 +54,7 @@ def link_save(request, link_id):
     else:
         l.weekday = None
     
-    # Validate and set time_of_day
+    # Backward compatibility: validate and set time_of_day on link
     time_str = request.POST.get("time_of_day")
     if time_str:
         try:
@@ -59,6 +67,35 @@ def link_save(request, link_id):
     else:
         l.time_of_day = None
     
+    # Save the link
     l.save()
+    
+    # Ensure schedule exists and update new fields
+    sched, created = StripeSubscriptionSchedule.objects.get_or_create(
+        sub=l,
+        defaults={
+            "weekdays_csv": "wed",
+            "default_time": "10:30",
+        }
+    )
+    
+    # Update schedule fields from form (new pattern)
+    days = request.POST.get("days") or None
+    start_time = request.POST.get("start_time") or None
+    location = request.POST.get("location") or None
+    repeats = request.POST.get("repeats") or None
+    
+    # Validate repeats
+    if repeats not in (StripeSubscriptionSchedule.REPEATS_WEEKLY, StripeSubscriptionSchedule.REPEATS_FORTNIGHTLY):
+        repeats = StripeSubscriptionSchedule.REPEATS_WEEKLY
+    
+    # Update fields
+    sched.days = days
+    sched.start_time = start_time
+    sched.location = location
+    sched.repeats = repeats
+    
+    sched.save()
+    
     messages.success(request, "Saved.")
     return redirect("admin_sub_links")
