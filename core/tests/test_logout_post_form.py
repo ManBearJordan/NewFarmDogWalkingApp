@@ -93,7 +93,21 @@ class TestLogoutPostForm:
         # GET request to logout should now work and redirect
         resp = self.client.get(reverse("logout"))
         assert resp.status_code in [302, 301]
+        assert resp.url == reverse("login")
         
-        # Verify user is logged out - accessing calendar should redirect to login
-        resp = self.client.get(reverse("calendar_view"))
+        # Verify user is logged out - session should be cleared
+        assert '_auth_user_id' not in self.client.session
+    
+    def test_logout_post_still_works(self):
+        """
+        CustomLogoutView also supports POST for backward compatibility.
+        """
+        self.client.login(username="regular", password="pass")
+        
+        # POST request to logout should work and redirect
+        resp = self.client.post(reverse("logout"))
         assert resp.status_code in [302, 301]
+        assert resp.url == reverse("login")
+        
+        # Verify user is logged out - session should be cleared
+        assert '_auth_user_id' not in self.client.session
