@@ -19,8 +19,10 @@ def test_portal_requires_linked_client(client):
     u = User.objects.create_user(username="nouser", password="p")
     client.login(username="nouser", password="p")
     resp = client.get(reverse("portal_home"))
-    assert resp.status_code == 200
-    assert b"not linked to a client profile" in resp.content.lower()
+    # Should get a 403 Forbidden response for users without client profiles
+    assert resp.status_code == 403
+    assert b"403" in resp.content
+    assert b"Access Denied" in resp.content or b"access denied" in resp.content.lower()
 
 @pytest.mark.django_db
 def test_stripe_key_update_post(client):

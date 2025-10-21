@@ -115,7 +115,7 @@ class AdminReviewViewsTests(TestCase):
     def test_review_apply_success(self):
         """Test applying review changes to booking."""
         self.test_client.login(username='staff', password='testpass123')
-        response = self.test_client.get(
+        response = self.test_client.post(
             reverse('admin_review_apply', kwargs={'booking_id': self.booking.id}),
             follow=True
         )
@@ -152,7 +152,7 @@ class AdminReviewViewsTests(TestCase):
         self.booking.save()
         
         self.test_client.login(username='staff', password='testpass123')
-        self.test_client.get(
+        self.test_client.post(
             reverse('admin_review_apply', kwargs={'booking_id': self.booking.id}),
             follow=True
         )
@@ -179,7 +179,7 @@ class AdminReviewViewsTests(TestCase):
         self.booking.save()
         
         self.test_client.login(username='staff', password='testpass123')
-        self.test_client.get(
+        self.test_client.post(
             reverse('admin_review_apply', kwargs={'booking_id': self.booking.id}),
             follow=True
         )
@@ -190,7 +190,7 @@ class AdminReviewViewsTests(TestCase):
     def test_review_apply_nonexistent_booking(self):
         """Test applying review to non-existent booking."""
         self.test_client.login(username='staff', password='testpass123')
-        response = self.test_client.get(
+        response = self.test_client.post(
             reverse('admin_review_apply', kwargs={'booking_id': 99999}),
             follow=True
         )
@@ -212,7 +212,7 @@ class AdminReviewViewsTests(TestCase):
         original_location = self.booking.location
         
         self.test_client.login(username='staff', password='testpass123')
-        response = self.test_client.get(
+        response = self.test_client.post(
             reverse('admin_review_dismiss', kwargs={'booking_id': self.booking.id}),
             follow=True
         )
@@ -234,7 +234,7 @@ class AdminReviewViewsTests(TestCase):
     def test_review_dismiss_nonexistent_booking(self):
         """Test dismissing review for non-existent booking."""
         self.test_client.login(username='staff', password='testpass123')
-        response = self.test_client.get(
+        response = self.test_client.post(
             reverse('admin_review_dismiss', kwargs={'booking_id': 99999}),
             follow=True
         )

@@ -87,6 +87,7 @@ MIDDLEWARE = [
     # Force-login middleware MUST come after AuthenticationMiddleware
     'newfarm.middleware.RedirectAnonymousToLoginMiddleware',
     'core.middleware.ServiceDurationGuardMiddleware',
+    'core.middleware.cloudflare_secure.CloudflareProtoMiddleware',
 ]
 
 ROOT_URLCONF = 'newfarm.urls'
@@ -181,9 +182,12 @@ PRODUCTION = os.getenv("PRODUCTION", "0") == "1"
 # --- Proxy/HTTPS awareness (Cloudflare Tunnel) ---
 USE_X_FORWARDED_HOST = env.bool("USE_X_FORWARDED_HOST", default=True if PRODUCTION else False)
 # Trust the proto header set by Cloudflare Tunnel
-SECURE_PROXY_SSL_HEADER = tuple(
-    env.list("SECURE_PROXY_SSL_HEADER", default=["HTTP_X_FORWARDED_PROTO", "https"])
-)
+# In production mode, default to X-Forwarded-Proto; in dev mode, None unless explicitly set
+_proxy_header_value = env.list("SECURE_PROXY_SSL_HEADER", default=["HTTP_X_FORWARDED_PROTO", "https"] if PRODUCTION else [])
+# Validate that the header is a 2-tuple (header_name, expected_value); fall back to default if malformed
+if _proxy_header_value and len(_proxy_header_value) != 2 and PRODUCTION:
+    _proxy_header_value = ["HTTP_X_FORWARDED_PROTO", "https"]
+SECURE_PROXY_SSL_HEADER = tuple(_proxy_header_value) if _proxy_header_value else None
 
 # Optional: tolerate Cloudflare CF-Visitor if present (middleware also handles this)
 CF_VISITOR_HEADER = "HTTP_CF_VISITOR"

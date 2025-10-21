@@ -20,6 +20,7 @@ from .stripe_integration import create_payment_intent, retrieve_payment_intent, 
 from .tasks import send_booking_confirmation_email
 from .forms import PortalBookingForm
 from .portal_billing import try_create_invoice_for_booking
+from .utils_auth import get_user_client_or_403, require_client
 
 
 def root_router(request):
@@ -195,58 +196,46 @@ def portal_checkout_finalize(request):
 
 
 @login_required
+@require_client
 def portal_home(request):
     """
     Dashboard: upcoming (next 30 days) and last 30 days (past).
     """
-    client = getattr(request.user, "client_profile", None)
-    if not client:
-        messages.error(request, "Your login is not linked to a client profile.")
-        return redirect("login")
+    client = get_user_client_or_403(request.user)
     
     now = timezone.localtime()
-    upcoming = Booking.objects.filter(
-        client=client,
-        start_dt__gte=now,
-        start_dt__lte=now + timedelta(days=30)
-    ).select_related("service").order_by("start_dt")
-    past = Booking.objects.filter(
-        client=client,
-        start_dt__lt=now,
-        start_dt__gte=now - timedelta(days=30)
-    ).select_related("service").order_by("-start_dt")
+    upcoming = (Booking.objects
+                .filter(client=client, start_dt__gte=now, start_dt__lte=now + timedelta(days=30))
+                .select_related("service").order_by("start_dt"))
+    past = (Booking.objects
+            .filter(client=client, start_dt__lt=now, start_dt__gte=now - timedelta(days=30))
+            .select_related("service").order_by("-start_dt"))
     return render(request, "portal/dashboard.html", {"upcoming": upcoming, "past": past})
 
 
 @login_required
+@require_client
 def portal_calendar(request):
     """
     Simple list calendar for the next 90 days.
     """
-    client = getattr(request.user, "client_profile", None)
-    if not client:
-        messages.error(request, "Your login is not linked to a client profile.")
-        return redirect("login")
+    client = get_user_client_or_403(request.user)
     
     now = timezone.localtime()
-    upcoming = Booking.objects.filter(
-        client=client,
-        start_dt__gte=now,
-        start_dt__lte=now + timedelta(days=90)
-    ).select_related("service").order_by("start_dt")
+    upcoming = (Booking.objects
+                .filter(client=client, start_dt__gte=now, start_dt__lte=now + timedelta(days=90))
+                .select_related("service").order_by("start_dt"))
     return render(request, "portal/calendar.html", {"upcoming": upcoming})
 
 
 @login_required
+@require_client
 @require_http_methods(["GET", "POST"])
 def portal_book(request):
     """
     One-page wizard: GET shows form; POST validates; if 'confirm' present, creates booking and tries to create invoice.
     """
-    client = getattr(request.user, "client_profile", None)
-    if not client:
-        messages.error(request, "Your login is not linked to a client record.")
-        return redirect("portal_home")
+    client = get_user_client_or_403(request.user)
 
     if request.method == "POST":
         form = PortalBookingForm(request.POST, client=client)
@@ -286,14 +275,12 @@ def portal_book(request):
 
 
 @login_required
+@require_client
 def portal_book_done(request, booking_id: int):
     """
     Confirmation page with invoice link if present.
     """
-    client = getattr(request.user, "client_profile", None)
-    if not client:
-        messages.error(request, "Your login is not linked to a client profile.")
-        return redirect("login")
+    client = get_user_client_or_403(request.user)
     
     b = get_object_or_404(
         Booking.objects.select_related("service"),
