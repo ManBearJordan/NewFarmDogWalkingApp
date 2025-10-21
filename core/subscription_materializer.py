@@ -36,6 +36,11 @@ def materialize_future_holds(now_dt=None):
     created = 0
 
     for sched in StripeSubscriptionSchedule.objects.select_related('sub__client').filter(sub__active=True):
+        # Enforce completeness before creating any bookings
+        if not sched.is_complete():
+            log.info("Skipping sched %s (%s): incomplete (%s)", sched.id, sched.sub.stripe_subscription_id, ",".join(sched.missing_fields()))
+            continue
+        
         # Get service from the link's service_code
         service_code = sched.sub.service_code
         service = None

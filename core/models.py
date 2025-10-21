@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.db.models import JSONField
 import uuid
 from django.core.validators import RegexValidator
+from django.core.exceptions import ValidationError
 from datetime import time, datetime
 import re
 
@@ -314,6 +315,48 @@ class StripeSubscriptionSchedule(models.Model):
     
     def interval_weeks(self) -> int:
         return 2 if self.repeats == self.REPEATS_FORTNIGHTLY else 1
+    
+    # ----- Completeness & validation helpers -----
+    def missing_fields(self):
+        """
+        Returns list of field names that are missing for a complete schedule.
+        Checks via the OneToOne relationship to StripeSubscriptionLink.
+        """
+        missing = []
+        # service_code comes from the link
+        if not self.sub or not (self.sub.service_code or "").strip():
+            missing.append("service_code")
+        if not (self.days or "").strip():
+            missing.append("days")
+        if not (self.start_time or "").strip():
+            missing.append("start_time")
+        if not (self.location or "").strip():
+            missing.append("location")
+        if not (self.repeats or "").strip():
+            missing.append("repeats")
+        return missing
+
+    def is_complete(self) -> bool:
+        """Returns True if schedule has all required fields set."""
+        return len(self.missing_fields()) == 0
+
+    def clean(self):
+        """
+        Enforce basic validity when saving via admin/wizard.
+        """
+        errs = {}
+        # days must be comma-separated short names e.g. MON,THU
+        if self.days:
+            parts = [p for p in re.split(r"[,\s]+", self.days) if p]
+            valid = {"MON","TUE","WED","THU","FRI","SAT","SUN"}
+            if not parts or any(p.strip().upper()[:3] not in valid for p in parts):
+                errs["days"] = "Use weekday abbreviations like: MON,THU"
+        # start_time must be HH:MM 24h
+        if self.start_time:
+            if not re.match(r"^\d{2}:\d{2}$", self.start_time.strip()):
+                errs["start_time"] = "Use time format HH:MM (24h), e.g. 10:30"
+        if errs:
+            raise ValidationError(errs)
 
 
 class Tag(models.Model):
