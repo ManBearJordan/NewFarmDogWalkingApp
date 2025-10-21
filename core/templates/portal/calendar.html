@@ -1,17 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Calendar</h1>
-<ul>
-  {% for b in upcoming %}
-    <li>
-      {{ b.start_dt }} → {{ b.end_dt }} — {{ b.service.name|default:b.service_name }}
-      {% if b.requires_admin_review %}
-        <span title="Awaiting staff review" style="font-size:0.85em;padding:2px 6px;border:1px solid #f0ad4e;color:#8a6d3b;border-radius:8px;">under review</span>
-      {% endif %}
-    </li>
-  {% empty %}
-    <li>No items.</li>
-  {% endfor %}
-</ul>
+<h1>Your Calendar</h1>
+<p><a href="{% url 'portal_book' %}">Book a Walk</a> · <a href="{% url 'portal_home' %}">Back to Dashboard</a></p>
+{% if upcoming %}
+  <ul>
+    {% for b in upcoming %}
+      <li>
+        {{ b.start_dt }} → {{ b.end_dt }} — {{ b.service.name|default:b.service_name }}
+        {% if b.requires_admin_review %}
+          <span title="Awaiting staff review" style="font-size:0.85em;padding:2px 6px;border:1px solid #f0ad4e;color:#8a6d3b;border-radius:8px;">under review</span>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No items.</p>
+{% endif %}
 {% endblock %}
 

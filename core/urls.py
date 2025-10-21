@@ -8,8 +8,8 @@ from . import views, views_admin_capacity, views_portal, views_admin_subs, views
 from core.views_auth import CustomLogoutView
 
 urlpatterns = [
-    path("", views_portal.root_router, name="root"),
-    path("portal/", views_client.client_dashboard, name="portal_home"),
+    path("", views_portal.portal_home, name="root"),
+    path("portal/", views_portal.portal_home, name="portal_home"),
     path("admin-tools/reconcile/", admin_tools_reconcile.reconcile_index, name="admin_reconcile"),
     path("admin-tools/reconcile/link/", admin_tools_reconcile.reconcile_link, name="admin_reconcile_link"),
     path("admin-tools/reconcile/detach/", admin_tools_reconcile.reconcile_detach, name="admin_reconcile_detach"),
@@ -20,8 +20,8 @@ urlpatterns = [
     path("admin-tools/subs/unscheduled/", admin_tools_subs.subs_unscheduled, name="admin_subs_unscheduled"),
     path("admin-tools/subs/wizard/<int:link_id>/", admin_tools_subs.subs_wizard, name="admin_subs_wizard"),
     path("calendar/", views_client.client_calendar, name="calendar"),
-    path("portal/book/", views_client.booking_create, name="portal_booking_create"),
-    path("portal/confirm/", views_client.booking_confirm, name="portal_booking_confirm"),
+    path("portal/booking-old/", views_client.booking_create, name="portal_booking_create_legacy"),
+    path("portal/confirm-old/", views_client.booking_confirm, name="portal_booking_confirm_legacy"),
     path("healthz/", views_misc.health_check, name="healthz"),
     path('clients/', views.client_list, name='client_list'),
     path('clients/new/', views.client_create, name='client_create'),
@@ -94,4 +94,8 @@ urlpatterns = [
     path("admin-tools/review/", admin_tools_review.review_list, name="admin_review_list"),
     path("admin-tools/review/apply/<int:booking_id>/", admin_tools_review.review_apply, name="admin_review_apply"),
     path("admin-tools/review/dismiss/<int:booking_id>/", admin_tools_review.review_dismiss, name="admin_review_dismiss"),
+    # Portal
+    path("portal/calendar/", views_portal.portal_calendar, name="portal_calendar"),
+    path("portal/book/", views_portal.portal_book, name="portal_book"),
+    path("portal/book/done/<int:booking_id>/", views_portal.portal_book_done, name="portal_book_done"),
 ]

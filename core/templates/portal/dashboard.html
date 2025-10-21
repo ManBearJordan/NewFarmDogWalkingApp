@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Your upcoming walks</h1>
+<h1>Your Dashboard</h1>
+<p><a href="{% url 'portal_book' %}">Book a Walk</a> · <a href="{% url 'portal_calendar' %}">View Calendar</a></p>
+
+<h2>Upcoming (next 30 days)</h2>
 {% if upcoming %}
   <ul>
     {% for b in upcoming %}
@@ -9,12 +12,27 @@
         {% if b.requires_admin_review %}
           <span title="Awaiting staff review" style="font-size:0.85em;padding:2px 6px;border:1px solid #f0ad4e;color:#8a6d3b;border-radius:8px;">under review</span>
         {% endif %}
+        {% if b.invoice_pdf_url %}
+          — <a href="{{ b.invoice_pdf_url }}" target="_blank" rel="noopener">Open invoice</a>
+        {% elif b.stripe_invoice_id %}
+          — <em>Invoice pending…</em>
+        {% endif %}
       </li>
     {% endfor %}
   </ul>
 {% else %}
-  <p>No upcoming bookings yet.</p>
+  <p>No upcoming bookings.</p>
 {% endif %}
-<p><a href="{% url 'portal_booking_create' %}">Book a walk</a> · <a href="{% url 'calendar' %}">Calendar</a></p>
+
+<h2>Recent Past (last 30 days)</h2>
+{% if past %}
+  <ul>
+    {% for b in past %}
+      <li>{{ b.start_dt }} — {{ b.service.name|default:b.service_name }}</li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No recent past bookings.</p>
+{% endif %}
 {% endblock %}
 
