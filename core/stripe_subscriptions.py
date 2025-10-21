@@ -143,3 +143,50 @@ def materialize_future_holds(sub_link: StripeSubscriptionLink, horizon_days: int
     sched.last_materialized_until = until
     sched.save(update_fields=["last_materialized_until"])
     return {"created": created}
+
+
+def upsert_subscription_schedule_from_stripe(sub):
+    """
+    Given a Stripe Subscription object (with .metadata),
+    create/update our StripeSubscriptionSchedule from metadata fields.
+    Reads: days, start_time, location, visits_per_fortnight, repeats
+    """
+    meta = getattr(sub, "metadata", {}) or {}
+    
+    # Find the subscription link
+    link = StripeSubscriptionLink.objects.filter(stripe_subscription_id=sub.id).first()
+    if not link:
+        log.warning("No StripeSubscriptionLink found for sub %s", sub.id)
+        return None
+    
+    # Get or create schedule
+    sched, created = StripeSubscriptionSchedule.objects.get_or_create(
+        sub=link,
+        defaults={
+            "weekdays_csv": "wed",
+            "default_time": "10:30",
+        }
+    )
+    
+    # Update from metadata
+    if meta.get("days"):
+        sched.days = meta["days"]
+    if meta.get("start_time"):
+        sched.start_time = meta["start_time"]
+    if meta.get("location"):
+        sched.location = meta["location"]
+    if meta.get("visits_per_fortnight"):
+        try:
+            sched.visits_per_fortnight = int(meta["visits_per_fortnight"])
+        except Exception:
+            log.warning("Invalid visits_per_fortnight on sub %s: %r", sub.id, meta["visits_per_fortnight"])
+    
+    # NEW: explicit repeats drives cadence
+    repeats = (meta.get("repeats") or "").strip().lower()
+    if repeats in (StripeSubscriptionSchedule.REPEATS_WEEKLY, StripeSubscriptionSchedule.REPEATS_FORTNIGHTLY):
+        sched.repeats = repeats
+    # If missing, default remains 'weekly'
+    
+    sched.save()
+    return sched
+

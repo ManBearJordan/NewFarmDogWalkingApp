@@ -3,6 +3,8 @@ from django.conf import settings
 from django.utils import timezone
 import uuid
 from django.core.validators import RegexValidator
+from datetime import time
+import re
 
 
 class Service(models.Model):
@@ -241,9 +243,65 @@ class StripeSubscriptionSchedule(models.Model):
     default_duration_minutes = models.PositiveIntegerField(default=60)
     default_block_label = models.CharField(max_length=128, blank=True, null=True)
     last_materialized_until = models.DateField(blank=True, null=True)
+    
+    # New fields for explicit repeats pattern
+    days = models.CharField(max_length=100, blank=True, null=True, help_text="Comma-separated: MON,TUE,...")
+    start_time = models.CharField(max_length=20, blank=True, null=True, help_text="HH:MM (24h)")
+    location = models.CharField(max_length=100, blank=True, null=True)
+    visits_per_fortnight = models.PositiveIntegerField(blank=True, null=True, help_text="Informational only")
+    
+    REPEATS_WEEKLY = "weekly"
+    REPEATS_FORTNIGHTLY = "fortnightly"
+    REPEATS_CHOICES = (
+        (REPEATS_WEEKLY, "Weekly"),
+        (REPEATS_FORTNIGHTLY, "Fortnightly"),
+    )
+    repeats = models.CharField(max_length=16, choices=REPEATS_CHOICES, default=REPEATS_WEEKLY)
 
     def __str__(self):
         return f"Schedule for {self.sub.stripe_subscription_id} - {self.weekdays_csv} @ {self.default_time}"
+    
+    @staticmethod
+    def _day_to_int(name: str) -> int:
+        m = name.strip().upper()[:3]
+        order = ["MON","TUE","WED","THU","FRI","SAT","SUN"]
+        return order.index(m) if m in order else 2  # default WED
+    
+    def parsed_days(self):
+        """
+        Returns list of weekday ints (0=Mon..6=Sun).
+        Fallback to [WED] if missing/invalid.
+        Uses 'days' field if set, otherwise falls back to weekdays_csv.
+        """
+        # Prefer new 'days' field
+        days_str = self.days or self.weekdays_csv
+        if days_str:
+            try:
+                parts = [p for p in re.split(r"[,\s]+", days_str) if p]
+                vals = [self._day_to_int(p) for p in parts]
+                vals = sorted(set([v for v in vals if 0 <= v <= 6]))
+                if vals:
+                    return vals
+            except Exception:
+                pass
+        return [2]  # WED
+    
+    def parsed_time(self) -> time:
+        """
+        Returns a datetime.time from 'HH:MM'. Fallback 10:30 if blank/invalid.
+        Uses 'start_time' field if set, otherwise falls back to default_time.
+        """
+        time_str = self.start_time or self.default_time
+        if time_str:
+            try:
+                hh, mm = time_str.split(":")
+                return time(int(hh), int(mm))
+            except Exception:
+                pass
+        return time(10, 30)
+    
+    def interval_weeks(self) -> int:
+        return 2 if self.repeats == self.REPEATS_FORTNIGHTLY else 1
 
 
 class Tag(models.Model):
