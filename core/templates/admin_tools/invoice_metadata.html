@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Invoice/Subscription Metadata for Booking #{{ booking.id }}</h1>
+
+<h3>Booking</h3>
+<ul>
+  <li>Client: {{ booking.client }}</li>
+  <li>Service: {{ booking.service.name }} ({{ booking.service.code }})</li>
+  <li>Start → End: {{ booking.start_dt }} → {{ booking.end_dt }}</li>
+  <li>Invoice ID: {{ invoice_id|default:"—" }}</li>
+  {% if booking.requires_admin_review %}
+    <li>Status: <strong style="color:#8a6d3b">Under review</strong></li>
+  {% else %}
+    <li>Status: OK</li>
+  {% endif %}
+</ul>
+
+{% if review_diff %}
+<details open>
+  <summary><strong>Current Review Differences</strong></summary>
+  <pre style="white-space:pre-wrap">{{ review_diff }}</pre>
+  <p>
+    <a href="{% url 'admin_review_apply' booking.id %}">Apply</a> ·
+    <a href="{% url 'admin_review_dismiss' booking.id %}">Dismiss</a>
+  </p>
+</details>
+{% endif %}
+
+<h3>Invoice Line-Items (matching this booking)</h3>
+{% if line_results %}
+  {% for item in line_results %}
+    <div style="border:1px solid #ddd; padding:12px; margin:10px 0; border-radius:8px;">
+      <div><strong>Description:</strong> {{ item.description|default:"(none)" }}</div>
+      <div><strong>Amount:</strong> {{ item.amount_total|default:"(n/a)" }}</div>
+      <details open>
+        <summary><strong>Metadata</strong></summary>
+        <pre style="white-space:pre-wrap">{{ item.metadata }}</pre>
+      </details>
+      {% if item.unknown %}
+        <div><em>Unknown keys:</em> {{ item.unknown|join:", " }}</div>
+      {% endif %}
+      {% if item.diff %}
+        <details open>
+          <summary><strong>Differences vs Booking</strong></summary>
+          <pre style="white-space:pre-wrap">{{ item.diff }}</pre>
+          <p>
+            <a href="{% url 'admin_review_apply' booking.id %}">Apply</a> ·
+            <a href="{% url 'admin_review_dismiss' booking.id %}">Dismiss</a>
+          </p>
+        </details>
+      {% else %}
+        <div style="color:#3c763d;">No differences detected.</div>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% else %}
+  <p>No matching invoice line-items found for this booking (looked for metadata.booking_id={{ booking.id }}).</p>
+{% endif %}
+
+<h3>Subscription Schedule (internal)</h3>
+{% if sched %}
+  <ul>
+    <li>Repeats: {{ sched.repeats|title }}</li>
+    <li>Days: {{ sched.days|default:"WED" }}</li>
+    <li>Start time: {{ sched.start_time|default:"10:30" }}</li>
+    <li>Location: {{ sched.location|default:"Home" }}</li>
+    <li>Service code: {{ sched.sub.service_code }}</li>
+  </ul>
+{% else %}
+  <p>(No active schedule record found for this client/service.)</p>
+{% endif %}
+
+<p><a href="javascript:history.back()">Back</a></p>
+{% endblock %}
