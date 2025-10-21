@@ -65,3 +65,14 @@ class CoreConfig(AppConfig):
             self._startup_ran = True
         except Exception:
             log.exception("Failed to schedule startup sync")
+        
+        # Start the background scheduler only when enabled and appropriate.
+        try:
+            from . import scheduler  # local import so migrations/collectstatic don't break
+        except Exception as e:
+            log.warning("core.apps: scheduler module not available: %s", e)
+            return
+        try:
+            scheduler.start_scheduler_if_enabled()
+        except Exception as e:
+            log.exception("core.apps: failed to start scheduler: %s", e)
