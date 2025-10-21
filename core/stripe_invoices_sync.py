@@ -193,3 +193,46 @@ def sync_invoices(days: int = 90) -> Dict[str, int]:
             log.exception("Invoice sync error (id=%s): %s", getattr(inv, "id", None), e)
     log.info("Invoice sync complete: %s", counts)
     return counts
+
+
+def process_invoice(inv) -> Dict[str, int]:
+    """
+    Process a single Stripe invoice object (as delivered by webhooks).
+    Links line items to bookings, updates invoice fields, and runs validator.
+    Returns a small counts dict.
+    """
+    counts = {"line_items": 0, "linked": 0, "updated": 0, "flagged": 0, "unlinked": 0, "errors": 0}
+    try:
+        customer_id = getattr(inv, "customer", None) or (inv.get("customer") if isinstance(inv, dict) else None)
+        lines = getattr(inv, "lines", None) if not isinstance(inv, dict) else inv.get("lines")
+        line_items = getattr(lines, "data", []) if lines and not isinstance(lines, dict) else ((lines or {}).get("data", []) if isinstance(lines, dict) else [])
+        for li in (line_items or []):
+            counts["line_items"] += 1
+            md = getattr(li, "metadata", None) or (li.get("metadata") if isinstance(li, dict) else {}) or {}
+            booking = None
+            if "booking_id" in md:
+                booking = _link_by_metadata(md["booking_id"])
+            if not booking:
+                booking = _link_by_client_and_time(
+                    customer_id=customer_id,
+                    service_code=(md.get("service_code") or "").strip() or None,
+                    booking_start=md.get("booking_start"),
+                )
+            if booking:
+                if _update_booking_from_invoice(booking, inv, md):
+                    counts["updated"] += 1
+                counts["linked"] += 1
+            else:
+                counts["unlinked"] += 1
+        try:
+            pre = Booking.objects.filter(requires_admin_review=True).count()
+            validate_invoice_against_bookings(inv)
+            post = Booking.objects.filter(requires_admin_review=True).count()
+            if post > pre:
+                counts["flagged"] += (post - pre)
+        except Exception as e:
+            log.exception("Validator error (invoice %s): %s", getattr(inv, "id", None), e)
+    except Exception as e:
+        counts["errors"] += 1
+        log.exception("process_invoice error (id=%s): %s", getattr(inv, "id", None), e)
+    return counts
