@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Booking Created</h1>
+<p>
+  Booking #{{ booking.id }} —
+  {{ booking.start_dt }} → {{ booking.end_dt }} —
+  {{ booking.service.name|default:booking.service_name }}
+</p>
+{% if booking.invoice_pdf_url %}
+  <p><a href="{{ booking.invoice_pdf_url }}" target="_blank" rel="noopener">Open Invoice</a></p>
+{% elif booking.stripe_invoice_id %}
+  <p><em>Invoice pending…</em> It will appear here shortly.</p>
+{% else %}
+  <p><em>No invoice yet.</em> It will appear shortly once processed.</p>
+{% endif %}
+<p><a href="{% url 'portal_home' %}">Back to Dashboard</a></p>
+{% endblock %}

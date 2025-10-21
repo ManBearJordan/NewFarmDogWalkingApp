@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Book a Walk</h1>
+<form method="post">
+  {% csrf_token %}
+  <table>
+    <tr><td>{{ form.service.label_tag }}</td><td>{{ form.service }}</td></tr>
+    <tr><td>{{ form.date.label_tag }}</td><td>{{ form.date }}</td></tr>
+    <tr><td>{{ form.time.label_tag }}</td><td>{{ form.time }}</td></tr>
+    <tr><td>{{ form.location.label_tag }}</td><td>{{ form.location }}</td></tr>
+  </table>
+  {% if form.non_field_errors %}
+    <div style="color:#a94442;">{{ form.non_field_errors }}</div>
+  {% endif %}
+  <p><button type="submit">Continue</button> <a href="{% url 'portal_home' %}">Cancel</a></p>
+</form>
+{% endblock %}

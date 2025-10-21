@@ -8,8 +8,8 @@ from . import views, views_admin_capacity, views_portal, views_admin_subs, views
 from core.views_auth import CustomLogoutView
 
 urlpatterns = [
-    path("", views_portal.root_router, name="root"),
-    path("portal/", views_client.client_dashboard, name="portal_home"),
+    path("", views_portal.portal_home, name="root"),
+    path("portal/", views_portal.portal_home, name="portal_home"),
     path("admin-tools/reconcile/", admin_tools_reconcile.reconcile_index, name="admin_reconcile"),
     path("admin-tools/reconcile/link/", admin_tools_reconcile.reconcile_link, name="admin_reconcile_link"),
     path("admin-tools/reconcile/detach/", admin_tools_reconcile.reconcile_detach, name="admin_reconcile_detach"),
@@ -94,4 +94,8 @@ urlpatterns = [
     path("admin-tools/review/", admin_tools_review.review_list, name="admin_review_list"),
     path("admin-tools/review/apply/<int:booking_id>/", admin_tools_review.review_apply, name="admin_review_apply"),
     path("admin-tools/review/dismiss/<int:booking_id>/", admin_tools_review.review_dismiss, name="admin_review_dismiss"),
+    # Portal
+    path("portal/calendar/", views_portal.portal_calendar, name="portal_calendar"),
+    path("portal/book/", views_portal.portal_book, name="portal_book"),
+    path("portal/book/done/<int:booking_id>/", views_portal.portal_book_done, name="portal_book_done"),
 ]
