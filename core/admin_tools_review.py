@@ -1,5 +1,6 @@
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render, redirect, get_object_or_404
+from django.views.decorators.http import require_POST
 from django.contrib import messages
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -35,6 +36,7 @@ def review_list(request):
 
 
 @staff_member_required
+@require_POST
 def review_apply(request, booking_id: int):
     """Apply invoice metadata values to the booking."""
     b = get_object_or_404(Booking, id=booking_id)
@@ -79,6 +81,7 @@ def review_apply(request, booking_id: int):
 
 
 @staff_member_required
+@require_POST
 def review_dismiss(request, booking_id: int):
     """Dismiss the review without applying changes."""
     b = get_object_or_404(Booking, id=booking_id)

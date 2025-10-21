@@ -87,6 +87,7 @@ MIDDLEWARE = [
     # Force-login middleware MUST come after AuthenticationMiddleware
     'newfarm.middleware.RedirectAnonymousToLoginMiddleware',
     'core.middleware.ServiceDurationGuardMiddleware',
+    'core.middleware.cloudflare_secure.CloudflareProtoMiddleware',
 ]
 
 ROOT_URLCONF = 'newfarm.urls'

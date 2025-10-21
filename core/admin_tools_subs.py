@@ -2,6 +2,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db import transaction
+from django.views.decorators.http import require_http_methods
 from .models import StripeSubscriptionLink, StripeSubscriptionSchedule, Service
 
 
@@ -48,6 +49,7 @@ def subs_unscheduled(request):
 
 @staff_member_required
 @transaction.atomic
+@require_http_methods(["GET", "POST"])
 def subs_wizard(request, link_id: int):
     """
     Capture service_code, days, start_time, repeats, location for a Stripe sub.
