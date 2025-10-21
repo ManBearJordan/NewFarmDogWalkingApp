@@ -59,7 +59,7 @@ class PetAdmin(admin.ModelAdmin):
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
     list_display = ['service_name', 'client', 'start_dt', 'end_dt', 'status', 'price_cents', 'deleted']
-    list_filter = ['status', 'deleted', 'service_code']
+    list_filter = ['status', 'deleted', 'service_code', 'requires_admin_review']
     search_fields = ['service_name', 'client__name', 'location']
     date_hierarchy = 'start_dt'
 

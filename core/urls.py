@@ -4,7 +4,7 @@ URL configuration for the core app.
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings, views_misc, views_client, admin_tools, subscription_admin
+from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings, views_misc, views_client, admin_tools, admin_tools_review, subscription_admin
 from core.views_auth import CustomLogoutView
 
 urlpatterns = [
@@ -84,4 +84,8 @@ urlpatterns = [
     path("stripe/webhooks/", views_webhooks.stripe_webhook, name="stripe_webhook"),
     # Service settings
     path('settings/services/', views_settings.service_settings, name='service_settings'),
+    # Admin review
+    path("admin-tools/review/", admin_tools_review.review_list, name="admin_review_list"),
+    path("admin-tools/review/apply/<int:booking_id>/", admin_tools_review.review_apply, name="admin_review_apply"),
+    path("admin-tools/review/dismiss/<int:booking_id>/", admin_tools_review.review_dismiss, name="admin_review_dismiss"),
 ]
