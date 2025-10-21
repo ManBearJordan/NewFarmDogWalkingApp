@@ -128,6 +128,7 @@ class Booking(models.Model):
     price_cents = models.IntegerField(default=0)
     notes = models.TextField(blank=True)
     stripe_invoice_id = models.CharField(max_length=200, blank=True, null=True)
+    stripe_invoice_status = models.CharField(max_length=32, blank=True, null=True)  # draft/open/paid/void/uncollectible
     deleted = models.BooleanField(default=False)
     # Card payments (portal flow)
     payment_intent_id = models.CharField(max_length=128, blank=True, null=True)
