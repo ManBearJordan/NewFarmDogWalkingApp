@@ -461,3 +461,25 @@ class CapacityHold(models.Model):
     @classmethod
     def purge_expired(cls):
         cls.objects.filter(expires_at__lt=timezone.now()).delete()
+
+
+# ---------- PR15: Stripe price → Service mapping ----------
+class StripePriceMap(models.Model):
+    """
+    Explicit mapping from Stripe Price IDs to local Services.
+    Prefer using this instead of relying on product/nickname text.
+    """
+    price_id = models.CharField(max_length=128, unique=True, db_index=True)
+    product_id = models.CharField(max_length=128, blank=True, null=True)
+    nickname = models.CharField(max_length=128, blank=True, null=True)
+    service = models.ForeignKey("Service", on_delete=models.CASCADE, related_name="stripe_prices")
+    active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("price_id",)
+
+    def __str__(self) -> str:
+        s = getattr(self.service, "code", None) or "(no service)"
+        return f"{self.price_id} → {s}"

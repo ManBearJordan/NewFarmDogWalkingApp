@@ -4,7 +4,7 @@ from django.urls import reverse
 from .models import (
     StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence, Tag,
     StripeKeyAudit, Service, ServiceDefaults, TimetableBlock, BlockCapacity, CapacityHold,
-    StripeSubscriptionLink, StripeSubscriptionSchedule
+    StripeSubscriptionLink, StripeSubscriptionSchedule, StripePriceMap
 )
 
 
@@ -179,3 +179,10 @@ class StripeSubscriptionScheduleAdmin(admin.ModelAdmin):
         return obj.sub.active if obj.sub else False
     get_active.short_description = "Active"
     get_active.boolean = True
+
+
+@admin.register(StripePriceMap)
+class StripePriceMapAdmin(admin.ModelAdmin):
+    list_display = ("price_id", "product_id", "nickname", "service", "active", "updated_at")
+    list_filter = ("active",)
+    search_fields = ("price_id", "product_id", "nickname", "service__code", "service__name")

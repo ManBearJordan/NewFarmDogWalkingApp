@@ -12,7 +12,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.utils.timezone import make_naive, is_aware, localtime
 
-from .models import Booking, Client, Service
+from .models import Booking, Client, Service, StripePriceMap
 from .stripe_invoices_sync import process_invoice
 
 log = logging.getLogger(__name__)
@@ -45,7 +45,8 @@ def _recent_invoices(days: int = 60) -> List[Any]:
         params = {
             "limit": 100,
             "created": {"gte": int(since.timestamp())},
-            "expand": ["data.lines.data"],
+            # include price so we can map to Service
+            "expand": ["data.lines.data", "data.lines.data.price"],
         }
         if starting_after:
             params["starting_after"] = starting_after
@@ -239,14 +240,22 @@ def reconcile_create_from_line(request):
         messages.error(request, f"Invoice line {line_id} not found.")
         return redirect("admin_reconcile")
     md = getattr(target_line, "metadata", None) or {}
-    service_code = (md.get("service_code") or "").strip()
+    # Prefer price → service mapping; fallback to metadata.service_code
+    price_id = getattr(getattr(target_line, "price", None), "id", None)
+    spm = None
+    if price_id:
+        spm = StripePriceMap.objects.filter(price_id=price_id, active=True).select_related("service").first()
+    if spm and spm.service and spm.service.is_active:
+        service = spm.service
+    else:
+        service_code = (md.get("service_code") or "").strip()
+        service = Service.objects.filter(code=service_code, is_active=True).first() if service_code else None
     start_dt = _parse_iso_local(md.get("booking_start"))
-    if not (service_code and start_dt):
-        messages.error(request, "Line metadata must include service_code and booking_start.")
+    if not start_dt:
+        messages.error(request, "Line metadata must include booking_start.")
         return redirect("admin_reconcile")
-    service = Service.objects.filter(code=service_code, is_active=True).first()
     if not (service and service.duration_minutes):
-        messages.error(request, "Service missing or has no duration; cannot compute end time.")
+        messages.error(request, "Service missing or has no duration. Map the Stripe price to a Service or set the duration.")
         return redirect("admin_reconcile")
     end_dt = start_dt + timedelta(minutes=service.duration_minutes)
     # Avoid duplicates

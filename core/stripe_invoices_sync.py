@@ -8,7 +8,7 @@ import stripe
 from django.utils.timezone import make_naive, is_aware
 from django.db import transaction
 
-from .models import Booking, Client, Service
+from .models import Booking, Client, Service, StripePriceMap
 from .invoice_validation import validate_invoice_against_bookings
 
 log = logging.getLogger(__name__)
@@ -50,6 +50,25 @@ def _safe_get(obj: Any, path: str, default=None):
         else:
             cur = getattr(cur, p, None)
     return cur if cur is not None else default
+
+
+def _service_from_line(li, md: Dict[str, Any]) -> Optional[Service]:
+    """
+    Resolve Service for a line using price→service mapping first, otherwise metadata.service_code.
+    """
+    # 1) Try mapped price
+    price_id = _safe_get(li, "price.id")
+    if price_id:
+        spm = StripePriceMap.objects.filter(price_id=price_id, active=True).select_related("service").first()
+        if spm and spm.service and spm.service.is_active:
+            return spm.service
+    # 2) Fallback to metadata.service_code
+    svc_code = (md.get("service_code") or "").strip() if isinstance(md, dict) else None
+    if svc_code:
+        svc = Service.objects.filter(code=svc_code, is_active=True).first()
+        if svc:
+            return svc
+    return None
 
 
 def _link_by_metadata(booking_id_val) -> Optional[Booking]:
@@ -125,7 +144,8 @@ def _iterate_invoices_since(days: int):
         params = {
             "limit": 100,
             "created": {"gte": int(since.timestamp())},
-            "expand": ["data.lines.data"],
+            # include price so we can map to Service
+            "expand": ["data.lines.data", "data.lines.data.price"],
         }
         if starting_after:
             params["starting_after"] = starting_after
@@ -160,6 +180,9 @@ def sync_invoices(days: int = 90) -> Dict[str, int]:
             for li in (line_items or []):
                 counts["line_items"] += 1
                 md = getattr(li, "metadata", None) or {}
+                # resolve service for better matching
+                svc = _service_from_line(li, md)
+                svc_code = getattr(svc, "code", None)
                 booking = None
                 # 1) Prefer explicit booking_id
                 if "booking_id" in md:
@@ -168,7 +191,7 @@ def sync_invoices(days: int = 90) -> Dict[str, int]:
                 if not booking:
                     booking = _link_by_client_and_time(
                         customer_id=customer_id,
-                        service_code=(md.get("service_code") or "").strip() or None,
+                        service_code=svc_code or (md.get("service_code") or "").strip() or None,
                         booking_start=md.get("booking_start"),
                     )
                 if booking:
@@ -209,13 +232,15 @@ def process_invoice(inv) -> Dict[str, int]:
         for li in (line_items or []):
             counts["line_items"] += 1
             md = getattr(li, "metadata", None) or (li.get("metadata") if isinstance(li, dict) else {}) or {}
+            svc = _service_from_line(li, md)
+            svc_code = getattr(svc, "code", None)
             booking = None
             if "booking_id" in md:
                 booking = _link_by_metadata(md["booking_id"])
             if not booking:
                 booking = _link_by_client_and_time(
                     customer_id=customer_id,
-                    service_code=(md.get("service_code") or "").strip() or None,
+                    service_code=svc_code or (md.get("service_code") or "").strip() or None,
                     booking_start=md.get("booking_start"),
                 )
             if booking:
