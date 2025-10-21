@@ -78,7 +78,11 @@ def _summarize_invoices_for_reconcile(days: int = 60):
     Return a list of invoices with only the lines that are 'unlinked' from local bookings
     (i.e., no local booking has this invoice id, or metadata.booking_id doesn't match a booking).
     """
-    invoices = _recent_invoices(days=days)
+    try:
+        invoices = _recent_invoices(days=days)
+    except Exception as e:
+        log.warning("Failed to fetch Stripe invoices: %s", e)
+        return []
     unlinked = []
     for inv in invoices:
         inv_id = getattr(inv, "id", None)
