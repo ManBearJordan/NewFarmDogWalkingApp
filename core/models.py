@@ -169,6 +169,29 @@ class AdminEvent(models.Model):
     def __str__(self):
         return f"{self.title} (due {self.due_dt.date()})"
 
+    @classmethod
+    def log(cls, event_type, message):
+        """
+        Create an AdminEvent for alerting admins about system events.
+        Due date is set to now for immediate visibility.
+        Prevents duplicate logging by checking for recent similar events.
+        """
+        from django.utils import timezone
+        # Check if a similar event was logged recently (within last hour)
+        one_hour_ago = timezone.now() - timezone.timedelta(hours=1)
+        recent_event = cls.objects.filter(
+            title__icontains=event_type,
+            notes=message,
+            due_dt__gte=one_hour_ago
+        ).first()
+        
+        if not recent_event:
+            cls.objects.create(
+                due_dt=timezone.now(),
+                title=f"{event_type}",
+                notes=message
+            )
+
 
 class SubOccurrence(models.Model):
     id = models.AutoField(primary_key=True)

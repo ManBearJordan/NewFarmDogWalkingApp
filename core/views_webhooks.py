@@ -1,11 +1,13 @@
-import json, stripe
+import json, stripe, logging
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.conf import settings
 from django.utils import timezone
 from .stripe_integration import get_stripe_key
-from .models import Client, StripeSubscriptionLink, Booking
+from .models import Client, StripeSubscriptionLink, Booking, Service, AdminEvent
 from .stripe_subscriptions import materialize_future_holds, resolve_service_code
+
+logger = logging.getLogger(__name__)
 
 @csrf_exempt
 def stripe_webhook(request):
@@ -37,6 +39,11 @@ def stripe_webhook(request):
         price = (data.get("items", {}).get("data", [{}])[0]).get("price", {})
         nickname = price.get("nickname") or ""
         service_code = resolve_service_code(nickname) or "walk"
+        
+        # Log if service_code doesn't exist in database
+        if service_code and not Service.objects.filter(code=service_code).exists():
+            logger.warning(f"Subscription {sub_id}: Unknown service_code from nickname → {service_code} (nickname: {nickname})")
+        
         link, _ = StripeSubscriptionLink.objects.update_or_create(
             stripe_subscription_id=sub_id,
             defaults={"client": client, "service_code": service_code, "status": status},
@@ -61,6 +68,29 @@ def stripe_webhook(request):
             hosted_pdf = inv.get('invoice_pdf') or inv.get('hosted_invoice_url') or None
         except Exception:
             hosted_pdf = None
+
+        # Extract and validate metadata
+        metadata = inv.get('metadata', {})
+        booking_id = metadata.get('booking_id')
+        service_code = metadata.get('service_code')
+        
+        # Log missing or invalid booking_id
+        if not booking_id or not Booking.objects.filter(id=booking_id).exists():
+            logger.warning(f"Invoice {invoice_id}: Invalid or missing booking_id in metadata → {booking_id}")
+            # Log to AdminEvent if metadata appears malformed
+            if metadata and not booking_id:
+                AdminEvent.log("stripe_metadata_error", f"Invoice {invoice_id} has malformed metadata: {dict(metadata)}")
+        
+        # Log invalid service_code (if present)
+        if service_code and not Service.objects.filter(code=service_code).exists():
+            logger.warning(f"Invoice {invoice_id}: Unknown service_code from metadata → {service_code}")
+        
+        # Check for unexpected metadata keys (debug mode only)
+        if settings.STRIPE_METADATA_LOGGING and metadata:
+            known_keys = {"booking_id", "service_code", "date", "time"}
+            unknown_keys = set(metadata.keys()) - known_keys
+            if unknown_keys:
+                logger.debug(f"Invoice {invoice_id}: Unused metadata fields → {sorted(unknown_keys)}")
 
         if invoice_id:
             qs = Booking.objects.filter(stripe_invoice_id=invoice_id)
