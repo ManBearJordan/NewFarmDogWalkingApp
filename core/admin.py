@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.utils.html import format_html
+from django.urls import reverse
 from .models import (
     StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence, Tag,
     StripeKeyAudit, Service, ServiceDefaults, TimetableBlock, BlockCapacity, CapacityHold
@@ -58,10 +60,33 @@ class PetAdmin(admin.ModelAdmin):
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ['service_name', 'client', 'start_dt', 'end_dt', 'status', 'price_cents', 'deleted']
+    list_display = ['service_name', 'client', 'start_dt', 'end_dt', 'status', 'price_cents', 'deleted', 'review_flag', 'review_summary', 'invoice_meta_link']
     list_filter = ['status', 'deleted', 'service_code', 'requires_admin_review']
     search_fields = ['service_name', 'client__name', 'location']
     date_hierarchy = 'start_dt'
+
+    def review_flag(self, obj):
+        return "⚠️" if getattr(obj, "requires_admin_review", False) else "—"
+    review_flag.short_description = "Review"
+
+    def review_summary(self, obj):
+        rd = getattr(obj, "review_diff", None)
+        if not rd:
+            return "—"
+        # show changed keys only
+        try:
+            keys = ", ".join(sorted(rd.keys()))
+            return keys or "—"
+        except Exception:
+            return "(diff)"
+    review_summary.short_description = "Diff"
+
+    def invoice_meta_link(self, obj):
+        if not obj.stripe_invoice_id:
+            return "—"
+        url = reverse("admin_invoice_metadata", args=[obj.id])
+        return format_html('<a href="{}">Invoice metadata</a>', url)
+    invoice_meta_link.short_description = "Inspect"
 
 
 @admin.register(BookingPet)
