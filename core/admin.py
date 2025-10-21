@@ -3,7 +3,8 @@ from django.utils.html import format_html
 from django.urls import reverse
 from .models import (
     StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence, Tag,
-    StripeKeyAudit, Service, ServiceDefaults, TimetableBlock, BlockCapacity, CapacityHold
+    StripeKeyAudit, Service, ServiceDefaults, TimetableBlock, BlockCapacity, CapacityHold,
+    StripeSubscriptionLink, StripeSubscriptionSchedule
 )
 
 
@@ -147,3 +148,34 @@ class CapacityHoldAdmin(admin.ModelAdmin):
     list_display = ("token", "block", "service_code", "client", "expires_at")
     list_filter = ("service_code",)
     date_hierarchy = "expires_at"
+
+
+@admin.register(StripeSubscriptionLink)
+class StripeSubscriptionLinkAdmin(admin.ModelAdmin):
+    list_display = ("id", "client", "stripe_subscription_id", "service_code", "active")
+    list_filter = ("active",)
+    search_fields = ("stripe_subscription_id", "client__name", "service_code")
+
+
+@admin.register(StripeSubscriptionSchedule)
+class StripeSubscriptionScheduleAdmin(admin.ModelAdmin):
+    list_display = ("id", "get_client", "get_stripe_subscription_id", "get_service_code", "repeats", "days", "start_time", "location", "get_active")
+    list_filter = ("repeats",)
+    search_fields = ("sub__stripe_subscription_id", "sub__client__name", "sub__service_code", "days", "location")
+    
+    def get_client(self, obj):
+        return obj.sub.client if obj.sub else "—"
+    get_client.short_description = "Client"
+    
+    def get_stripe_subscription_id(self, obj):
+        return obj.sub.stripe_subscription_id if obj.sub else "—"
+    get_stripe_subscription_id.short_description = "Stripe Sub ID"
+    
+    def get_service_code(self, obj):
+        return obj.sub.service_code if obj.sub else "—"
+    get_service_code.short_description = "Service Code"
+    
+    def get_active(self, obj):
+        return obj.sub.active if obj.sub else False
+    get_active.short_description = "Active"
+    get_active.boolean = True

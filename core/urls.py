@@ -4,7 +4,7 @@ URL configuration for the core app.
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings, views_misc, views_client, admin_tools, admin_tools_review, admin_tools_metadata, subscription_admin
+from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings, views_misc, views_client, admin_tools, admin_tools_review, admin_tools_metadata, admin_tools_subs, subscription_admin
 from core.views_auth import CustomLogoutView
 
 urlpatterns = [
@@ -14,6 +14,8 @@ urlpatterns = [
     path("admin-tools/reconcile/mark-paid/<int:booking_id>/", admin_tools.reconcile_mark_paid, name="admin_reconcile_paid"),
     path("admin-tools/subscriptions/", subscription_admin.link_list, name="admin_sub_links"),
     path("admin-tools/subscriptions/save/<int:link_id>/", subscription_admin.link_save, name="admin_sub_link_save"),
+    path("admin-tools/subs/unscheduled/", admin_tools_subs.subs_unscheduled, name="admin_subs_unscheduled"),
+    path("admin-tools/subs/wizard/<int:link_id>/", admin_tools_subs.subs_wizard, name="admin_subs_wizard"),
     path("calendar/", views_client.client_calendar, name="calendar"),
     path("portal/book/", views_client.booking_create, name="portal_booking_create"),
     path("portal/confirm/", views_client.booking_confirm, name="portal_booking_confirm"),

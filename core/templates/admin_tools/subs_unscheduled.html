@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Subscriptions – Schedule Status</h1>
+<p>Every Stripe subscription needs a schedule before bookings can be materialized.</p>
+<table border="1" cellpadding="6" cellspacing="0">
+  <tr>
+    <th>Client</th>
+    <th>Stripe Sub ID</th>
+    <th>Service</th>
+    <th>Repeats</th>
+    <th>Days</th>
+    <th>Start</th>
+    <th>Location</th>
+    <th>Status</th>
+    <th>Actions</th>
+  </tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.link.client }}</td>
+    <td>{{ r.link.stripe_subscription_id }}</td>
+    <td>{{ r.link.service_code|default:"—" }}</td>
+    <td>{{ r.sched.repeats|default:"—" }}</td>
+    <td>{{ r.sched.days|default:"—" }}</td>
+    <td>{{ r.sched.start_time|default:"—" }}</td>
+    <td>{{ r.sched.location|default:"—" }}</td>
+    <td>
+      {% if r.status == "complete" %}
+        <span style="color:#3c763d;">complete</span>
+      {% else %}
+        <span style="color:#8a6d3b;">needs schedule</span>
+        <small>(missing: {{ r.missing|join:", " }})</small>
+      {% endif %}
+    </td>
+    <td>
+      <a href="{% url 'admin_subs_wizard' r.link.id %}">Set / Edit</a>
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="9">No subscriptions found.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Set Schedule – {{ link.client }} ({{ link.stripe_subscription_id }})</h1>
+<form method="post">
+  {% csrf_token %}
+  <table cellpadding="6">
+    <tr>
+      <td>Service</td>
+      <td>
+        <select name="service_code" required>
+          <option value="">-- choose --</option>
+          {% for s in services %}
+            <option value="{{ s.code }}" {% if link.service_code == s.code %}selected{% endif %}>{{ s.name }} ({{ s.code }})</option>
+          {% endfor %}
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <td>Repeats</td>
+      <td>
+        <select name="repeats" required>
+          {% for val,label in repeats_choices %}
+            <option value="{{ val }}" {% if sched.repeats == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <td>Days</td>
+      <td><input type="text" name="days" value="{{ sched.days|default:'' }}" placeholder="e.g. MON,THU" required></td>
+    </tr>
+    <tr>
+      <td>Start time</td>
+      <td><input type="time" name="start_time" value="{{ sched.start_time|default:'' }}" required></td>
+    </tr>
+    <tr>
+      <td>Location</td>
+      <td><input type="text" name="location" value="{{ sched.location|default:'Home' }}" required></td>
+    </tr>
+  </table>
+  <p>
+    <button type="submit">Save Schedule</button>
+    <a href="{% url 'admin_subs_unscheduled' %}">Cancel</a>
+  </p>
+</form>
+{% endblock %}
