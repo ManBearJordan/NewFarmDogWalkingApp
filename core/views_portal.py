@@ -199,14 +199,19 @@ def portal_home(request):
     """
     Dashboard: upcoming (next 30 days) and last 30 days (past).
     """
+    client = getattr(request.user, "client_profile", None)
+    if not client:
+        messages.error(request, "Your login is not linked to a client profile.")
+        return redirect("login")
+    
     now = timezone.localtime()
     upcoming = Booking.objects.filter(
-        client=request.user.client_profile,
+        client=client,
         start_dt__gte=now,
         start_dt__lte=now + timedelta(days=30)
     ).select_related("service").order_by("start_dt")
     past = Booking.objects.filter(
-        client=request.user.client_profile,
+        client=client,
         start_dt__lt=now,
         start_dt__gte=now - timedelta(days=30)
     ).select_related("service").order_by("-start_dt")
@@ -218,9 +223,14 @@ def portal_calendar(request):
     """
     Simple list calendar for the next 90 days.
     """
+    client = getattr(request.user, "client_profile", None)
+    if not client:
+        messages.error(request, "Your login is not linked to a client profile.")
+        return redirect("login")
+    
     now = timezone.localtime()
     upcoming = Booking.objects.filter(
-        client=request.user.client_profile,
+        client=client,
         start_dt__gte=now,
         start_dt__lte=now + timedelta(days=90)
     ).select_related("service").order_by("start_dt")
@@ -280,9 +290,14 @@ def portal_book_done(request, booking_id: int):
     """
     Confirmation page with invoice link if present.
     """
+    client = getattr(request.user, "client_profile", None)
+    if not client:
+        messages.error(request, "Your login is not linked to a client profile.")
+        return redirect("login")
+    
     b = get_object_or_404(
         Booking.objects.select_related("service"),
         id=booking_id,
-        client=request.user.client_profile
+        client=client
     )
     return render(request, "portal/book_done.html", {"booking": b})
