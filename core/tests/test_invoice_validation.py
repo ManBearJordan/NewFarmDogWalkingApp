@@ -384,3 +384,25 @@ class InvoiceValidationTests(TestCase):
         
         self.assertTrue(booking2.requires_admin_review)
         self.assertIn("location", booking2.review_diff)
+
+    def test_flags_time_mismatch(self):
+        """Test that time mismatches are flagged with review_diff populated."""
+        invoice = {
+            "id": "in_789",
+            "customer": self.client.stripe_customer_id,
+            "lines": {"data": [
+                {
+                    "id": "ili_1",
+                    "metadata": {
+                        "booking_id": str(self.booking.id),
+                        "booking_start": "2025-10-21T10:15:00",  # mismatch vs 10:00
+                        "booking_end": "2025-10-21T10:45:00",
+                        "service_code": "walk30",
+                    },
+                }
+            ]},
+        }
+        validate_invoice_against_bookings(invoice)
+        self.booking.refresh_from_db()
+        self.assertTrue(self.booking.requires_admin_review)
+        self.assertIn("start_dt", self.booking.review_diff or {})
