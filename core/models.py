@@ -337,6 +337,24 @@ class StripeSubscriptionSchedule(models.Model):
         return 2 if self.repeats == self.REPEATS_FORTNIGHTLY else 1
     
     # ----- Completeness & validation helpers -----
+    def occurs_on_datetime(self, dt) -> bool:
+        """
+        Returns True if this schedule would occur on the given naive local datetime.
+        Safe for WEEKLY schedules. For FORTNIGHTLY, parity is ambiguous without an anchor,
+        so we conservatively return False (to avoid wrong links) unless the interval is weekly.
+        """
+        if not self.is_complete():
+            return False
+        # Compare weekday & time
+        days = set(self.parsed_days())
+        t = self.parsed_time()
+        if dt.weekday() not in days:
+            return False
+        if dt.hour != t.hour or dt.minute != t.minute:
+            return False
+        # Only weekly is deterministic without an anchor
+        return self.interval_weeks() == 1
+
     def missing_fields(self):
         """
         Returns list of field names that are missing for a complete schedule.
