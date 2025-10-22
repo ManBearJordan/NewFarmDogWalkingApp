@@ -88,6 +88,7 @@ MIDDLEWARE = [
     'newfarm.middleware.RedirectAnonymousToLoginMiddleware',
     'core.middleware.ServiceDurationGuardMiddleware',
     'core.middleware.cloudflare_secure.CloudflareProtoMiddleware',
+    'core.middleware.request_id.RequestIDMiddleware',
 ]
 
 ROOT_URLCONF = 'newfarm.urls'
@@ -228,9 +229,26 @@ SERVER_EMAIL = env.str("SERVER_EMAIL", default="server@app.newfarmdogwalking.com
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "filters": {
+        "request_id": {
+            "()": "core.logging_filters.RequestIDLogFilter",
+        },
+    },
+    "formatters": {
+        "standard": {
+            "format": "%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s"
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+            "filters": ["request_id"],
+        },
+    },
     "loggers": {
         "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": True},
         "core.scheduler": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "core": {"handlers": ["console"], "level": "INFO"},
     },
 }

@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 from django.test import Client as TestClient
 from django.urls import reverse
 from django.utils import timezone
-from core.models import Client, Booking, Service, AdminEvent, StripeSubscriptionLink
+from core.models import Client, Booking, Service, AdminTask, StripeSubscriptionLink
 
 
 @pytest.mark.django_db
@@ -130,7 +130,7 @@ class TestWebhookInvoiceLogging:
 
     @patch('core.views_webhooks.get_stripe_key')
     def test_invoice_malformed_metadata_creates_admin_event(self, mock_get_key):
-        """Test that malformed metadata creates an AdminEvent"""
+        """Test that malformed metadata creates an AdminTask"""
         mock_get_key.return_value = "sk_test_123"
         
         webhook_payload = {
@@ -147,7 +147,7 @@ class TestWebhookInvoiceLogging:
             }
         }
         
-        initial_count = AdminEvent.objects.count()
+        initial_count = AdminTask.objects.count()
         
         response = self.test_client.post(
             '/stripe/webhooks/',
@@ -156,9 +156,9 @@ class TestWebhookInvoiceLogging:
         )
         
         assert response.status_code == 200
-        assert AdminEvent.objects.count() == initial_count + 1
+        assert AdminTask.objects.count() == initial_count + 1
         
-        event = AdminEvent.objects.latest('id')
+        event = AdminTask.objects.latest('id')
         assert "stripe_metadata_error" in event.title
         assert "in_malformed" in event.notes
         assert "malformed metadata" in event.notes
@@ -256,37 +256,37 @@ class TestWebhookSubscriptionLogging:
 
 
 @pytest.mark.django_db
-class TestAdminEventLog:
-    """Test AdminEvent.log() class method"""
+class TestAdminTaskLog:
+    """Test AdminTask.log() class method"""
 
-    def test_admin_event_log_creates_event(self):
-        """Test that AdminEvent.log creates a new event"""
-        initial_count = AdminEvent.objects.count()
+    def test_admin_task_log_creates_event(self):
+        """Test that AdminTask.log creates a new event"""
+        initial_count = AdminTask.objects.count()
         
-        AdminEvent.log("test_event", "Test message")
+        AdminTask.log("test_event", "Test message")
         
-        assert AdminEvent.objects.count() == initial_count + 1
-        event = AdminEvent.objects.latest('id')
+        assert AdminTask.objects.count() == initial_count + 1
+        event = AdminTask.objects.latest('id')
         assert event.title == "test_event"
         assert event.notes == "Test message"
 
-    def test_admin_event_log_prevents_duplicates(self):
-        """Test that AdminEvent.log prevents duplicate events within an hour"""
-        AdminEvent.log("test_event", "Test message")
-        initial_count = AdminEvent.objects.count()
+    def test_admin_task_log_prevents_duplicates(self):
+        """Test that AdminTask.log prevents duplicate events within an hour"""
+        AdminTask.log("test_event", "Test message")
+        initial_count = AdminTask.objects.count()
         
         # Try to log the same event again
-        AdminEvent.log("test_event", "Test message")
+        AdminTask.log("test_event", "Test message")
         
         # Should not create a new event
-        assert AdminEvent.objects.count() == initial_count
+        assert AdminTask.objects.count() == initial_count
 
-    def test_admin_event_log_allows_different_messages(self):
-        """Test that AdminEvent.log allows different messages"""
-        AdminEvent.log("test_event", "Message 1")
-        initial_count = AdminEvent.objects.count()
+    def test_admin_task_log_allows_different_messages(self):
+        """Test that AdminTask.log allows different messages"""
+        AdminTask.log("test_event", "Message 1")
+        initial_count = AdminTask.objects.count()
         
-        AdminEvent.log("test_event", "Message 2")
+        AdminTask.log("test_event", "Message 2")
         
         # Should create a new event with different message
-        assert AdminEvent.objects.count() == initial_count + 1
+        assert AdminTask.objects.count() == initial_count + 1

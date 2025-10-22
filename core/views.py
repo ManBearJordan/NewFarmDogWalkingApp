@@ -29,7 +29,7 @@ from django.views.decorators.http import require_http_methods
 import json
 import logging
 
-from .models import Client, Booking, AdminEvent, SubOccurrence, Pet, BookingPet, Tag
+from .models import Client, Booking, AdminTask, SubOccurrence, Pet, BookingPet, Tag
 from .forms import PetForm, ClientForm
 from .booking_create_service import create_bookings_with_billing
 from .stripe_integration import (
@@ -403,8 +403,8 @@ def calendar_view(request):
     sub_occurrence_count = sub_occurrences.count()
     logger.info(f"Calendar view: found {sub_occurrence_count} active subscription occurrences for {year}-{month:02d}")
     
-    # Count AdminEvents - these are not client-specific
-    admin_events = AdminEvent.objects.filter(
+    # Count AdminTasks - these are not client-specific
+    admin_events = AdminTask.objects.filter(
         due_dt__date__gte=month_start,
         due_dt__date__lt=month_end
     )
@@ -760,7 +760,7 @@ def subscription_delete(request: HttpRequest, sub_id: str) -> HttpResponse:
 @user_passes_test(lambda u: u.is_staff)
 def admin_tasks_list(request: HttpRequest) -> HttpResponse:
     """
-    Show AdminEvent items. Default filter = upcoming; `?f=past` lists past ones.
+    Show AdminTask items. Default filter = upcoming; `?f=past` lists past ones.
     """
     from datetime import timedelta
     f = request.GET.get("f", "upcoming")
@@ -768,7 +768,7 @@ def admin_tasks_list(request: HttpRequest) -> HttpResponse:
     # Subtract 5 seconds to handle microsecond truncation and request processing time
     # This ensures tasks created "now" show up in the upcoming list
     now = now - timedelta(seconds=5)
-    qs = AdminEvent.objects.all()
+    qs = AdminTask.objects.all()
     if f == "past":
         qs = qs.filter(due_dt__lt=now)
     else:
@@ -787,7 +787,7 @@ def admin_task_create(request: HttpRequest) -> HttpResponse:
             due = make_aware(due, tz)
         title = (request.POST.get("title") or "").strip()
         notes = (request.POST.get("notes") or "").strip()
-        AdminEvent.objects.create(due_dt=due or timezone.now(), title=title, notes=notes)
+        AdminTask.objects.create(due_dt=due or timezone.now(), title=title, notes=notes)
         return redirect("admin_tasks_list")
     # Minimal fallback form (rarely used in tests)
     return render(request, "core/admin_task_form.html")
@@ -795,7 +795,7 @@ def admin_task_create(request: HttpRequest) -> HttpResponse:
 
 @user_passes_test(lambda u: u.is_staff)
 def admin_task_edit(request: HttpRequest, pk: int) -> HttpResponse:
-    ev = get_object_or_404(AdminEvent, pk=pk)
+    ev = get_object_or_404(AdminTask, pk=pk)
     if request.method == "POST":
         tz = get_current_timezone()
         due_raw = (request.POST.get("due_dt") or "").strip()
@@ -812,7 +812,7 @@ def admin_task_edit(request: HttpRequest, pk: int) -> HttpResponse:
 
 @user_passes_test(lambda u: u.is_staff)
 def admin_task_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    ev = get_object_or_404(AdminEvent, pk=pk)
+    ev = get_object_or_404(AdminTask, pk=pk)
     if request.method == "POST":
         ev.delete()
     return redirect("admin_tasks_list")

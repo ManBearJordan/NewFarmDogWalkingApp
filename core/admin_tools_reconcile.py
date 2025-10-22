@@ -14,6 +14,7 @@ from django.utils.timezone import make_naive, is_aware, localtime
 
 from .models import Booking, Client, Service, StripePriceMap
 from .stripe_invoices_sync import process_invoice
+from .audit import emit as audit_emit
 
 log = logging.getLogger(__name__)
 BRISBANE = ZoneInfo("Australia/Brisbane")
@@ -185,6 +186,13 @@ def reconcile_link(request):
         process_invoice(inv)
     except Exception as e:
         log.exception("process_invoice failed during manual link: %s", e)
+    audit_emit(
+        "reconcile.link",
+        message=f"Linked booking #{b.id} to invoice {invoice_id}",
+        actor=request.user,
+        booking=b,
+        context={"invoice_id": invoice_id},
+    )
     messages.success(request, f"Linked booking #{b.id} to invoice {invoice_id}.")
     return redirect("admin_reconcile")
 
@@ -202,6 +210,13 @@ def reconcile_detach(request):
     b.invoice_pdf_url = None
     # do not clear paid_at to preserve history; detach only means unlink
     b.save(update_fields=["stripe_invoice_id","stripe_invoice_status","invoice_pdf_url"])
+    audit_emit(
+        "reconcile.detach",
+        message=f"Detached invoice link from booking #{b.id}",
+        actor=request.user,
+        booking=b,
+        context={},
+    )
     messages.info(request, f"Detached invoice from booking #{b.id}.")
     return redirect("admin_reconcile")
 
@@ -276,6 +291,13 @@ def reconcile_create_from_line(request):
         service_code=service.code,
         service_name=service.name,
         service_label=service.name,
+    )
+    audit_emit(
+        "reconcile.create_from_line",
+        message=f"Created booking #{b.id} from invoice line {line_id}",
+        actor=request.user,
+        booking=b,
+        context={"invoice_id": invoice_id, "line_id": line_id, "service": service.code, "start": str(start_dt)},
     )
     # Link it to the invoice we created it from
     _update_invoice_fields_from_obj(b, inv)
