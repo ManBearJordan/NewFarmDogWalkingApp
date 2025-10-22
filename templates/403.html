@@ -3,15 +3,13 @@
 {% block title %}403 - Access Denied | NewFarm Dog Walking{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-5">
-  <div class="col-md-6 text-center">
-    <h1 class="display-1">🐾</h1>
-    <h2 class="mb-4">403 - Access Denied</h2>
-    <p class="lead">Access denied – this page isn't for your paws.</p>
-    <p class="text-muted">You don't have permission to access this page. If you believe this is an error, please contact support.</p>
-    <div class="mt-4">
-      <a href="/" class="btn btn-primary">Return Home</a>
+<section class="card center" style="min-height:220px; text-align:center">
+  <div>
+    <h1>Access denied – this page isn't for your paws.</h1>
+    <p class="muted">You might need to sign in with a staff account or switch users.</p>
+    <div class="mt-8">
+      <a class="btn" href="{% url 'portal_home' %}">Go back home</a>
     </div>
   </div>
-</div>
+</section>
 {% endblock %}
