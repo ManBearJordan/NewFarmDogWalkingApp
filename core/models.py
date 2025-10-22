@@ -196,7 +196,8 @@ class BookingPet(models.Model):
         return f"{self.pet.name} in {self.booking}"
 
 
-class AdminEvent(models.Model):
+class AdminTask(models.Model):
+    """Admin task/todo management (formerly AdminEvent)"""
     due_dt = models.DateTimeField()
     title = models.CharField(max_length=200)
     notes = models.TextField(blank=True)
@@ -207,7 +208,7 @@ class AdminEvent(models.Model):
     @classmethod
     def log(cls, event_type, message):
         """
-        Create an AdminEvent for alerting admins about system events.
+        Create an AdminTask for alerting admins about system events.
         Due date is set to now for immediate visibility.
         Prevents duplicate logging by checking for recent similar events.
         """
@@ -226,6 +227,29 @@ class AdminEvent(models.Model):
                 title=f"{event_type}",
                 notes=message
             )
+
+
+# ---------- PR19: AdminEvent (lightweight audit trail) ----------
+class AdminEvent(models.Model):
+    """
+    Write-once audit event for key actions (reconcile, webhooks, portal booking).
+    Keep context JSON small (ids, codes, times).
+    """
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    event_type = models.CharField(max_length=100, db_index=True)
+    message = models.TextField(blank=True, null=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="admin_events"
+    )
+    booking = models.ForeignKey("Booking", on_delete=models.SET_NULL, null=True, blank=True, related_name="admin_events")
+    context = JSONField(blank=True, null=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+
+    def __str__(self):
+        who = f" by {self.actor}" if self.actor_id else ""
+        return f"[{self.created_at:%Y-%m-%d %H:%M}] {self.event_type}{who}"
 
 
 class SubOccurrence(models.Model):

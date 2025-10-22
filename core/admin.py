@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from .models import (
-    StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, SubOccurrence, Tag,
+    StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, AdminTask, SubOccurrence, Tag,
     StripeKeyAudit, Service, ServiceDefaults, TimetableBlock, BlockCapacity, CapacityHold,
     StripeSubscriptionLink, StripeSubscriptionSchedule, StripePriceMap
 )
@@ -97,11 +97,33 @@ class BookingPetAdmin(admin.ModelAdmin):
     search_fields = ['booking__service_name', 'pet__name']
 
 
-@admin.register(AdminEvent)
-class AdminEventAdmin(admin.ModelAdmin):
+@admin.register(AdminTask)
+class AdminTaskAdmin(admin.ModelAdmin):
     list_display = ['title', 'due_dt']
     date_hierarchy = 'due_dt'
     search_fields = ['title', 'notes']
+
+
+@admin.register(AdminEvent)
+class AdminEventAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "event_type", "actor", "booking", "short_message")
+    list_filter = ("event_type",)
+    search_fields = ("message", "context")
+    ordering = ("-created_at", "-id")
+    readonly_fields = ("created_at", "event_type", "message", "actor", "booking", "context")
+
+    def short_message(self, obj):
+        msg = (obj.message or "").strip()
+        return (msg[:80] + "…") if len(msg) > 80 else msg
+    short_message.short_description = "Message"
+
+    def has_add_permission(self, request):
+        # Audit events are write-once via code, not manually created
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        # Preserve audit trail
+        return False
 
 
 @admin.register(SubOccurrence)
