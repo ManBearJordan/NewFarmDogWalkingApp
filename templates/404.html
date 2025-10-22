@@ -3,15 +3,13 @@
 {% block title %}404 - Page Not Found | NewFarm Dog Walking{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-5">
-  <div class="col-md-6 text-center">
-    <h1 class="display-1">🐕</h1>
-    <h2 class="mb-4">404 - Page Not Found</h2>
-    <p class="lead">Oops! We couldn't find that page.</p>
-    <p class="text-muted">Looks like this trail went cold. The page you're looking for might have been moved or deleted.</p>
-    <div class="mt-4">
-      <a href="/" class="btn btn-primary">Return Home</a>
+<section class="card center" style="min-height:220px; text-align:center">
+  <div>
+    <h1>Oops! We couldn't find that page.</h1>
+    <p class="muted">The link may be out of date or the page moved.</p>
+    <div class="mt-8">
+      <a class="btn" href="{% url 'portal_home' %}">Back to Portal</a>
     </div>
   </div>
-</div>
+</section>
 {% endblock %}

@@ -1,0 +1,66 @@
+/* --- NewFarmDogWalking minimal UI --- */
+:root{
+  --bg:#0f172a;
+  --panel:#111827;
+  --card:#0b1220;
+  --muted:#94a3b8;
+  --text:#e5e7eb;
+  --brand:#60a5fa;
+  --brand-2:#34d399;
+  --warn:#f59e0b;
+  --err:#ef4444;
+  --ok:#22c55e;
+  --chip:#1f2937;
+  --chip-b:#334155;
+  --btn:#1e293b;
+  --btn-b:#334155;
+}
+html,body{background:#0b1120;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;line-height:1.45;}
+a{color:var(--brand);text-decoration:none}
+a:hover{text-decoration:underline}
+header.site{background:linear-gradient(180deg,rgba(96,165,250,.1),rgba(96,165,250,0));padding:18px 0 8px;border-bottom:1px solid rgba(148,163,184,.15)}
+.wrap{max-width:980px;margin:0 auto;padding:0 16px}
+nav.top ul{display:flex;gap:14px;list-style:none;margin:0;padding:0;align-items:center}
+nav.top a{display:inline-block;padding:8px 10px;border-radius:10px;background:transparent;border:1px solid transparent}
+nav.top a.active, nav.top a:hover{background:rgba(51,65,85,.4);border-color:rgba(148,163,184,.25)}
+.page{padding:20px 0 40px}
+h1{font-size:1.6rem;margin:10px 0 14px}
+h2{font-size:1.2rem;margin:18px 0 10px;color:#cbd5e1}
+p.muted, .muted{color:var(--muted)}
+.card{background:var(--card);border:1px solid rgba(148,163,184,.15);border-radius:14px;padding:14px;margin:12px 0;box-shadow:0 10px 20px rgba(2,6,23,.35) inset, 0 10px 18px rgba(0,0,0,.15)}
+.grid{display:grid;gap:14px}
+.grid.cols-2{grid-template-columns:1fr 1fr}
+@media (max-width:840px){.grid.cols-2{grid-template-columns:1fr}}
+table.clean{width:100%;border-collapse:separate;border-spacing:0}
+table.clean th, table.clean td{padding:10px 12px;border-bottom:1px solid rgba(148,163,184,.12);vertical-align:top}
+table.clean th{color:#cbd5e1;text-align:left;font-weight:600}
+ul.list{list-style:none;margin:0;padding:0}
+ul.list li{padding:10px 12px;border:1px solid rgba(148,163,184,.12);border-radius:12px;margin:8px 0;background:rgba(15,23,42,.35)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.right{margin-left:auto}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid var(--chip-b);background:var(--chip);font-size:.85rem;color:#cbd5e1}
+.chip.warn{border-color:#f59e0b33;color:#f8cf8a;background:#3b2f12}
+.chip.ok{border-color:#22c55e44;color:#b5f5c7;background:#0f2d1b}
+.chip.bad{border-color:#ef444433;color:#f9b5b5;background:#3a0f13}
+.btn{display:inline-block;padding:8px 12px;border-radius:10px;border:1px solid var(--btn-b);background:var(--btn);color:#e5e7eb}
+.btn:hover{filter:brightness(1.1)}
+.btn.primary{background:#0b2447;border-color:#1d4ed8}
+.btn.link{background:transparent;border-color:transparent;padding:0}
+.field{margin:10px 0}
+.field label{display:block;margin-bottom:6px;color:#cbd5e1}
+.field input, .field select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(148,163,184,.25);background:#0b1220;color:#e5e7eb}
+.actions{display:flex;gap:10px;align-items:center}
+.empty{padding:16px;border:1px dashed rgba(148,163,184,.35);border-radius:12px;color:#cbd5e1;background:rgba(15,23,42,.25)}
+.toast-wrap{position:fixed;right:14px;top:14px;display:flex;flex-direction:column;gap:8px;z-index:1000}
+.toast{background:#0b1220;border:1px solid rgba(148,163,184,.25);padding:10px 12px;border-radius:12px;box-shadow:0 10px 18px rgba(0,0,0,.35)}
+.toast.info{border-color:#60a5fa55}
+.toast.success{border-color:#34d39955}
+.toast.error{border-color:#ef444455}
+.sep{height:1px;background:rgba(148,163,184,.15);margin:8px 0}
+.tag{font-size:.8rem;color:#9ca3af}
+.mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace}
+/* utility */
+.mt-8{margin-top:8px}
+.mb-6{margin-bottom:6px}
+.mb-12{margin-bottom:12px}
+.center{display:flex;justify-content:center;align-items:center}

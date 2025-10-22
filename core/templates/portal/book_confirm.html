@@ -1,23 +1,36 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Confirm Your Booking</h1>
-<ul>
-  <li>Service: {{ form.cleaned_data.service.name }} ({{ form.cleaned_data.service.code }})</li>
-  <li>Start: {{ form.cleaned_data.start_dt }}</li>
-  <li>End: {{ form.cleaned_data.end_dt }}</li>
-  <li>Location: {{ form.cleaned_data.location|default:"Home" }}</li>
-  <li>Price: (per invoice)</li>
-</ul>
-<form method="post">
-  {% csrf_token %}
-  <input type="hidden" name="service" value="{{ form.cleaned_data.service.id }}">
-  <input type="hidden" name="date" value="{{ form.cleaned_data.start_dt|date:'Y-m-d' }}">
-  <input type="hidden" name="time" value="{{ form.cleaned_data.start_dt|time:'H:i' }}">
-  <input type="hidden" name="location" value="{{ form.cleaned_data.location }}">
-  <input type="hidden" name="confirm" value="1">
-  <p>
-    <button type="submit">Confirm & Create</button>
-    <a href="{% url 'portal_book' %}">Go back</a>
-  </p>
-</form>
+<div class="row mb-12">
+  <h1>Confirm Your Booking</h1>
+  <div class="right actions">
+    <a class="btn" href="{% url 'portal_book' %}">Go back</a>
+  </div>
+  <div class="sep"></div>
+</div>
+
+<section class="card">
+  <div class="grid cols-2">
+    <div>
+      <div class="muted tag">Service</div>
+      <div><strong>{{ form.cleaned_data.service.name }}</strong> <span class="tag">({{ form.cleaned_data.service.code }})</span></div>
+    </div>
+    <div>
+      <div class="muted tag">When</div>
+      <div class="mono">{{ form.cleaned_data.start_dt }} → {{ form.cleaned_data.end_dt }}</div>
+    </div>
+  </div>
+  <div class="mt-8">
+    <div class="muted tag">Location</div>
+    <div>{{ form.cleaned_data.location|default:"Home" }}</div>
+  </div>
+  <form method="post" class="mt-8">
+    {% csrf_token %}
+    <input type="hidden" name="service" value="{{ form.cleaned_data.service.id }}">
+    <input type="hidden" name="date" value="{{ form.cleaned_data.start_dt|date:'Y-m-d' }}">
+    <input type="hidden" name="time" value="{{ form.cleaned_data.start_dt|time:'H:i' }}">
+    <input type="hidden" name="location" value="{{ form.cleaned_data.location }}">
+    <input type="hidden" name="confirm" value="1">
+    <button class="btn primary" type="submit">Confirm & Create</button>
+  </form>
+</section>
 {% endblock %}

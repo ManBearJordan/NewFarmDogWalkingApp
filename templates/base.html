@@ -1,50 +1,46 @@
-<!doctype html>
+{% load static %}
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}NewFarm Dog Walking{% endblock %}</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
 </head>
 <body>
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="{% url 'portal_home' %}">NewFarm Dog Walking</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
+  <header class="site">
+    <div class="wrap">
+      <nav class="top">
+        <ul>
           {% if user.is_authenticated %}
-            <li class="nav-item"><a class="nav-link" href="{% url 'portal_home' %}">Dashboard</a></li>
-            <li class="nav-item"><a class="nav-link" href="{% url 'portal_book' %}">Book a Walk</a></li>
-            <li class="nav-item"><a class="nav-link" href="{% url 'portal_calendar' %}">Calendar</a></li>
+            <li><a href="{% url 'portal_home' %}" class="{% if request.resolver_match.url_name == 'portal_home' %}active{% endif %}">Portal</a></li>
+            <li><a href="{% url 'portal_book' %}" class="{% if request.resolver_match.url_name == 'portal_book' %}active{% endif %}">Book a Walk</a></li>
             {% if user.is_staff %}
-              <li class="nav-item"><a class="nav-link" href="{% url 'admin:index' %}">Admin</a></li>
+              <li><a href="{% url 'admin:index' %}">Django Admin</a></li>
             {% endif %}
-            <li class="nav-item"><a class="nav-link" href="{% url 'logout' %}">Logout</a></li>
+            <li class="right"><a href="{% url 'logout' %}">Logout</a></li>
           {% else %}
-            <li class="nav-item"><a class="nav-link" href="{% url 'login' %}">Login</a></li>
+            <li><a href="{% url 'login' %}">Login</a></li>
           {% endif %}
         </ul>
-      </div>
+      </nav>
     </div>
-  </nav>
-  
-  <div class="container mt-4">
-    {% if messages %}
+  </header>
+  {% if messages %}
+    <div class="toast-wrap" role="status" aria-live="polite">
       {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-          {{ message }}
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
+        {% if 'error' in message.tags %}
+          <div class="toast error">{{ message }}</div>
+        {% elif 'success' in message.tags %}
+          <div class="toast success">{{ message }}</div>
+        {% else %}
+          <div class="toast info">{{ message }}</div>
+        {% endif %}
       {% endfor %}
-    {% endif %}
-    
-    {% block content %}
-    {% endblock %}
-  </div>
-  
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    </div>
+  {% endif %}
+  <main class="wrap page">
+    {% block content %}{% endblock %}
+  </main>
 </body>
 </html>
