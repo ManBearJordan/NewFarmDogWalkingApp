@@ -1,6 +1,10 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils.timezone import make_naive, is_aware
+from zoneinfo import ZoneInfo
 from core.models import Booking, StripeSubscriptionSchedule, Service
+
+BRISBANE = ZoneInfo("Australia/Brisbane")
 
 
 class Command(BaseCommand):
@@ -27,12 +31,16 @@ class Command(BaseCommand):
             svc = b.service
             if not svc:
                 continue
+            # Convert to naive local datetime for matching
+            start_dt = b.start_dt
+            if is_aware(start_dt):
+                start_dt = make_naive(start_dt.astimezone(BRISBANE), BRISBANE)
             # Candidate schedules: same client, same service_code, active & complete
             candidates = (StripeSubscriptionSchedule.objects
                           .filter(sub__client=b.client,
                                   sub__service_code=svc.code,
                                   sub__active=True))
-            candidates = [s for s in candidates if s.is_complete() and s.occurs_on_datetime(b.start_dt)]
+            candidates = [s for s in candidates if s.is_complete() and s.occurs_on_datetime(start_dt)]
             if len(candidates) == 1:
                 sched = candidates[0]
                 self.stdout.write(f"Link booking #{b.id} -> schedule #{sched.id}")
