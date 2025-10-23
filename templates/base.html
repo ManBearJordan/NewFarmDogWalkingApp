@@ -13,18 +13,22 @@
       <nav class="top">
         <ul>
           {% if user.is_authenticated %}
-            <li><a href="{% url 'portal_home' %}" class="{% if request.resolver_match and request.resolver_match.url_name == 'portal_home' %}active{% endif %}">Portal</a></li>
             {% if user.is_staff %}
-              <li>
-                <!-- Go directly to the blue-bar staff portal -->
-                <a href="/bookings/">Admin</a>
-              </li>
-            {% endif %}
-            <li><a href="{% url 'portal_book' %}" class="{% if request.resolver_match and request.resolver_match.url_name == 'portal_book' %}active{% endif %}">Book a Walk</a></li>
-            {% if user.is_staff %}
+              {# === STAFF NAV (blue-bar portal) === #}
+              <li><a href="{% url 'calendar_view' %}">Calendar</a></li>
+              <li><a href="{% url 'booking_list' %}">Bookings</a></li>
+              <li><a href="{% url 'subscriptions_list' %}">Subscriptions</a></li>
+              <li><a href="{% url 'client_list' %}">Clients</a></li>
+              <li><a href="{% url 'pet_list' %}">Pets</a></li>
+              <li><a href="{% url 'tags_list' %}">Tags</a></li>
               <li><a href="{% url 'admin:index' %}">Django Admin</a></li>
+              <li><a href="{% url 'logout' %}">Logout</a></li>
+            {% else %}
+              {# === CLIENT NAV === #}
+              <li><a href="{% url 'portal_home' %}" class="{% if request.resolver_match and request.resolver_match.url_name == 'portal_home' %}active{% endif %}">Portal</a></li>
+              <li><a href="{% url 'portal_book' %}" class="{% if request.resolver_match and request.resolver_match.url_name == 'portal_book' %}active{% endif %}">Book a Walk</a></li>
+              <li><a href="{% url 'logout' %}">Logout</a></li>
             {% endif %}
-            <li class="right"><a href="{% url 'logout' %}">Logout</a></li>
           {% else %}
             <li><a href="{% url 'login' %}">Login</a></li>
           {% endif %}
