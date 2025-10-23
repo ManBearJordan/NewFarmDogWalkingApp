@@ -82,6 +82,20 @@ class TestServiceDurationGuardMiddleware:
         assert response.status_code == 200
         assert response.content == b"OK"
 
+    def test_staff_allowed_on_ops_bookings_path(self):
+        """Test that staff users can access /ops/bookings/ path without redirect"""
+        # Create a service without duration
+        Service.objects.create(code="WALK", name="Dog Walk", is_active=True, duration_minutes=None)
+        
+        request = self.factory.get("/ops/bookings/")
+        request.user = self.staff_user
+        request = self.add_session_and_messages(request)
+        
+        response = self.middleware(request)
+        
+        assert response.status_code == 200
+        assert response.content == b"OK"
+
     def test_staff_allowed_on_calendar_path(self):
         """Test that staff users can access /calendar/ path without redirect"""
         # Create a service without duration
@@ -96,12 +110,40 @@ class TestServiceDurationGuardMiddleware:
         assert response.status_code == 200
         assert response.content == b"OK"
 
+    def test_staff_allowed_on_ops_calendar_path(self):
+        """Test that staff users can access /ops/calendar/ path without redirect"""
+        # Create a service without duration
+        Service.objects.create(code="WALK", name="Dog Walk", is_active=True, duration_minutes=None)
+        
+        request = self.factory.get("/ops/calendar/")
+        request.user = self.staff_user
+        request = self.add_session_and_messages(request)
+        
+        response = self.middleware(request)
+        
+        assert response.status_code == 200
+        assert response.content == b"OK"
+
     def test_staff_allowed_on_subscriptions_path(self):
         """Test that staff users can access /subscriptions/ path without redirect"""
         # Create a service without duration
         Service.objects.create(code="WALK", name="Dog Walk", is_active=True, duration_minutes=None)
         
         request = self.factory.get("/subscriptions/")
+        request.user = self.staff_user
+        request = self.add_session_and_messages(request)
+        
+        response = self.middleware(request)
+        
+        assert response.status_code == 200
+        assert response.content == b"OK"
+
+    def test_staff_allowed_on_ops_subscriptions_path(self):
+        """Test that staff users can access /ops/subscriptions/ path without redirect"""
+        # Create a service without duration
+        Service.objects.create(code="WALK", name="Dog Walk", is_active=True, duration_minutes=None)
+        
+        request = self.factory.get("/ops/subscriptions/")
         request.user = self.staff_user
         request = self.add_session_and_messages(request)
         

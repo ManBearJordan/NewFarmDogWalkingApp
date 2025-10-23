@@ -14,13 +14,13 @@
         <ul>
           {% if user.is_authenticated %}
             {% if user.is_staff %}
-              {# === STAFF NAV (blue-bar portal) === #}
-              <li><a href="{% url 'calendar_view' %}">Calendar</a></li>
-              <li><a href="{% url 'booking_list' %}">Bookings</a></li>
-              <li><a href="{% url 'subscriptions_list' %}">Subscriptions</a></li>
-              <li><a href="{% url 'client_list' %}">Clients</a></li>
-              <li><a href="{% url 'pet_list' %}">Pets</a></li>
-              <li><a href="{% url 'tags_list' %}">Tags</a></li>
+              {# === STAFF NAV (namespaced under /ops/) === #}
+              <li><a href="/ops/calendar/">Calendar</a></li>
+              <li><a href="/ops/bookings/">Bookings</a></li>
+              <li><a href="/ops/subscriptions/">Subscriptions</a></li>
+              <li><a href="/ops/clients/">Clients</a></li>
+              <li><a href="/ops/pets/">Pets</a></li>
+              <li><a href="/ops/tags/">Tags</a></li>
               <li><a href="{% url 'admin:index' %}">Django Admin</a></li>
               <li><a href="{% url 'logout' %}">Logout</a></li>
             {% else %}
