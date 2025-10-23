@@ -76,3 +76,6 @@ class CoreConfig(AppConfig):
             scheduler.start_scheduler_if_enabled()
         except Exception as e:
             log.exception("core.apps: failed to start scheduler: %s", e)
+        
+        # Import signals to register them
+        import core.signals  # noqa
