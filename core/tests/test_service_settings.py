@@ -1,6 +1,7 @@
 import pytest
 from django.urls import reverse
 from django.contrib.auth.models import User
+from django.conf import settings
 from core.models import Service, Client, Booking, SubOccurrence, StripeSubscriptionLink
 from datetime import datetime, timedelta
 from django.utils import timezone
@@ -226,3 +227,61 @@ def test_service_duration_guard_middleware_allows_non_staff(client):
     resp = client.get(reverse("portal_home"))
     # Just check that we don't get redirected to service_settings
     assert reverse("service_settings") not in resp.url if resp.status_code == 302 else True
+
+
+@pytest.mark.django_db
+def test_service_duration_guard_exempts_admin_path(client):
+    """Test that middleware exempts the configured DJANGO_ADMIN_URL path"""
+    # Create staff user
+    user = User.objects.create_user(username="staffuser", password="testpass", is_staff=True, is_superuser=True)
+    client.login(username="staffuser", password="testpass")
+    
+    # Create an active service without duration (would normally block staff)
+    Service.objects.create(code="walk30", name="Walk 30", is_active=True)
+    
+    # Get the configured admin URL from settings
+    admin_url = getattr(settings, 'DJANGO_ADMIN_URL', 'admin/')
+    admin_path = f"/{admin_url.lstrip('/')}"
+    
+    # Access the admin path - should NOT be redirected to service_settings
+    resp = client.get(admin_path)
+    # Should either load admin (200) or redirect to admin login, but NOT to service_settings
+    assert reverse("service_settings") not in resp.url if resp.status_code == 302 else True
+
+
+@pytest.mark.django_db
+def test_service_duration_guard_exempts_fallback_admin_path(client):
+    """Test that middleware exempts the fallback /admin/ path"""
+    # Create staff user
+    user = User.objects.create_user(username="staffuser", password="testpass", is_staff=True, is_superuser=True)
+    client.login(username="staffuser", password="testpass")
+    
+    # Create an active service without duration (would normally block staff)
+    Service.objects.create(code="walk30", name="Walk 30", is_active=True)
+    
+    # Access the fallback /admin/ path - should NOT be redirected to service_settings
+    resp = client.get("/admin/")
+    # Should either load admin (200) or redirect to admin login, but NOT to service_settings
+    assert reverse("service_settings") not in resp.url if resp.status_code == 302 else True
+
+
+@pytest.mark.django_db
+def test_service_duration_guard_still_blocks_non_admin_staff_paths(client):
+    """Test that middleware still blocks staff from non-admin paths when services need setup"""
+    # Create staff user
+    user = User.objects.create_user(username="staffuser", password="testpass", is_staff=True)
+    client.login(username="staffuser", password="testpass")
+    
+    # Create an active service without duration
+    Service.objects.create(code="walk30", name="Walk 30", is_active=True)
+    
+    # Try to access non-admin paths - should still be redirected to service_settings
+    non_admin_paths = [
+        reverse("client_list"),
+        reverse("calendar"),
+    ]
+    
+    for path in non_admin_paths:
+        resp = client.get(path)
+        assert resp.status_code == 302, f"Expected redirect for {path}"
+        assert reverse("service_settings") in resp.url, f"Expected redirect to service_settings for {path}"
