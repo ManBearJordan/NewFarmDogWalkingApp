@@ -7,6 +7,9 @@ from .models import (
     StripeSubscriptionLink, StripeSubscriptionSchedule, StripePriceMap
 )
 
+# Make the Django Admin header "VIEW SITE" open the blue-bar staff portal
+admin.site.site_url = "/bookings/"
+
 
 @admin.register(StripeKeyAudit)
 class StripeKeyAuditAdmin(admin.ModelAdmin):

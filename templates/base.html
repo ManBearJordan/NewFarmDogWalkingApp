@@ -13,8 +13,14 @@
       <nav class="top">
         <ul>
           {% if user.is_authenticated %}
-            <li><a href="{% url 'portal_home' %}" class="{% if request.resolver_match.url_name == 'portal_home' %}active{% endif %}">Portal</a></li>
-            <li><a href="{% url 'portal_book' %}" class="{% if request.resolver_match.url_name == 'portal_book' %}active{% endif %}">Book a Walk</a></li>
+            <li><a href="{% url 'portal_home' %}" class="{% if request.resolver_match and request.resolver_match.url_name == 'portal_home' %}active{% endif %}">Portal</a></li>
+            {% if user.is_staff %}
+              <li>
+                <!-- Go directly to the blue-bar staff portal -->
+                <a href="/bookings/">Admin</a>
+              </li>
+            {% endif %}
+            <li><a href="{% url 'portal_book' %}" class="{% if request.resolver_match and request.resolver_match.url_name == 'portal_book' %}active{% endif %}">Book a Walk</a></li>
             {% if user.is_staff %}
               <li><a href="{% url 'admin:index' %}">Django Admin</a></li>
             {% endif %}
