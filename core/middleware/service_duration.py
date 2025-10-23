@@ -16,7 +16,9 @@ class ServiceDurationGuardMiddleware:
         self.admin_prefix = "/" + admin_env.lstrip("/")
         # Classic Django admin fallback
         self.fallback_admin_prefix = "/admin/"
-        # Blue-bar staff portal sections to allow without interception
+        # NEW: single namespace for staff
+        self.ops_prefix = "/ops/"
+        # Blue-bar staff portal sections (kept for backward compatibility)
         self.staff_portal_prefixes = (
             "/bookings/",
             "/calendar/",
@@ -38,10 +40,11 @@ class ServiceDurationGuardMiddleware:
 
         # Only guard authenticated staff
         if user and user.is_authenticated and user.is_staff:
-            # --- EXEMPT: Django Admin and the blue-bar staff portal paths ---
+            # --- EXEMPT: Django Admin, /ops/ namespace, and legacy staff portal paths ---
             if (
                 path.startswith(self.admin_prefix)
                 or path.startswith(self.fallback_admin_prefix)
+                or path.startswith(self.ops_prefix)
                 or any(path.startswith(p) for p in self.staff_portal_prefixes)
             ):
                 return self.get_response(request)
