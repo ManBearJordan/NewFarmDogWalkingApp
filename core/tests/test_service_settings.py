@@ -176,8 +176,9 @@ def test_service_duration_guard_middleware_blocks_staff_without_durations(client
     # Create an active service without duration
     Service.objects.create(code="walk30", name="Walk 30", is_active=True)
     
-    # Try to access any page that's not service_settings
-    resp = client.get(reverse("client_list"))
+    # Try to access a path that's not exempt (not in staff portal paths)
+    # /admin-tools/ is not in the exempt list
+    resp = client.get(reverse("admin_reconcile"))
     
     # Should redirect to service_settings
     assert resp.status_code == 302
@@ -193,8 +194,8 @@ def test_service_duration_guard_middleware_allows_staff_with_durations(client):
     # Create an active service with duration
     Service.objects.create(code="walk30", name="Walk 30", duration_minutes=30, is_active=True)
     
-    # Should be able to access other pages
-    resp = client.get(reverse("client_list"))
+    # Should be able to access non-exempt pages
+    resp = client.get(reverse("admin_reconcile"))
     assert resp.status_code == 200
 
 
@@ -208,7 +209,7 @@ def test_service_duration_guard_middleware_ignores_inactive_services(client):
     Service.objects.create(code="walk30", name="Walk 30", is_active=False)
     
     # Should be able to access other pages (inactive services are ignored)
-    resp = client.get(reverse("client_list"))
+    resp = client.get(reverse("admin_reconcile"))
     assert resp.status_code == 200
 
 
@@ -267,21 +268,33 @@ def test_service_duration_guard_exempts_fallback_admin_path(client):
 
 @pytest.mark.django_db
 def test_service_duration_guard_still_blocks_non_admin_staff_paths(client):
-    """Test that middleware still blocks staff from non-admin paths when services need setup"""
+    """Test that middleware still blocks staff from non-exempt paths when services need setup"""
     # Create staff user
-    user = User.objects.create_user(username="staffuser", password="testpass", is_staff=True)
+    user = User.objects.create_user(username="staffuser", password="testpass", is_staff=True, is_superuser=True)
     client.login(username="staffuser", password="testpass")
     
     # Create an active service without duration
     Service.objects.create(code="walk30", name="Walk 30", is_active=True)
     
-    # Try to access non-admin paths - should still be redirected to service_settings
-    non_admin_paths = [
-        reverse("client_list"),
-        reverse("calendar"),
+    # Try to access non-exempt paths - should be redirected to service_settings by our middleware
+    non_exempt_paths = [
+        reverse("admin_reconcile"),  # /admin-tools/ is not in the exempt list
     ]
     
-    for path in non_admin_paths:
+    for path in non_exempt_paths:
         resp = client.get(path)
         assert resp.status_code == 302, f"Expected redirect for {path}"
         assert reverse("service_settings") in resp.url, f"Expected redirect to service_settings for {path}"
+    
+    # But exempt paths should NOT be redirected by our middleware
+    # (the view itself may have its own logic, but our middleware should not intercept)
+    exempt_paths = [
+        reverse("client_list"),  # /clients/ is exempt
+        reverse("booking_list"),  # /bookings/ is exempt
+    ]
+    
+    for path in exempt_paths:
+        resp = client.get(path)
+        # Should NOT be redirected to service_settings by our middleware
+        # (200 or other redirects are fine, just not to service_settings)
+        assert resp.status_code == 200, f"Expected success for exempt path {path}"
