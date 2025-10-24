@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from typing import Tuple, Optional
 from dotenv import load_dotenv
@@ -7,6 +8,16 @@ import json
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# -----------------------------------------------------------------------------
+# Management command detection - suppress scheduler during mgmt commands
+# -----------------------------------------------------------------------------
+MANAGEMENT_COMMANDS = {
+    "makemigrations", "migrate", "collectstatic", "test", "shell", "check",
+    "loaddata", "dumpdata", "createsuperuser", "dbshell",
+    "seed_service_windows", "sync_all",
+}
+IS_MANAGEMENT_CMD = len(sys.argv) > 1 and sys.argv[1] in MANAGEMENT_COMMANDS
 
 
 # -----------------------------------------------------------------------------

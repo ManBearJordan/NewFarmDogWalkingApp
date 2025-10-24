@@ -20,17 +20,15 @@ class CoreConfig(AppConfig):
         server boot. Guarded by env STARTUP_SYNC=1 and avoids duplicate runs under
         Django autoreload by checking RUN_MAIN.
         """
+        # --- NEW: don't start background scheduler during management commands ---
+        if getattr(settings, "IS_MANAGEMENT_CMD", False):
+            # Import signals to register them even in management commands
+            import core.signals  # noqa
+            return
+        
         # First, handle the existing startup sync logic (optional, controlled by STARTUP_SYNC env var)
         try:
-            # Don't spin up background jobs when running mgmt commands
-            mgmt_cmds = {
-                "migrate", "makemigrations", "collectstatic", "test", "shell",
-                "loaddata", "dumpdata", "createsuperuser", "check",
-            }
-            if len(sys.argv) > 1 and sys.argv[1] in mgmt_cmds:
-                # Early return only from this try block, not the whole method
-                pass
-            elif getattr(settings, "DISABLE_SCHEDULER", False):
+            if getattr(settings, "DISABLE_SCHEDULER", False):
                 # Skip startup sync if scheduler is disabled
                 pass
             elif getattr(settings, "STARTUP_SYNC", False):
