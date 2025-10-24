@@ -28,6 +28,7 @@ def test_ready_skips_when_running_migrate(monkeypatch):
     from django.conf import settings
     monkeypatch.setattr(settings, "STARTUP_SYNC", True)
     monkeypatch.setattr(settings, "DISABLE_SCHEDULER", False)
+    monkeypatch.setattr(settings, "IS_MANAGEMENT_CMD", True)  # Mock the flag
     
     # Mock sys.argv to contain 'migrate'
     original_argv = sys.argv.copy()
@@ -57,6 +58,7 @@ def test_ready_skips_when_running_test(monkeypatch):
     from django.conf import settings
     monkeypatch.setattr(settings, "STARTUP_SYNC", True)
     monkeypatch.setattr(settings, "DISABLE_SCHEDULER", False)
+    monkeypatch.setattr(settings, "IS_MANAGEMENT_CMD", True)  # Mock the flag
     
     # Mock sys.argv to contain 'test'
     original_argv = sys.argv.copy()
@@ -86,6 +88,7 @@ def test_ready_skips_when_running_collectstatic(monkeypatch):
     from django.conf import settings
     monkeypatch.setattr(settings, "STARTUP_SYNC", True)
     monkeypatch.setattr(settings, "DISABLE_SCHEDULER", False)
+    monkeypatch.setattr(settings, "IS_MANAGEMENT_CMD", True)  # Mock the flag
     
     # Mock sys.argv to contain 'collectstatic'
     original_argv = sys.argv.copy()

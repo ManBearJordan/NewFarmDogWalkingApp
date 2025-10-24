@@ -13,9 +13,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Management command detection - suppress scheduler during mgmt commands
 # -----------------------------------------------------------------------------
 MANAGEMENT_COMMANDS = {
-    "makemigrations", "migrate", "collectstatic", "shell", "dbshell",
-    "loaddata", "dumpdata", "createsuperuser", "seed_service_windows",
-    "sync_all", "check", "test",
+    "makemigrations", "migrate", "collectstatic", "test", "shell", "check",
+    "loaddata", "dumpdata", "createsuperuser", "dbshell",
+    "seed_service_windows", "sync_all",
 }
 IS_MANAGEMENT_CMD = len(sys.argv) > 1 and sys.argv[1] in MANAGEMENT_COMMANDS
 

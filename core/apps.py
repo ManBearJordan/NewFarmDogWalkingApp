@@ -28,15 +28,7 @@ class CoreConfig(AppConfig):
         
         # First, handle the existing startup sync logic (optional, controlled by STARTUP_SYNC env var)
         try:
-            # Don't spin up background jobs when running mgmt commands
-            mgmt_cmds = {
-                "migrate", "makemigrations", "collectstatic", "test", "shell",
-                "loaddata", "dumpdata", "createsuperuser", "check",
-            }
-            if len(sys.argv) > 1 and sys.argv[1] in mgmt_cmds:
-                # Early return only from this try block, not the whole method
-                pass
-            elif getattr(settings, "DISABLE_SCHEDULER", False):
+            if getattr(settings, "DISABLE_SCHEDULER", False):
                 # Skip startup sync if scheduler is disabled
                 pass
             elif getattr(settings, "STARTUP_SYNC", False):
