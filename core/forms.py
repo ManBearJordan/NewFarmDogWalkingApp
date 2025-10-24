@@ -96,7 +96,7 @@ class PortalBookingForm(forms.Form):
             return cleaned
         
         # Enforce ServiceWindow constraints for client portal
-        # Convert naive local datetime to aware for timezone comparisons (handles DST properly)
+        # Convert naive local datetime to aware for timezone comparisons
         aware_start = django_timezone.make_aware(start_dt, BRISBANE)
         aware_end = django_timezone.make_aware(end_dt, BRISBANE)
         win_qs = ServiceWindow.objects.filter(active=True, block_in_portal=True)
