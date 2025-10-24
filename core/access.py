@@ -11,7 +11,22 @@ from django.contrib.auth import REDIRECT_FIELD_NAME
 
 def _login_redirect(request):
     """Helper to redirect to login with next parameter."""
-    next_q = f"?{REDIRECT_FIELD_NAME}={request.get_full_path()}"
+    from django.utils.http import url_has_allowed_host_and_scheme
+    
+    # Get the path and validate it's safe
+    next_path = request.get_full_path()
+    
+    # Validate the redirect target is safe (same host, no external redirects)
+    allowed_hosts = request.get_host()
+    if not url_has_allowed_host_and_scheme(
+        url=next_path,
+        allowed_hosts={allowed_hosts},
+        require_https=request.is_secure()
+    ):
+        # If not safe, redirect to login without next parameter
+        return redirect(settings.LOGIN_URL)
+    
+    next_q = f"?{REDIRECT_FIELD_NAME}={next_path}"
     return redirect(f"{settings.LOGIN_URL}{next_q}")
 
 
