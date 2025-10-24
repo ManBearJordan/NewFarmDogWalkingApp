@@ -193,3 +193,56 @@ def test_ready_runs_when_command_name_in_argument(monkeypatch):
         assert called["n"] == 1  # should start - 'test' is not at argv[1]
     finally:
         sys.argv = original_argv
+
+
+def test_is_management_cmd_flag_set_for_migrate(monkeypatch):
+    """Test that IS_MANAGEMENT_CMD flag is set correctly for migrate"""
+    original_argv = sys.argv.copy()
+    sys.argv = ["manage.py", "migrate"]
+    
+    try:
+        # Reimport settings to pick up sys.argv change
+        import importlib
+        from newfarm import settings
+        importlib.reload(settings)
+        
+        assert settings.IS_MANAGEMENT_CMD is True
+    finally:
+        sys.argv = original_argv
+
+
+def test_is_management_cmd_flag_not_set_for_runserver(monkeypatch):
+    """Test that IS_MANAGEMENT_CMD flag is False for runserver"""
+    original_argv = sys.argv.copy()
+    sys.argv = ["manage.py", "runserver"]
+    
+    try:
+        # Reimport settings to pick up sys.argv change
+        import importlib
+        from newfarm import settings
+        importlib.reload(settings)
+        
+        assert settings.IS_MANAGEMENT_CMD is False
+    finally:
+        sys.argv = original_argv
+
+
+def test_ready_returns_early_when_is_management_cmd_set(monkeypatch):
+    """Test that ready() returns early when IS_MANAGEMENT_CMD is set"""
+    from django.conf import settings
+    from unittest.mock import patch, MagicMock
+    
+    # Set IS_MANAGEMENT_CMD to True
+    monkeypatch.setattr(settings, "IS_MANAGEMENT_CMD", True)
+    
+    # Mock the scheduler import to detect if it's called
+    mock_scheduler = MagicMock()
+    
+    with patch.dict('sys.modules', {'core.scheduler': mock_scheduler}):
+        cfg = CoreConfig("core", __import__('core'))
+        cfg.ready()
+        
+        # Scheduler should not be imported or started
+        # The function should return early
+        # We can't directly test if return happened, but we can verify scheduler wasn't started
+        mock_scheduler.start_scheduler_if_enabled.assert_not_called()
