@@ -6,9 +6,13 @@
 <section class="card center" style="min-height:220px; text-align:center">
   <div>
     <h1>Access denied – this page isn't for your paws.</h1>
-    <p class="muted">You might need to sign in with a staff account or switch users.</p>
+    {% if message %}
+      <p class="muted">{{ message }}</p>
+    {% else %}
+      <p class="muted">You might need to sign in with a staff account or switch users.</p>
+    {% endif %}
     <div class="mt-8">
-      <a class="btn" href="{% url 'portal_home' %}">Go back home</a>
+      <a class="btn" href="/">Go back home</a>
     </div>
   </div>
 </section>

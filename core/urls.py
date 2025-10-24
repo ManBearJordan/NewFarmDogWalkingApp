@@ -4,12 +4,43 @@ URL configuration for the core app.
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings, views_misc, views_client, admin_tools, admin_tools_review, admin_tools_metadata, admin_tools_subs, admin_tools_reconcile, subscription_admin
+from . import views, views_admin_capacity, views_portal, views_admin_subs, views_webhooks, views_settings, views_misc, views_client, admin_tools, admin_tools_review, admin_tools_metadata, admin_tools_subs, admin_tools_reconcile, subscription_admin, admin_views
 from core.views_auth import CustomLogoutView
+from core.access import require_superuser, require_client
 
 urlpatterns = [
+    # ----- Public / auth -----
     path("", views_portal.portal_home, name="root"),
-    path("portal/", views_portal.portal_home, name="portal_home"),
+    path("healthz/", views_misc.health_check, name="healthz"),
+    
+    # Legacy /calendar/ → smart redirect based on role
+    path("calendar/", views_misc.calendar_smart_redirect, name="calendar_legacy"),
+    
+    # ----- Client portal (must be linked to Client) -----
+    path("portal/", require_client(views_portal.portal_home), name="portal_home"),
+    path("portal/calendar/", require_client(views_portal.portal_calendar), name="portal_calendar"),
+    path("portal/book/", require_client(views_portal.portal_book), name="portal_book"),
+    path("portal/book/done/<int:booking_id>/", require_client(views_portal.portal_book_done), name="portal_book_done"),
+    path("portal/booking-old/", views_client.booking_create, name="portal_booking_create_legacy"),
+    path("portal/confirm-old/", views_client.booking_confirm, name="portal_booking_confirm_legacy"),
+    path("portal/bookings/new/", views.portal_booking_create, name="portal_booking_create_old"),
+    path("portal/bookings/confirm/", views.portal_booking_confirm, name="portal_booking_confirm_old"),
+    path("portal/bookings/new-prepay/", views_portal.portal_booking_new, name="portal_booking_new_prepay"),
+    path("portal/blocks/", views_portal.portal_blocks_for_date, name="portal_blocks_for_date"),
+    path("portal/checkout/start/", views_portal.portal_checkout_start, name="portal_checkout_start"),
+    path("portal/checkout/finalize/", views_portal.portal_checkout_finalize, name="portal_checkout_finalize"),
+    
+    # ----- Admin / ops (superuser only) -----
+    path("ops/calendar/", require_superuser(views.calendar_view), name="ops_calendar"),
+    path("ops/bookings/", require_superuser(views.booking_list), name="ops_bookings"),
+    path("ops/subscriptions/", require_superuser(views.subscriptions_list), name="ops_subscriptions"),
+    path("ops/clients/", require_superuser(views.client_list), name="ops_clients"),
+    path("ops/pets/", require_superuser(views.PetListView.as_view()), name="ops_pets"),
+    path("ops/tags/", require_superuser(views.tags_list), name="ops_tags"),
+    path("ops/reports/invoices/", require_superuser(views.reports_invoices_list), name="ops_reports_invoices"),
+    path("ops/admin/sync/", require_superuser(admin_views.stripe_diagnostics_view), name="ops_admin_sync"),
+    
+    # Legacy admin-tools paths (kept for backward compatibility, wrapped with guards)
     path("admin-tools/reconcile/", admin_tools_reconcile.reconcile_index, name="admin_reconcile"),
     path("admin-tools/reconcile/link/", admin_tools_reconcile.reconcile_link, name="admin_reconcile_link"),
     path("admin-tools/reconcile/detach/", admin_tools_reconcile.reconcile_detach, name="admin_reconcile_detach"),
@@ -19,29 +50,21 @@ urlpatterns = [
     path("admin-tools/subscriptions/save/<int:link_id>/", subscription_admin.link_save, name="admin_sub_link_save"),
     path("admin-tools/subs/unscheduled/", admin_tools_subs.subs_unscheduled, name="admin_subs_unscheduled"),
     path("admin-tools/subs/wizard/<int:link_id>/", admin_tools_subs.subs_wizard, name="admin_subs_wizard"),
-    # Legacy /calendar/ → smart redirect based on role
-    path("calendar/", views_misc.calendar_smart_redirect, name="calendar_legacy"),
-    path("portal/booking-old/", views_client.booking_create, name="portal_booking_create_legacy"),
-    path("portal/confirm-old/", views_client.booking_confirm, name="portal_booking_confirm_legacy"),
-    path("healthz/", views_misc.health_check, name="healthz"),
+    
+    # Legacy staff paths (kept for backward compatibility)
     path('clients/', views.client_list, name='client_list'),
     path('clients/new/', views.client_create, name='client_create'),
-    # Clients: Stripe + Credit actions
     path("clients/stripe/sync/", views.clients_stripe_sync, name="clients_stripe_sync"),
     path("clients/<int:client_id>/stripe/link/", views.client_stripe_link, name="client_stripe_link"),
     path("clients/<int:client_id>/stripe/open/", views.client_stripe_open, name="client_stripe_open"),
     path("clients/<int:client_id>/credit/add/", views.client_credit_add, name="client_credit_add"),
+    path('clients/<int:client_id>/credit/', views.client_add_credit, name='client_add_credit'),
     path('bookings/create-batch/', views.booking_create_batch, name='booking_create_batch'),
-    # Bookings tab (list & manage)
     path("bookings/", views.booking_list, name="booking_list"),
     path("bookings/<int:booking_id>/open-invoice/", views.booking_open_invoice, name="booking_open_invoice"),
     path("bookings/<int:booking_id>/delete/", views.booking_soft_delete, name="booking_soft_delete"),
     path("bookings/export/ics/", views.booking_export_ics, name="booking_export_ics"),
-    path('clients/<int:client_id>/credit/', views.client_add_credit, name='client_add_credit'),
-    # Admin/ops calendar (explicit)
-    path('ops/calendar/', views.calendar_view, name='ops_calendar'),
     path('reports/invoices/', views.reports_invoices_list, name='reports_invoices_list'),
-    # Subscriptions tab
     path("subscriptions/", views.subscriptions_list, name="subscriptions_list"),
     path("subscriptions/sync/", views.subscriptions_sync, name="subscriptions_sync"),
     path("subscriptions/<str:sub_id>/delete/", views.subscription_delete, name="subscription_delete"),
@@ -61,43 +84,39 @@ urlpatterns = [
     # --- Auth (client portal) ---
     path("accounts/login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
     path("accounts/logout/", CustomLogoutView.as_view(), name="logout"),
-    # --- Portal (original booking flow with credit/invoice support) ---
-    path("portal/bookings/new/", views.portal_booking_create, name="portal_booking_create_old"),
-    path("portal/bookings/confirm/", views.portal_booking_confirm, name="portal_booking_confirm_old"),
-    # Portal (pre-pay flow with flexible capacity)
-    path("portal/bookings/new-prepay/", views_portal.portal_booking_new, name="portal_booking_new_prepay"),
-    path("portal/blocks/", views_portal.portal_blocks_for_date, name="portal_blocks_for_date"),
-    path("portal/checkout/start/", views_portal.portal_checkout_start, name="portal_checkout_start"),
-    path("portal/checkout/finalize/", views_portal.portal_checkout_finalize, name="portal_checkout_finalize"),
+    
     # --- Calendar: troubleshoot sync ---
     path("calendar/troubleshoot-sync/", views.calendar_troubleshoot_sync, name="calendar_troubleshoot_sync"),
+    
     # Admin Tasks (AdminEvent CRUD)
     path("admin/tasks/", views.admin_tasks_list, name="admin_tasks_list"),
     path("admin/tasks/new/", views.admin_task_create, name="admin_task_create"),
     path("admin/tasks/<int:pk>/edit/", views.admin_task_edit, name="admin_task_edit"),
     path("admin/tasks/<int:pk>/delete/", views.admin_task_delete, name="admin_task_delete"),
+    
     # CRM Tags
     path("crm/tags/", views.tags_list, name="tags_list"),
     path("crm/tags/new/", views.tag_create, name="tag_create"),
     path("crm/tags/<int:pk>/edit/", views.tag_edit, name="tag_edit"),
     path("crm/tags/<int:pk>/delete/", views.tag_delete, name="tag_delete"),
+    
     # Admin capacity editor
     path("admin/capacity/", views_admin_capacity.capacity_edit, name="admin_capacity_edit"),
+    
     # Admin subscriptions dashboard
     path("admin/subs/", views_admin_subs.subs_dashboard, name="admin_subs_dashboard"),
     path("admin/subs/<str:sub_id>/schedule/", views_admin_subs.subs_set_schedule, name="admin_subs_set_schedule"),
     path("admin/subs/occ/<int:occ_id>/finalize/", views_admin_subs.subs_finalize_occurrence, name="admin_subs_finalize_occurrence"),
+    
     # Stripe webhook
     path("stripe/webhooks/", views_webhooks.stripe_webhook, name="stripe_webhook"),
+    
     # Service settings
     path('settings/services/', views_settings.service_settings, name='service_settings'),
+    
     # Admin review
     path("admin-tools/invoice-metadata/<int:booking_id>/", admin_tools_metadata.invoice_metadata, name="admin_invoice_metadata"),
     path("admin-tools/review/", admin_tools_review.review_list, name="admin_review_list"),
     path("admin-tools/review/apply/<int:booking_id>/", admin_tools_review.review_apply, name="admin_review_apply"),
     path("admin-tools/review/dismiss/<int:booking_id>/", admin_tools_review.review_dismiss, name="admin_review_dismiss"),
-    # Portal
-    path("portal/calendar/", views_portal.portal_calendar, name="portal_calendar"),
-    path("portal/book/", views_portal.portal_book, name="portal_book"),
-    path("portal/book/done/<int:booking_id>/", views_portal.portal_book_done, name="portal_book_done"),
 ]
