@@ -19,7 +19,7 @@ class ServiceDurationGuardMiddleware:
         # Classic Django admin fallback
         self.fallback_admin_prefix = "/admin/"
         
-        # Canonical staff namespace
+        # Canonical staff namespace - exempt from guard
         self.ops_prefix = "/ops/"
         
         # Legacy staff routes - these are exempt from duration guard to maintain backward compatibility
@@ -32,6 +32,7 @@ class ServiceDurationGuardMiddleware:
             "/pets/",
             "/tags/",
             "/admin-tools/",
+            "/reports/",
         )
         
         # Always-safe paths

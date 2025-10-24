@@ -6,6 +6,6 @@ from django.contrib.auth.decorators import login_required
 
 urlpatterns = [
     path(getattr(settings, 'DJANGO_ADMIN_URL', 'admin/'), admin.site.urls),
-    path("ops/", include("core.ops_urls")),
+    # /ops/ routes are now defined in core.urls with proper access guards
     path('', include('core.urls')),
 ]
