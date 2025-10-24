@@ -4,13 +4,10 @@ Tests for Service Windows functionality.
 from django.test import TestCase
 from django.utils import timezone
 from datetime import time, datetime, timedelta
-from zoneinfo import ZoneInfo
 
 from core.models import Service
 from core.models_service_windows import ServiceWindow
-
-
-BRISBANE = ZoneInfo("Australia/Brisbane")
+from core.constants import BRISBANE
 
 
 class ServiceWindowModelTestCase(TestCase):
