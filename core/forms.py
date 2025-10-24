@@ -2,6 +2,7 @@ from django import forms
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from .models import Pet, Client, Tag, Service
+from .models_service_windows import ServiceWindow
 from .utils_conflicts import has_conflict
 
 BRISBANE = ZoneInfo("Australia/Brisbane")
@@ -93,4 +94,18 @@ class PortalBookingForm(forms.Form):
             return cleaned
         if has_conflict(self.client, start_dt, end_dt):
             self.add_error(None, "That time conflicts with an existing booking.")
+            return cleaned
+        
+        # Enforce ServiceWindow constraints for client portal
+        # Convert naive local datetime to aware for timezone comparisons
+        aware_start = BRISBANE.localize(start_dt)
+        aware_end = BRISBANE.localize(end_dt)
+        win_qs = ServiceWindow.objects.filter(active=True, block_in_portal=True)
+        for w in win_qs:
+            if w.applies_on(aware_start) and w.overlaps(aware_start, aware_end) and w.blocks_service_in_portal(svc):
+                self.add_error(None, 
+                    f'"{svc.name}" is not bookable during {w.title} ({w.start_time}–{w.end_time}). '
+                    "Please choose another time."
+                )
+                break
         return cleaned

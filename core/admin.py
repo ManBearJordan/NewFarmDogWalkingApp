@@ -4,7 +4,7 @@ from django.urls import reverse
 from .models import (
     StripeSettings, Client, Pet, Booking, BookingPet, AdminEvent, AdminTask, SubOccurrence, Tag,
     StripeKeyAudit, Service, ServiceDefaults, TimetableBlock, BlockCapacity, CapacityHold,
-    StripeSubscriptionLink, StripeSubscriptionSchedule, StripePriceMap
+    StripeSubscriptionLink, StripeSubscriptionSchedule, StripePriceMap, ServiceWindow
 )
 
 # Make the Django Admin header "VIEW SITE" open the /ops/ namespaced staff portal
@@ -211,3 +211,11 @@ class StripePriceMapAdmin(admin.ModelAdmin):
     list_display = ("price_id", "product_id", "nickname", "service", "active", "updated_at")
     list_filter = ("active",)
     search_fields = ("price_id", "product_id", "nickname", "service__code", "service__name")
+
+
+@admin.register(ServiceWindow)
+class ServiceWindowAdmin(admin.ModelAdmin):
+    list_display = ("title", "weekday", "start_time", "end_time", "block_in_portal", "warn_in_admin", "max_concurrent", "active")
+    list_filter = ("active", "weekday", "block_in_portal", "warn_in_admin")
+    filter_horizontal = ("allowed_services",)
+    search_fields = ("title",)
