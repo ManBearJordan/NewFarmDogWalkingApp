@@ -26,6 +26,7 @@
             {% else %}
               {# === CLIENT NAV === #}
               <li><a href="{% url 'portal_home' %}" class="{% if request.resolver_match and request.resolver_match.url_name == 'portal_home' %}active{% endif %}">Portal</a></li>
+              <li><a href="{% url 'portal_calendar' %}" class="{% if request.resolver_match and request.resolver_match.url_name == 'portal_calendar' %}active{% endif %}">Calendar</a></li>
               <li><a href="{% url 'portal_book' %}" class="{% if request.resolver_match and request.resolver_match.url_name == 'portal_book' %}active{% endif %}">Book a Walk</a></li>
               <li><a href="{% url 'logout' %}">Logout</a></li>
             {% endif %}

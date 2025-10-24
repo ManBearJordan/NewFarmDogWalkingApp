@@ -30,6 +30,7 @@ import json
 import logging
 
 from .models import Client, Booking, AdminTask, SubOccurrence, Pet, BookingPet, Tag
+from .models_service_windows import ServiceWindow
 from .forms import PetForm, ClientForm
 from .booking_create_service import create_bookings_with_billing
 from .stripe_integration import (
@@ -433,6 +434,35 @@ def calendar_view(request):
             calendar_days[day_num] = {'bookings': 0, 'sub_occurrences': 0, 'admin_events': 0}
         calendar_days[day_num]['admin_events'] += 1
     
+    # Window warnings for admin calendar
+    warnings = []
+    wins = list(ServiceWindow.objects.filter(active=True, warn_in_admin=True))
+    # optional: capacity check map
+    booked_by_win_key = {}
+    
+    for booking in bookings:
+        s = booking.start_dt
+        e = booking.end_dt
+        svc = booking.service
+        if not (s and e and svc):
+            continue
+        for w in wins:
+            if w.applies_on(s) and w.overlaps(s, e):
+                # violation if service not in allowed list
+                if w.allowed_services.exists() and svc.pk not in w.allowed_services.values_list("pk", flat=True):
+                    warnings.append(f'Booking #{booking.id} violates window "{w.title}".')
+                # capacity accounting
+                if w.max_concurrent:
+                    key = (w.id, s.date(), w.start_time, w.end_time)
+                    booked_by_win_key.setdefault(key, 0)
+                    booked_by_win_key[key] += 1
+    
+    # add capacity warnings
+    for (w_id, d, ws, we), cnt in booked_by_win_key.items():
+        w = next(x for x in wins if x.id == w_id)
+        if w.max_concurrent and cnt > w.max_concurrent:
+            warnings.append(f'{d} window "{w.title}" over capacity: {cnt}/{w.max_concurrent}.')
+    
     # Get bookings for selected date if provided - provide as day_detail structure
     day_detail = None
     if selected_date:
@@ -468,6 +498,7 @@ def calendar_view(request):
         'prev_year': prev_year,
         'next_month': next_month,
         'next_year': next_year,
+        'window_warnings': warnings,
     }
     
     return render(request, 'core/calendar.html', context)

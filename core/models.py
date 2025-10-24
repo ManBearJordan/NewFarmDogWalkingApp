@@ -525,3 +525,7 @@ class StripePriceMap(models.Model):
     def __str__(self) -> str:
         s = getattr(self.service, "code", None) or "(no service)"
         return f"{self.price_id} → {s}"
+
+
+# import the ServiceWindow model into the app namespace (admin will find it)
+from .models_service_windows import ServiceWindow  # noqa: E402,F401

@@ -6,6 +6,17 @@
 {% block content %}
 <h2 class="mb-3">Calendar</h2>
 
+{% if window_warnings %}
+  <div class="alert alert-warning" role="alert">
+    <strong>Service Window Warnings:</strong>
+    <ul class="mb-0">
+      {% for msg in window_warnings %}
+        <li>{{ msg }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
 <!-- Legend + Troubleshoot -->
 <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
   <div class="d-flex align-items-center gap-3">

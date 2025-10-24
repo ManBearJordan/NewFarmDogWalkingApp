@@ -19,7 +19,8 @@ urlpatterns = [
     path("admin-tools/subscriptions/save/<int:link_id>/", subscription_admin.link_save, name="admin_sub_link_save"),
     path("admin-tools/subs/unscheduled/", admin_tools_subs.subs_unscheduled, name="admin_subs_unscheduled"),
     path("admin-tools/subs/wizard/<int:link_id>/", admin_tools_subs.subs_wizard, name="admin_subs_wizard"),
-    path("calendar/", views_client.client_calendar, name="calendar"),
+    # Legacy /calendar/ → smart redirect based on role
+    path("calendar/", views_misc.calendar_smart_redirect, name="calendar_legacy"),
     path("portal/booking-old/", views_client.booking_create, name="portal_booking_create_legacy"),
     path("portal/confirm-old/", views_client.booking_confirm, name="portal_booking_confirm_legacy"),
     path("healthz/", views_misc.health_check, name="healthz"),
@@ -37,7 +38,8 @@ urlpatterns = [
     path("bookings/<int:booking_id>/delete/", views.booking_soft_delete, name="booking_soft_delete"),
     path("bookings/export/ics/", views.booking_export_ics, name="booking_export_ics"),
     path('clients/<int:client_id>/credit/', views.client_add_credit, name='client_add_credit'),
-    path('calendar/', views.calendar_view, name='calendar_view'),
+    # Admin/ops calendar (explicit)
+    path('ops/calendar/', views.calendar_view, name='ops_calendar'),
     path('reports/invoices/', views.reports_invoices_list, name='reports_invoices_list'),
     # Subscriptions tab
     path("subscriptions/", views.subscriptions_list, name="subscriptions_list"),
