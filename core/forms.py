@@ -98,8 +98,8 @@ class PortalBookingForm(forms.Form):
         
         # Enforce ServiceWindow constraints for client portal
         # Convert naive local datetime to aware for timezone comparisons
-        aware_start = BRISBANE.localize(start_dt)
-        aware_end = BRISBANE.localize(end_dt)
+        aware_start = start_dt.replace(tzinfo=BRISBANE)
+        aware_end = end_dt.replace(tzinfo=BRISBANE)
         win_qs = ServiceWindow.objects.filter(active=True, block_in_portal=True)
         for w in win_qs:
             if w.applies_on(aware_start) and w.overlaps(aware_start, aware_end) and w.blocks_service_in_portal(svc):
