@@ -27,7 +27,14 @@
     <span class="badge rounded-pill" style="background-color:#fd7e14;">&nbsp;</span>
     <span class="small text-muted">Admin events</span>
   </div>
-  <div class="ms-auto">
+  <div class="ms-auto d-flex gap-2">
+    {% if user.is_superuser %}
+    <button class="btn btn-primary" id="btnSyncNow" type="button"
+            title="Sync subscriptions and materialize bookings now"
+            data-show-spinner>
+      Sync Now
+    </button>
+    {% endif %}
     <button class="btn btn-outline-secondary" id="btnTroubleshootSync" type="button"
             title="Clear & rebuild future holds from Stripe subscriptions"
             data-show-spinner>
@@ -217,6 +224,39 @@
   (function(){
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
     const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+  })();
+
+  // Sync Now button handler
+  (function(){
+    const btn = document.getElementById('btnSyncNow');
+    if(!btn) return;
+    
+    btn.addEventListener('click', async function(){
+      if(!confirm('Run subscription sync now? This will materialize bookings from subscription schedules.')) {
+        return;
+      }
+      try{
+        btn.disabled = true;
+        btn.textContent = 'Syncing...';
+        const resp = await fetch("{% url 'ops_admin_sync_subscriptions' %}", {
+          method: "POST",
+          headers: {"X-Requested-With":"XMLHttpRequest","X-CSRFToken":"{{ csrf_token }}"}
+        });
+        const data = await resp.json();
+        if(!resp.ok){
+          throw new Error(data && data.error ? data.error : resp.statusText);
+        }
+        // Show success message
+        const stats = data.stats || {};
+        alert(`Sync completed!\nProcessed: ${stats.processed || 0}\nCreated: ${stats.created || 0}\nSkipped: ${stats.skipped || 0}\nRemoved: ${stats.removed || 0}`);
+        // Reload page to show updated counts
+        window.location.reload();
+      }catch(err){
+        alert(`Sync failed: ${String(err)}`);
+        btn.disabled = false;
+        btn.textContent = 'Sync Now';
+      }
+    });
   })();
 
   (function(){

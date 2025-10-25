@@ -133,6 +133,8 @@ def _get_active_subscriptions(horizon_days: int) -> List[Dict]:
     Returns:
         List of subscription dictionaries
     """
+    from django.conf import settings
+    
     try:
         # Try to get real Stripe subscriptions
         api_key = get_stripe_key()  # raises in production if unset
@@ -141,6 +143,11 @@ def _get_active_subscriptions(horizon_days: int) -> List[Dict]:
         return []
     
     if not api_key:
+        # Only return fake subscriptions in non-production environments
+        is_production = getattr(settings, 'PRODUCTION', False)
+        if is_production:
+            log.warning("[Stripe] No API key configured in production; returning empty subscription list")
+            return []
         log.info("[Stripe] No key; using sample subscriptions (non-production)")
         return _get_fake_subscriptions()
     
@@ -172,6 +179,11 @@ def _get_active_subscriptions(horizon_days: int) -> List[Dict]:
         
     except Exception as e:
         log_subscription_error(f"Error fetching Stripe subscriptions: {e}")
+        # In production, don't fall back to fake data
+        is_production = getattr(settings, 'PRODUCTION', False)
+        if is_production:
+            log.error("[Stripe] Error in production; not using fake data")
+            return []
         log_subscription_info("Falling back to fake subscription data")
         return _get_fake_subscriptions()
 

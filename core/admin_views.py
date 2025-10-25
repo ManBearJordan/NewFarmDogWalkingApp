@@ -6,12 +6,14 @@ from django.http import JsonResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from django.utils.decorators import method_decorator
 from django.contrib import messages
 import json
 
 from .stripe_key_manager import get_stripe_key, get_key_status, update_stripe_key
 from .stripe_integration import list_booking_services
+from .subscription_materializer import materialize_all
 
 
 @staff_member_required
@@ -74,3 +76,40 @@ def stripe_diagnostics_view(request):
             diagnostics['key_format_valid'] = True
     
     return JsonResponse(diagnostics)
+
+
+@staff_member_required
+@require_POST
+def admin_sync_subscriptions(request):
+    """
+    Admin-only endpoint to manually trigger subscription materialization.
+    This syncs Stripe subscriptions and materializes bookings.
+    Returns JSON with sync statistics.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Run the materialization for all schedules
+        result = materialize_all()
+        
+        # Return success with statistics
+        return JsonResponse({
+            'success': True,
+            'message': f'Sync completed successfully',
+            'stats': {
+                'processed': result.get('processed', 0),
+                'created': result.get('created', 0),
+                'skipped': result.get('skipped', 0),
+                'removed': result.get('removed', 0),
+            }
+        })
+    except Exception as e:
+        # Log the full error for debugging
+        logger.exception("Subscription sync failed")
+        
+        # Return generic error message to user (don't expose internal details)
+        return JsonResponse({
+            'success': False,
+            'message': 'Sync failed. Please check server logs for details.',
+        }, status=500)
