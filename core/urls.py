@@ -39,6 +39,7 @@ urlpatterns = [
     path("ops/tags/", require_superuser(views.tags_list), name="ops_tags"),
     path("ops/reports/invoices/", require_superuser(views.reports_invoices_list), name="ops_reports_invoices"),
     path("ops/admin/sync/", require_superuser(admin_views.stripe_diagnostics_view), name="ops_admin_sync"),
+    path("ops/admin/sync-subscriptions/", require_superuser(admin_views.admin_sync_subscriptions), name="ops_admin_sync_subscriptions"),
     
     # Legacy admin-tools paths (kept for backward compatibility, wrapped with guards)
     path("admin-tools/reconcile/", admin_tools_reconcile.reconcile_index, name="admin_reconcile"),

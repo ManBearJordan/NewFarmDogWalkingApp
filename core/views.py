@@ -340,8 +340,9 @@ def client_add_credit(request, client_id):
 @login_required
 def calendar_view(request):
     """Show calendar month view with day details."""
-    # Get current month or requested month
-    now = timezone.now()
+    # Get current month or requested month in local timezone
+    local_tz = TZ  # Australia/Brisbane
+    now = timezone.now().astimezone(local_tz)
     year = int(request.GET.get('year', now.year))
     month = int(request.GET.get('month', now.month))
     selected_date = request.GET.get('date')
@@ -354,12 +355,13 @@ def calendar_view(request):
     days_data = {}
     calendar_days = {}  # day number -> data for easier template access
     
-    # Get all relevant data for the month
-    month_start = date(year, month, 1)
+    # Get all relevant data for the month in local timezone
+    # Create timezone-aware datetime boundaries for the month
+    month_start_dt = datetime(year, month, 1, 0, 0, 0, tzinfo=local_tz)
     if month == 12:
-        month_end = date(year + 1, 1, 1)
+        month_end_dt = datetime(year + 1, 1, 1, 0, 0, 0, tzinfo=local_tz)
     else:
-        month_end = date(year, month + 1, 1)
+        month_end_dt = datetime(year, month + 1, 1, 0, 0, 0, tzinfo=local_tz)
     
     # Determine client filtering based on user permissions
     # Admin users (superuser) see all bookings, non-admin staff see only their client's bookings
@@ -378,9 +380,10 @@ def calendar_view(request):
         logger.debug(f"Calendar view for admin user {user.username}: showing all bookings")
     
     # Count bookings (exclude deleted and cancelled/voided status)
+    # Use timezone-aware datetime filtering
     bookings_qs = Booking.objects.filter(
-        start_dt__date__gte=month_start,
-        start_dt__date__lt=month_end,
+        start_dt__gte=month_start_dt,
+        start_dt__lt=month_end_dt,
     )
     if client_filter:
         bookings_qs = bookings_qs.filter(client=client_filter)
@@ -392,8 +395,8 @@ def calendar_view(request):
     
     # Count SubOccurrences where active=True
     sub_occurrences_qs = SubOccurrence.objects.filter(
-        start_dt__date__gte=month_start,
-        start_dt__date__lt=month_end,
+        start_dt__gte=month_start_dt,
+        start_dt__lt=month_end_dt,
         active=True
     )
     # TODO: Filter sub occurrences by client if needed
@@ -406,30 +409,33 @@ def calendar_view(request):
     
     # Count AdminTasks - these are not client-specific
     admin_events = AdminTask.objects.filter(
-        due_dt__date__gte=month_start,
-        due_dt__date__lt=month_end
+        due_dt__gte=month_start_dt,
+        due_dt__lt=month_end_dt
     )
     admin_event_count = admin_events.count()
     logger.info(f"Calendar view: found {admin_event_count} admin events for {year}-{month:02d}")
     
-    # Build day counts
+    # Build day counts - convert to local date for grouping
     for booking in bookings:
-        day_key = booking.start_dt.date()
-        day_num = day_key.day
+        # Convert to local timezone before extracting date
+        local_dt = booking.start_dt.astimezone(local_tz)
+        day_num = local_dt.day
         if day_num not in calendar_days:
             calendar_days[day_num] = {'bookings': 0, 'sub_occurrences': 0, 'admin_events': 0}
         calendar_days[day_num]['bookings'] += 1
     
     for sub_occurrence in sub_occurrences:
-        day_key = sub_occurrence.start_dt.date()
-        day_num = day_key.day
+        # Convert to local timezone before extracting date
+        local_dt = sub_occurrence.start_dt.astimezone(local_tz)
+        day_num = local_dt.day
         if day_num not in calendar_days:
             calendar_days[day_num] = {'bookings': 0, 'sub_occurrences': 0, 'admin_events': 0}
         calendar_days[day_num]['sub_occurrences'] += 1
     
     for admin_event in admin_events:
-        day_key = admin_event.due_dt.date()
-        day_num = day_key.day
+        # Convert to local timezone before extracting date
+        local_dt = admin_event.due_dt.astimezone(local_tz)
+        day_num = local_dt.day
         if day_num not in calendar_days:
             calendar_days[day_num] = {'bookings': 0, 'sub_occurrences': 0, 'admin_events': 0}
         calendar_days[day_num]['admin_events'] += 1
@@ -467,9 +473,14 @@ def calendar_view(request):
     day_detail = None
     if selected_date:
         try:
-            selected_dt = datetime.strptime(selected_date, '%Y-%m-%d').date()
+            # Parse the date and create timezone-aware datetime boundaries
+            selected_dt = datetime.strptime(selected_date, '%Y-%m-%d')
+            selected_start = datetime(selected_dt.year, selected_dt.month, selected_dt.day, 0, 0, 0, tzinfo=local_tz)
+            selected_end = datetime(selected_dt.year, selected_dt.month, selected_dt.day, 23, 59, 59, tzinfo=local_tz)
+            
             bookings_detail_qs = Booking.objects.filter(
-                start_dt__date=selected_dt,
+                start_dt__gte=selected_start,
+                start_dt__lt=selected_end,
             )
             if client_filter:
                 bookings_detail_qs = bookings_detail_qs.filter(client=client_filter)
