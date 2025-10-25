@@ -86,6 +86,9 @@ def admin_sync_subscriptions(request):
     This syncs Stripe subscriptions and materializes bookings.
     Returns JSON with sync statistics.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         # Run the materialization for all schedules
         result = materialize_all()
@@ -102,9 +105,11 @@ def admin_sync_subscriptions(request):
             }
         })
     except Exception as e:
-        # Return error response
+        # Log the full error for debugging
+        logger.exception("Subscription sync failed")
+        
+        # Return generic error message to user (don't expose internal details)
         return JsonResponse({
             'success': False,
-            'message': f'Sync failed: {str(e)}',
-            'error': str(e)
+            'message': 'Sync failed. Please check server logs for details.',
         }, status=500)
